@@ -9,7 +9,7 @@
 
 import type { JudgeResult } from '@lc/compiler';
 import type { Level } from '@lc/schema';
-import { type Grade, gradeOf, profitOf } from '../level/progress';
+import { gradeOf, profitOf } from '../level/progress';
 
 export interface SettlementPanelProps {
   level: Level;
@@ -20,10 +20,6 @@ export interface SettlementPanelProps {
   walletHalf: number;
   onNextLevel: () => void;
   nextLevelTitle?: string;
-}
-
-export function gradeOfResult(result: JudgeResult): Grade {
-  return gradeOf(result.score);
 }
 
 export function SettlementPanel({
