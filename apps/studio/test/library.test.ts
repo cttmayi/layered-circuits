@@ -23,8 +23,10 @@ import {
   exportSave,
   importSave,
   leaderboard,
+  rankOf,
   recordAttempt,
   recordClear,
+  starsOf,
 } from '../src/level/progress';
 
 function makeModule(name: string, hash: string, extra: Partial<StoredModule> = {}): StoredModule {
@@ -174,5 +176,41 @@ describe('存档导入导出（M3-E）', () => {
     expect(progress.library).toEqual([]);
     expect(progress.attempts).toEqual({});
     expect(progress.cleared['s1-not']?.clearedAt).toBe(1);
+  });
+});
+
+describe('三星目标与称号（P1）', () => {
+  it('星级规则：功能 1 星，材料费 ≤ 对标 2 星，硬核时序达标 3 星', () => {
+    const base = { pass: true, score: 60, timingBudgetPs: null as number | null, timingOk: false };
+    expect(starsOf({ ...base, pass: false }, true)).toBe(0);
+    expect(starsOf(base, false)).toBe(1); // 只交付
+    expect(starsOf({ ...base, score: 100 }, false)).toBe(2); // 满分 + 非硬核
+    expect(starsOf(base, true)).toBe(2); // 硬核交付（没有时序预算的关卡）
+    expect(starsOf({ ...base, score: 100 }, true)).toBe(3);
+    // 有时序预算的关卡：时序星看 timingOk，与模式无关
+    expect(starsOf({ ...base, timingBudgetPs: 7000, timingOk: false }, true)).toBe(1);
+    expect(starsOf({ ...base, timingBudgetPs: 7000, timingOk: true, score: 100 }, false)).toBe(3);
+  });
+
+  it('星级与利润取历史最好，钱包是各关最好一次的利润之和', () => {
+    let progress = recordClear(emptyProgress(), 's1-not', 60, 10, 1);
+    expect(progress.cleared['s1-not']?.stars).toBe(1);
+    // 重挑战拿了满分三星、成本更低 → 星级与利润都刷新
+    progress = recordClear(progress, 's1-not', 100, 8, 3);
+    expect(progress.cleared['s1-not']?.stars).toBe(3);
+    expect(progress.walletHalf).toBe(2); // 款项 10 − 材料费 8 = 2 半单位（1 元）
+    expect(progress.cleared['s1-not']?.score).toBe(100);
+    expect(progress.cleared['s1-not']?.bestCostHalf).toBe(8);
+  });
+
+  it('称号按通关数与钱包升级，并给出下一级差距', () => {
+    let progress = emptyProgress();
+    expect(rankOf(progress).title).toBe('学徒');
+    expect(rankOf(progress).next).toContain('维修铺师傅');
+    progress = recordClear(progress, 's1-not', 100, 8, 3);
+    progress = recordClear(progress, 's1-and', 100, 8, 3);
+    expect(rankOf(progress).title).toBe('学徒'); // 只通了 2 单，还不够 3 单
+    progress = recordClear(progress, 's1-or', 100, 8, 3);
+    expect(rankOf(progress).title).toBe('维修铺师傅');
   });
 });

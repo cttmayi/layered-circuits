@@ -18,8 +18,29 @@ export interface LevelRecord {
   bestCostHalf: number;
   /** 这一单赚到的钱（半单位口径：款项 − 材料费），取历史最好 */
   bestProfitHalf: number;
+  /** 历史最好星级（0~3：功能 / 成本 / 时序） */
+  stars: number;
   clearedAt: number;
 }
+
+/**
+ * 三星目标：把「可选的硬核模式」变成玩家自己想要的追求。
+ *  - 功能星：交付成功（必得）
+ *  - 成本星：材料费 ≤ 对标成本（等价于拿满 100 分）
+ *  - 时序星：有时序预算的关卡看 timingOk，其余关卡要求「用硬核模式交付」
+ */
+export function starsOf(
+  result: { pass: boolean; score: number; timingBudgetPs: number | null; timingOk: boolean },
+  hardcore: boolean,
+): number {
+  if (!result.pass) return 0;
+  let stars = 1;
+  if (result.score >= 100) stars += 1;
+  if (result.timingBudgetPs !== null ? result.timingOk : hardcore) stars += 1;
+  return stars;
+}
+
+export const MAX_STARS_PER_LEVEL = 3;
 
 /** 评级（免费试错的压力来源）：分数 → S/A/B/C */
 export type Grade = 'S' | 'A' | 'B' | 'C';
@@ -101,6 +122,7 @@ export function recordClear(
   levelId: string,
   score: number,
   costHalf: number,
+  stars = 1,
 ): Progress {
   const previous = progress.cleared[levelId];
   const level = ALL_LEVELS.find((l) => l.id === levelId);
@@ -109,6 +131,7 @@ export function recordClear(
     score: Math.max(previous?.score ?? 0, score),
     bestCostHalf: previous ? Math.min(previous.bestCostHalf, costHalf) : costHalf,
     bestProfitHalf: previous ? Math.max(previous.bestProfitHalf, profit) : profit,
+    stars: Math.max(previous?.stars ?? 0, stars),
     clearedAt: previous?.clearedAt ?? Date.now(),
   };
   const cleared = { ...progress.cleared, [levelId]: record };
@@ -189,6 +212,39 @@ export interface LeaderboardRow {
   bestKnownHalf: number;
   /** 是否已经做到已知最省 */
   atBestKnown: boolean;
+}
+
+/** 称号（声望）：通关数与钱一起决定 —— 这是钱包的第一个用途（哪怕还不花钱） */
+export interface Rank {
+  title: string;
+  /** 达到下一级还差什么（用于展示） */
+  next: string | null;
+}
+
+// 阈值按「正常交付一单赚 1~7 元」的节奏标定：不要卡住正常玩家
+const RANKS: Array<{ title: string; cleared: number; walletHalf: number }> = [
+  { title: '学徒', cleared: 0, walletHalf: 0 },
+  { title: '维修铺师傅', cleared: 3, walletHalf: 4 },
+  { title: '高级技师', cleared: 6, walletHalf: 20 },
+  { title: '研究所特聘', cleared: 9, walletHalf: 60 },
+  { title: '总工程师', cleared: 13, walletHalf: 140 },
+];
+
+export function rankOf(progress: Progress): Rank {
+  const cleared = clearedCount(progress);
+  const wallet = progress.walletHalf;
+  let current = RANKS[0] as { title: string; cleared: number; walletHalf: number };
+  let next: { title: string; cleared: number; walletHalf: number } | null = null;
+  for (const rank of RANKS) {
+    if (cleared >= rank.cleared && wallet >= rank.walletHalf) current = rank;
+    else if (!next) next = rank;
+  }
+  return {
+    title: current.title,
+    next: next
+      ? `升到「${next.title}」还需 ${Math.max(0, next.cleared - cleared)} 单 + ${Math.max(0, (next.walletHalf - wallet) / 2)} 元`
+      : null,
+  };
 }
 
 /** 本地重挑战榜：一关一行的历史最好成绩（通关的才知道成本） */

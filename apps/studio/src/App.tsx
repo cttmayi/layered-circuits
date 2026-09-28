@@ -36,14 +36,17 @@ import {
   isLevelUnlocked,
   leaderboard,
   type Progress,
+  rankOf,
   recordAttempt,
   recordClear,
   saveProgress,
+  starsOf,
 } from './level/progress';
 import { docFor, type GameMode, initialSession, levelOf, storageKeyFor } from './level/session';
 import { Inspector } from './panels/Inspector';
 import { JudgePanel } from './panels/JudgePanel';
 import { LevelCard } from './panels/LevelCard';
+import { LevelMap } from './panels/LevelMap';
 import { LibraryPanel } from './panels/LibraryPanel';
 import { Palette } from './panels/Palette';
 import { SettlementPanel } from './panels/SettlementPanel';
@@ -115,6 +118,8 @@ export function App(): React.JSX.Element {
   const [toast, setToast] = useState<string | null>(null);
   /** 结算页：交付并封装之后出现（客户验收报告 + 钱 + 评级） */
   const [settlement, setSettlement] = useState<JudgeResult | null>(null);
+  /** 本次交付的星数（结算页展示） */
+  const [settlementStars, setSettlementStars] = useState(0);
   /** 封装过场：电路被压成一颗芯片落进组件库 */
   const [chipDrop, setChipDrop] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 900, height: 600 });
@@ -656,16 +661,24 @@ export function App(): React.JSX.Element {
       Date.now(),
     );
     commit({ ...doc, library: addModule(doc.library, stored) });
-    setProgress((prev) => {
-      const withModule = { ...prev, library: addModule(prev.library, stored) };
-      return recordClear(withModule, currentLevel.id, judgeResult.score, judgeResult.costHalf);
-    });
+    // 星级：功能（交付成功）/ 成本（满分）/ 时序（硬核或时序达标）
+    const stars = starsOf(judgeResult, forcedHardcore || mode === 'timing');
+    setProgress((prev) =>
+      recordClear(
+        { ...prev, library: addModule(prev.library, stored) },
+        currentLevel.id,
+        judgeResult.score,
+        judgeResult.costHalf,
+        stars,
+      ),
+    );
     const index = ALL_LEVELS.findIndex((l) => l.id === currentLevel.id);
     const next = ALL_LEVELS[index + 1];
     // 过场：芯片落进组件库 → 结算页（客户验收报告 + 钱 + 评级）
     setChipDrop(name);
     window.setTimeout(() => setChipDrop(null), 1400);
     setSettlement(judgeResult);
+    setSettlementStars(stars);
     setToast(
       `已交付【${name}】：材料费 ${info.costHalf / 2} 元${next ? `，已解锁下一单「${next.title}」` : '，主线全部完成'}`,
     );
@@ -768,7 +781,7 @@ export function App(): React.JSX.Element {
             </button>
             <span className="cleared-count">
               已通关 {ALL_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
-              {ALL_LEVELS.length} · 钱包 {progress.walletHalf / 2} 元
+              {ALL_LEVELS.length} · 钱包 {progress.walletHalf / 2} 元 · {rankOf(progress).title}
             </span>
           </div>
         )}
@@ -924,6 +937,7 @@ export function App(): React.JSX.Element {
           {currentLevel && settlement && (
             <SettlementPanel
               level={currentLevel}
+              stars={settlementStars}
               levelName={currentLevel.unlock?.name ?? currentLevel.title}
               result={settlement}
               previousScore={levelRecord?.score ?? null}
@@ -948,6 +962,11 @@ export function App(): React.JSX.Element {
               onClear={() => void clearLevel()}
             />
           )}
+          <LevelMap
+            progress={progress}
+            currentLevelId={currentLevel?.id ?? ''}
+            onPick={(id) => switchTo('level', id)}
+          />
           <LibraryPanel
             library={doc.library}
             rows={leaderboard(progress)}

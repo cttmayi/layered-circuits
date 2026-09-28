@@ -13,6 +13,8 @@ import { gradeOf, profitOf } from '../level/progress';
 
 export interface SettlementPanelProps {
   level: Level;
+  /** 本次交付拿到的星数（0~3） */
+  stars: number;
   levelName: string;
   result: JudgeResult;
   /** 上一次通关的分数（判断是否破纪录）；首次通关传 null */
@@ -24,6 +26,7 @@ export interface SettlementPanelProps {
 
 export function SettlementPanel({
   level,
+  stars,
   levelName,
   result,
   previousScore,
@@ -79,6 +82,18 @@ export function SettlementPanel({
           </tr>
         </tbody>
       </table>
+
+      <p className={`stars stars-${stars}`}>
+        {'★'.repeat(stars)}
+        {'☆'.repeat(3 - stars)}
+        <em>
+          {stars >= 3
+            ? '三星：功能、成本、时序全部达标'
+            : stars === 2
+              ? `还差一颗星：${result.score < 100 ? '把材料费压到对标成本' : '用硬核模式交付'}`
+              : '先做到功能 + 成本达标，再追时序'}
+        </em>
+      </p>
 
       {brokeRecord && (
         <p className="record">破纪录！比上次多得 {result.score - (previousScore ?? 0)} 分</p>
