@@ -9,6 +9,7 @@ import {
   compileDesign,
   computeCosts,
   hashDesign,
+  judgeDesign,
   wrapModule,
 } from '@lc/compiler';
 import {
@@ -16,6 +17,7 @@ import {
   InMemoryModuleLibrary,
   type ModuleLibrary,
   ModuleTemplateSchema,
+  parseLevel,
 } from '@lc/schema';
 import { allInputCombinations, type Logic, runVectors, Simulator } from '@lc/sim-core';
 import type {
@@ -74,6 +76,15 @@ export function handleRequest(req: StudioRequest): StudioResponse {
         diagnostics: result.diagnostics.map((d) => `[${d.severity}] ${d.message}`),
       };
       return { id: req.id, wrapped: info };
+    }
+
+    if (req.type === 'judge') {
+      const level = parseLevel(req.level);
+      const result = judgeDesign(req.design, level, {
+        library,
+        hardcore: req.hardcore,
+      });
+      return { id: req.id, judge: result };
     }
 
     const { design, mode, inputs } = req;

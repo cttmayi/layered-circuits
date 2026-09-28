@@ -41,7 +41,13 @@ export const LevelSchema = z.object({
   kind: LevelKindSchema,
   title: z.string().min(1),
   brief: z.string().default(''),
+  /** 这一关要教会玩家的东西（GDD「阶段核心教学」落到单关） */
+  teaching: z.string().default(''),
+  /** 卡关时的提示（玩家主动点开） */
+  hint: z.string().default(''),
   mode: z.enum(['logic', 'timing']).default('logic'),
+  /** 硬核工程模式的额外约束：关键路径不得超过该延迟（ps）；缺省表示硬核模式也不查时序 */
+  timingBudgetPs: z.number().int().positive().optional(),
   /** 可用素材（GDD 第 3 节的阶段约束） */
   allowedUnits: z.array(z.enum(UNITS)).default([...UNITS]),
   /** 模块可用性：none = 阶段 1 只能用手搭；all = 全部组件库；listed = 仅白名单 */

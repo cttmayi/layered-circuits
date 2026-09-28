@@ -4,7 +4,7 @@
  * 这条链路把 M0 的验收判据（2 三极管 + 3 电阻搭出的非门真值表正确）在 UI 层面锁死。
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { notGateDemo } from '../src/editor/demos';
@@ -168,6 +168,9 @@ describe('工作台界面', () => {
   it('渲染工具栏、成本面板与真值表（载入非门示例后自动仿真）', async () => {
     render(<App />);
     expect(screen.getByText(/电路工作台/)).toBeTruthy();
+    // 默认进入关卡模式，先切到自由沙盒再载入示例
+    fireEvent.click(screen.getByText('自由模式'));
+    fireEvent.click(screen.getByText('载入非门示例'));
     expect(screen.getByText('封装为模块')).toBeTruthy();
 
     // 自动仿真后（测试环境下走主线程回退路径），成本面板与真值表都要出现

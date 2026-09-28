@@ -15,3 +15,4 @@ coverage/
 
 # 视觉工具产物
 .dsh-vision-router/
+.tmp-*/

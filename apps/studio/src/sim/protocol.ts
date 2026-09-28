@@ -3,7 +3,8 @@
  * 同一份 handleRequest 既跑在 Web Worker 里，也跑在主线程回退路径上（见 runner.ts）。
  */
 
-import type { Design } from '@lc/schema';
+import type { JudgeResult } from '@lc/compiler';
+import type { Design, Level } from '@lc/schema';
 import type { Logic, SimMode } from '@lc/sim-core';
 import type { StoredPort } from '../editor/model';
 
@@ -60,7 +61,16 @@ export type StudioRequest =
       withTruth?: boolean;
       maxTruthRows?: number;
     }
-  | { id: number; type: 'wrap'; design: Design; library: unknown[]; name: string; stage: number };
+  | { id: number; type: 'wrap'; design: Design; library: unknown[]; name: string; stage: number }
+  | {
+      id: number;
+      type: 'judge';
+      design: Design;
+      library: unknown[];
+      level: Level;
+      /** 硬核工程模式：额外检查关卡时序预算 */
+      hardcore: boolean;
+    };
 
 /** 去掉 id 的请求（Omit 在联合类型上会塌成公共字段，必须分配式处理） */
 export type StudioRequestInput = StudioRequest extends infer T
@@ -73,5 +83,6 @@ export interface StudioResponse {
   id: number;
   snapshot?: SimSnapshot;
   wrapped?: WrappedModuleInfo;
+  judge?: JudgeResult;
   error?: string;
 }

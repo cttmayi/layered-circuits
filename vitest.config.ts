@@ -10,6 +10,7 @@ export default defineConfig({
       '@lc/schema': pkg('schema'),
       '@lc/sim-core': pkg('sim-core'),
       '@lc/compiler': pkg('compiler'),
+      '@lc/content': pkg('content'),
     },
   },
   test: {

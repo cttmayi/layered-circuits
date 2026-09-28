@@ -1,3 +1,5 @@
+import type { JudgeResult } from '@lc/compiler';
+import { STAGE1_LEVELS } from '@lc/content';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { emptyDoc, notGateDemo } from './editor/demos';
 import {
@@ -25,13 +27,22 @@ import {
   screenToWorld,
   signalText,
 } from './editor/render';
+import {
+  isCleared,
+  isLevelUnlocked,
+  type Progress,
+  recordAttempt,
+  recordClear,
+  saveProgress,
+} from './level/progress';
+import { docFor, type GameMode, initialSession, levelOf, storageKeyFor } from './level/session';
 import { Inspector } from './panels/Inspector';
+import { JudgePanel } from './panels/JudgePanel';
+import { LevelCard } from './panels/LevelCard';
 import { Palette } from './panels/Palette';
 import { TruthTable } from './panels/TruthTable';
 import type { SimSnapshot, StudioResponse } from './sim/protocol';
 import { createRunner } from './sim/runner';
-
-const STORAGE_KEY = 'lc-studio-doc-v1';
 
 interface DragState {
   mode: 'pan' | 'move' | 'none';
@@ -57,18 +68,14 @@ export function App(): React.JSX.Element {
     startSyms: new Map(),
   });
 
-  const [doc, setDoc] = useState<Doc>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Doc;
-        if (parsed && Array.isArray(parsed.syms)) return parsed;
-      }
-    } catch {
-      /* 忽略损坏的本地存档 */
-    }
-    return notGateDemo();
-  });
+  // 会话（模式 / 当前关卡 / 存档）一次性装载
+  const session = useMemo(() => initialSession(), []);
+  const [doc, setDoc] = useState<Doc>(() => session.doc);
+  const [progress, setProgress] = useState<Progress>(() => session.progress);
+  const [gameMode, setGameMode] = useState<GameMode>(() => session.mode);
+  const [levelId, setLevelId] = useState<string>(() => session.levelId);
+  const [judgeResult, setJudgeResult] = useState<JudgeResult | null>(null);
+  const [judging, setJudging] = useState(false);
   const [undoStack, setUndoStack] = useState<Doc[]>([]);
   const [redoStack, setRedoStack] = useState<Doc[]>([]);
   const [camera, setCamera] = useState<Camera>({ x: 340, y: 220, scale: 1 });
@@ -137,17 +144,23 @@ export function App(): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [doc, mode, showTruth, showTiming, runner, runnerKind]);
 
-  // ---- 本地自动存档 ----
+  // ---- 本地自动存档（按模式 + 关卡分开存） ----
+  const storageKey = storageKeyFor(gameMode, levelId);
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+        localStorage.setItem(storageKey, JSON.stringify(doc));
       } catch {
         /* 存档失败无所谓 */
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [doc]);
+  }, [doc, storageKey]);
+
+  // ---- 关卡进度与组件库持久化 ----
+  useEffect(() => {
+    saveProgress(progress);
+  }, [progress]);
 
   // ---- 引脚电平映射：netId → signal，再展开到 pinKey ----
   const pinSignals = useMemo(() => {
@@ -238,11 +251,16 @@ export function App(): React.JSX.Element {
   const deleteSelection = (): void => {
     if (selection.length === 0 && selectedWires.length === 0) return;
     const ids = new Set(selection);
+    const lockedHit = doc.syms.some((s) => ids.has(s.id) && s.locked);
+    if (lockedHit) setToast('关卡规定的端口元件不能删除（它们是本关的接口约定）');
     const next: Doc = {
       ...doc,
-      syms: doc.syms.filter((s) => !ids.has(s.id)),
+      syms: doc.syms.filter((s) => !(ids.has(s.id) && !s.locked)),
       wires: doc.wires.filter(
-        (w) => !selectedWires.includes(w.id) && !ids.has(w.a.inst) && !ids.has(w.b.inst),
+        (w) =>
+          !selectedWires.includes(w.id) &&
+          (!ids.has(w.a.inst) || doc.syms.find((s) => s.id === w.a.inst)?.locked) &&
+          (!ids.has(w.b.inst) || doc.syms.find((s) => s.id === w.b.inst)?.locked),
       ),
     };
     commit(next);
@@ -507,6 +525,11 @@ export function App(): React.JSX.Element {
       template: info.template,
     };
     commit({ ...doc, library: [...doc.library.filter((m) => m.hash !== info.hash), stored] });
+    // 组件库是全局资产：自由模式封装的模块，之后进关卡也能直接用
+    setProgress((prev) => ({
+      ...prev,
+      library: [...prev.library.filter((m) => m.hash !== info.hash), stored],
+    }));
     setToast(
       `已封装「${info.name}」：成本 ${info.costHalf / 2}（半单位 ${info.costHalf}），哈希 #${info.hash.slice(0, 8)}${info.isSequential ? '，判定为时序电路' : ''}`,
     );
@@ -520,6 +543,93 @@ export function App(): React.JSX.Element {
     setSelectedWires([]);
   };
 
+  // ---- 关卡：切换关卡 / 自由模式 ----
+  const currentLevel = levelOf(gameMode, levelId);
+
+  const switchTo = (nextMode: GameMode, nextLevelId: string): void => {
+    setGameMode(nextMode);
+    setLevelId(nextLevelId);
+    setJudgeResult(null);
+    setDoc(docFor(nextMode, nextLevelId, progress.library));
+    setSelection([]);
+    setSelectedWires([]);
+    setPlacing(null);
+    setPendingPin(null);
+  };
+
+  // ---- 关卡校验：判定跑在 Worker/主线程，用的就是画布上这份电路 ----
+  const runJudge = async (): Promise<void> => {
+    if (!currentLevel) return;
+    setJudging(true);
+    setProgress((prev) => recordAttempt(prev, currentLevel.id));
+    try {
+      const response = await runner.send({
+        type: 'judge',
+        design: toDesign(doc, { id: `level-${currentLevel.id}`, name: currentLevel.title }),
+        library: doc.library.map((m) => m.template),
+        level: currentLevel,
+        hardcore: mode === 'timing',
+      });
+      if (response.error || !response.judge) {
+        setToast(`校验失败：${response.error ?? '未知错误'}`);
+        return;
+      }
+      setJudgeResult(response.judge);
+      const judge = response.judge;
+      if (judge.pass) {
+        setToast(
+          judge.score >= 100
+            ? `通过！成本 ${judge.costHalf / 2} 已是最优，满分 100`
+            : `通过！成本 ${judge.costHalf / 2}（预算 ${judge.budgetHalf / 2}），得分 ${judge.score}`,
+        );
+      } else {
+        setToast(judge.errors[0] ?? '还没通过，看看下方对比表');
+      }
+    } finally {
+      setJudging(false);
+    }
+  };
+
+  /** 通关：把当前电路封装成关卡产出的模块，永久加入个人组件库，并记录成绩 */
+  const clearLevel = async (): Promise<void> => {
+    if (!currentLevel || !judgeResult?.pass) return;
+    const name = currentLevel.unlock?.name ?? currentLevel.title;
+    const design = toDesign(doc, { id: `wrap-${currentLevel.id}`, name });
+    const response = await runner.send({
+      type: 'wrap',
+      design,
+      library: doc.library.map((m) => m.template),
+      name,
+      stage: currentLevel.stage,
+    });
+    if (response.error || !response.wrapped) {
+      setToast(`封装失败：${response.error ?? '未知错误'}`);
+      return;
+    }
+    const info = response.wrapped;
+    const stored = {
+      hash: info.hash,
+      name: info.name,
+      costHalf: info.costHalf,
+      isSequential: info.isSequential,
+      ports: info.ports,
+      template: info.template,
+    };
+    commit({ ...doc, library: [...doc.library.filter((m) => m.hash !== info.hash), stored] });
+    setProgress((prev) => {
+      const withModule = {
+        ...prev,
+        library: [...prev.library.filter((m) => m.hash !== info.hash), stored],
+      };
+      return recordClear(withModule, currentLevel.id, judgeResult.score, judgeResult.costHalf);
+    });
+    const index = STAGE1_LEVELS.findIndex((l) => l.id === currentLevel.id);
+    const next = STAGE1_LEVELS[index + 1];
+    setToast(
+      `已封装【${name}】：成本 ${info.costHalf / 2}，已加入组件库${next ? `，已解锁下一关「${next.title}」` : '，阶段 1 全部通关！'}`,
+    );
+  };
+
   // ---- 面板数据 ----
   const units: Array<[UnitKind, number]> = snapshot
     ? ([
@@ -531,6 +641,7 @@ export function App(): React.JSX.Element {
     : [];
 
   const selectedSyms = doc.syms.filter((s) => selection.includes(s.id));
+  const levelRecord = currentLevel ? progress.cleared[currentLevel.id] : undefined;
 
   return (
     <div className="app">
@@ -538,6 +649,57 @@ export function App(): React.JSX.Element {
         <div className="brand">
           逐层电路 <span>· 电路工作台</span>
         </div>
+        <div className="group">
+          <button
+            type="button"
+            className={gameMode === 'level' ? 'active' : ''}
+            onClick={() => switchTo('level', levelId)}
+            title="按阶段 1 的关卡顺序挑战，受素材与预算约束"
+          >
+            关卡模式
+          </button>
+          <button
+            type="button"
+            className={gameMode === 'free' ? 'active' : ''}
+            onClick={() => switchTo('free', levelId)}
+            title="自由沙盒：不限素材与预算"
+          >
+            自由模式
+          </button>
+        </div>
+        {gameMode === 'level' && (
+          <div className="group">
+            <select
+              className="level-select"
+              value={levelId}
+              onChange={(e) => switchTo('level', e.target.value)}
+              title="关卡顺序：前一关通关后解锁下一关"
+            >
+              {STAGE1_LEVELS.map((item) => {
+                const unlocked = isLevelUnlocked(progress, item.id);
+                const cleared = isCleared(progress, item.id);
+                return (
+                  <option key={item.id} value={item.id} disabled={!unlocked}>
+                    {cleared ? '★ ' : unlocked ? '' : '🔒 '}
+                    {item.title}
+                  </option>
+                );
+              })}
+            </select>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void runJudge()}
+              disabled={judging}
+            >
+              {judging ? '校验中…' : '校验本关'}
+            </button>
+            <span className="cleared-count">
+              已通关 {STAGE1_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
+              {STAGE1_LEVELS.length}
+            </span>
+          </div>
+        )}
         <div className="group">
           <button
             type="button"
@@ -575,10 +737,20 @@ export function App(): React.JSX.Element {
           </button>
         </div>
         <div className="group">
-          <button type="button" onClick={() => loadDoc(notGateDemo())}>
-            载入非门示例
-          </button>
-          <button type="button" onClick={() => loadDoc(emptyDoc())}>
+          {gameMode === 'level' ? (
+            <button
+              type="button"
+              onClick={() => switchTo('level', levelId)}
+              title="丢弃当前草图，回到本关初始状态（组件库保留）"
+            >
+              重载本关
+            </button>
+          ) : (
+            <button type="button" onClick={() => loadDoc(notGateDemo())}>
+              载入非门示例
+            </button>
+          )}
+          <button type="button" onClick={() => loadDoc({ ...emptyDoc(), library: doc.library })}>
             清空
           </button>
           <button type="button" className="primary" onClick={() => void wrapSelection()}>
@@ -608,7 +780,21 @@ export function App(): React.JSX.Element {
       </header>
 
       <div className="body">
-        <Palette placing={placing} onPick={setPlacing} library={doc.library} />
+        <Palette
+          placing={placing}
+          onPick={setPlacing}
+          library={doc.library}
+          level={currentLevel}
+          header={
+            currentLevel && (
+              <LevelCard
+                level={currentLevel}
+                costHalf={snapshot?.cost.half ?? 0}
+                onShowHint={() => setToast(currentLevel.hint)}
+              />
+            )
+          }
+        />
 
         <div className="canvas-wrap" ref={containerRef}>
           <canvas
@@ -646,6 +832,17 @@ export function App(): React.JSX.Element {
         </div>
 
         <div className="side">
+          {currentLevel && (
+            <JudgePanel
+              level={currentLevel}
+              result={judgeResult}
+              busy={judging}
+              record={levelRecord}
+              attempts={progress.attempts[currentLevel.id] ?? 0}
+              onJudge={() => void runJudge()}
+              onClear={() => void clearLevel()}
+            />
+          )}
           <Inspector
             snapshot={snapshot}
             units={units}

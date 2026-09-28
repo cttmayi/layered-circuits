@@ -21,7 +21,8 @@
     "paths": {
       "@lc/schema": ["packages/schema/src/index.ts"],
       "@lc/sim-core": ["packages/sim-core/src/index.ts"],
-      "@lc/compiler": ["packages/compiler/src/index.ts"]
+      "@lc/compiler": ["packages/compiler/src/index.ts"],
+      "@lc/content": ["packages/content/src/index.ts"]
     }
   },
   "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "vitest.config.ts"]

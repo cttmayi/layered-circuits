@@ -51,6 +51,7 @@ export default defineConfig({
       '@lc/schema': source('schema'),
       '@lc/sim-core': source('sim-core'),
       '@lc/compiler': source('compiler'),
+      '@lc/content': source('content'),
     },
   },
   worker: { format: 'es' },

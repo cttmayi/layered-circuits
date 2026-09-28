@@ -380,3 +380,93 @@ body,
 .truth .bad {
   color: var(--bad);
 }
+
+/* ---- 关卡模式 ---- */
+.level-select {
+  background: #10161d;
+  color: #cfe0f0;
+  border: 1px solid #26313d;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font: inherit;
+  max-width: 160px;
+}
+.level-select:disabled {
+  opacity: 0.5;
+}
+.cleared-count {
+  color: #7d8ea3;
+  font-size: 11px;
+}
+.level-card {
+  border-bottom: 1px solid #1d2733;
+}
+.level-card h3 {
+  margin-top: 0;
+}
+.level-card .small {
+  margin: 4px 0 8px;
+}
+.teaching {
+  background: #131c26;
+  border-left: 2px solid #ffb454;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+.budget {
+  margin: 6px 0 8px;
+}
+.budget-bar {
+  height: 6px;
+  background: #1b2430;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.budget-fill {
+  display: block;
+  height: 100%;
+  background: #38d67a;
+  transition: width 0.15s ease;
+}
+.budget-fill.over {
+  background: #ff5f56;
+}
+.budget-text {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #8ea3bb;
+  margin-top: 4px;
+}
+.group-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+.verdict {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 6px 0;
+}
+.verdict.pass {
+  color: #38d67a;
+}
+.verdict.fail {
+  color: #ffb454;
+}
+.hi {
+  color: #38d67a;
+}
+.bad {
+  color: #ff5f56;
+}
+.locked {
+  color: #b99530;
+  font-style: normal;
+  font-size: 10px;
+}
+.palette-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
