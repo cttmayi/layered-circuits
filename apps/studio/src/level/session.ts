@@ -5,7 +5,7 @@
  * 组件库是全局的（GDD 铁律 2），切关卡时始终带上玩家已封装的所有模块。
  */
 
-import { findLevel, STAGE1_LEVELS } from '@lc/content';
+import { ALL_LEVELS, findLevel } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { notGateDemo } from '../editor/demos';
 import type { Doc, StoredModule } from '../editor/model';
@@ -21,11 +21,11 @@ export function storageKeyFor(mode: GameMode, levelId: string): string {
 
 /** 默认进入「已解锁且还没通关」的第一关；全通了就停在最后一关优化成绩 */
 export function defaultLevelId(progress: Progress): string {
-  const pending = STAGE1_LEVELS.find(
+  const pending = ALL_LEVELS.find(
     (level) => isLevelUnlocked(progress, level.id) && !progress.cleared[level.id]?.clearedAt,
   );
   if (pending) return pending.id;
-  return (STAGE1_LEVELS[STAGE1_LEVELS.length - 1] as Level).id;
+  return (ALL_LEVELS[ALL_LEVELS.length - 1] as Level).id;
 }
 
 export function readStoredDoc(key: string): Doc | null {
@@ -79,7 +79,5 @@ export function levelOf(mode: GameMode, levelId: string): Level | null {
 }
 
 export function unlockedLevelIds(progress: Progress): string[] {
-  return STAGE1_LEVELS.filter((level) => isLevelUnlocked(progress, level.id)).map(
-    (level) => level.id,
-  );
+  return ALL_LEVELS.filter((level) => isLevelUnlocked(progress, level.id)).map((level) => level.id);
 }

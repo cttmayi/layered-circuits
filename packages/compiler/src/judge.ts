@@ -10,7 +10,7 @@
 
 import type { Design, Level, ModuleLibrary } from '@lc/schema';
 import { costHalfOf, scoreOf } from '@lc/schema';
-import { type Logic, runVectors, type SimMode, transitionsIn } from '@lc/sim-core';
+import { type Logic, runVectors, type SimMode, transitionsIn, type Waveform } from '@lc/sim-core';
 import { computeCosts } from './cost.js';
 import { compileDesign } from './flatten.js';
 import { measureSetupHold } from './setup-hold.js';
@@ -33,6 +33,8 @@ export interface JudgeRow {
   mismatches: Array<{ port: string; expected: Logic; actual: Logic }>;
   /** 本窗口内输出端口的跳变次数（> 1 通常意味着毛刺/空翻） */
   glitches: number;
+  /** 本行采样的时间窗口（ps） */
+  window: { fromPs: number; toPs: number };
 }
 
 export interface JudgeTiming {
@@ -68,6 +70,8 @@ export interface JudgeResult {
   criticalPathPs: number;
   timingBudgetPs: number | null;
   isSequential: boolean;
+  /** 波形（只含端口网络）：UI 直接画阶梯图，判定用的就是它 */
+  waveform: Waveform | null;
   timing: JudgeTiming;
   /** 0~100：成本越接近理论最优越高 */
   score: number;
@@ -143,6 +147,7 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
       mode,
       defaultSettlePs: defaultSettle(level),
       trace: true,
+      tracePortsOnly: true,
     });
     waveform = run.waveform;
     rows = run.rows.map((row) => {
@@ -164,6 +169,7 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
         ok: row.ok,
         mismatches: row.mismatches,
         glitches,
+        window: row.window,
       };
     });
     failedRows = rows.filter((r) => !r.ok).length;
@@ -296,6 +302,7 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     criticalPathPs,
     timingBudgetPs: level.timingBudgetPs ?? null,
     isSequential,
+    waveform: waveform ?? null,
     timing: {
       clockPort: checks.clockPort ?? null,
       criticalPathPs,

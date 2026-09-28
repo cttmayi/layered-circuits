@@ -57,6 +57,8 @@ export interface VectorRunResult {
 export interface RunVectorsOptions {
   mode: SimMode;
   trace?: boolean;
+  /** trace 时只保留端口网络（UI 波形只要端口；内部节点成千上万时别全带上） */
+  tracePortsOnly?: boolean;
   /** 时序模式默认采样等待时间（ps），默认 100ns */
   defaultSettlePs?: number;
   maxIterations?: number;
@@ -126,8 +128,10 @@ export function runVectors(
   if (diagnostics.some((d) => d.kind === 'unstable')) unstable = true;
 
   const result: VectorRunResult = { pass, rows, diagnostics, unstable };
-  // 波形带上全部网络：面板默认画端口，排查时再展开内部节点
-  if (options.trace && sim.trace) result.waveform = toWaveform(sim.trace, net);
+  // 缺省带上全部网络（排查用）；关卡判定只要端口，避免把上千个内部节点传到前端
+  if (options.trace && sim.trace) {
+    result.waveform = toWaveform(sim.trace, net, options.tracePortsOnly ? { portOnly: true } : {});
+  }
   return result;
 }
 

@@ -470,3 +470,42 @@ body,
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* ---- 波形面板（M2）：阶梯图 + 向量竖线 ---- */
+.wave-svg {
+  display: block;
+  margin-top: 4px;
+  background: #0e1319;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.wave-svg .vline {
+  stroke: #2a3644;
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
+.wave-svg .strong {
+  stroke: #58d68d;
+  stroke-width: 2;
+}
+
+/* 弱 1 / 弱 0：RTL 上拉电阻给的弱电平，画细一点以示区别 */
+.wave-svg .weak {
+  stroke: #2f7d55;
+  stroke-width: 2;
+  stroke-dasharray: 4 2;
+}
+
+.wave-svg .unknown {
+  stroke: #b99530;
+  stroke-width: 2;
+  stroke-dasharray: 1 3;
+}
+
+.wave-svg .wlabel {
+  fill: #9fb0c3;
+  font-size: 11px;
+  font-family: var(--mono, ui-monospace, monospace);
+}

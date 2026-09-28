@@ -5,7 +5,7 @@
  * 进度与组件库都存 localStorage，后续可以整体导出成存档 / 交给服务端校验。
  */
 
-import { requiredPortsOf, STAGE1_LEVELS } from '@lc/content';
+import { ALL_LEVELS, requiredPortsOf } from '@lc/content';
 import type { Level } from '@lc/schema';
 import type { Doc, StoredModule, Sym } from '../editor/model';
 
@@ -56,9 +56,9 @@ export function saveProgress(progress: Progress): void {
 
 /** 关卡解锁：第一关总是开放，之后要求前一关**真的通关**（失败尝试不算） */
 export function isLevelUnlocked(progress: Progress, levelId: string): boolean {
-  const index = STAGE1_LEVELS.findIndex((level) => level.id === levelId);
+  const index = ALL_LEVELS.findIndex((level) => level.id === levelId);
   if (index <= 0) return index === 0;
-  const previous = STAGE1_LEVELS[index - 1] as Level;
+  const previous = ALL_LEVELS[index - 1] as Level;
   return isCleared(progress, previous.id);
 }
 
@@ -67,7 +67,7 @@ export function isCleared(progress: Progress, levelId: string): boolean {
 }
 
 export function clearedCount(progress: Progress): number {
-  return STAGE1_LEVELS.filter((level) => isCleared(progress, level.id)).length;
+  return ALL_LEVELS.filter((level) => isCleared(progress, level.id)).length;
 }
 
 /** 记录一次通关：只保留历史最好成绩与最低成本 */

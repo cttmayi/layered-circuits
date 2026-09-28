@@ -1,5 +1,5 @@
 import type { JudgeResult } from '@lc/compiler';
-import { STAGE1_LEVELS } from '@lc/content';
+import { ALL_LEVELS } from '@lc/content';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { emptyDoc, notGateDemo } from './editor/demos';
 import {
@@ -41,6 +41,7 @@ import { JudgePanel } from './panels/JudgePanel';
 import { LevelCard } from './panels/LevelCard';
 import { Palette } from './panels/Palette';
 import { TruthTable } from './panels/TruthTable';
+import { WaveformPanel } from './panels/WaveformPanel';
 import type { SimSnapshot, StudioResponse } from './sim/protocol';
 import { createRunner } from './sim/runner';
 
@@ -87,6 +88,7 @@ export function App(): React.JSX.Element {
   const [pendingPoint, setPendingPoint] = useState<{ x: number; y: number } | null>(null);
   const [mode, setMode] = useState<'logic' | 'timing'>('logic');
   const [showTruth, setShowTruth] = useState(true);
+  const [showWave, setShowWave] = useState(false);
   const [showTiming, setShowTiming] = useState(false);
   const [snapshot, setSnapshot] = useState<SimSnapshot | null>(null);
   const [resultDoc, setResultDoc] = useState<Doc | null>(null);
@@ -623,8 +625,8 @@ export function App(): React.JSX.Element {
       };
       return recordClear(withModule, currentLevel.id, judgeResult.score, judgeResult.costHalf);
     });
-    const index = STAGE1_LEVELS.findIndex((l) => l.id === currentLevel.id);
-    const next = STAGE1_LEVELS[index + 1];
+    const index = ALL_LEVELS.findIndex((l) => l.id === currentLevel.id);
+    const next = ALL_LEVELS[index + 1];
     setToast(
       `已封装【${name}】：成本 ${info.costHalf / 2}，已加入组件库${next ? `，已解锁下一关「${next.title}」` : '，阶段 1 全部通关！'}`,
     );
@@ -675,7 +677,7 @@ export function App(): React.JSX.Element {
               onChange={(e) => switchTo('level', e.target.value)}
               title="关卡顺序：前一关通关后解锁下一关"
             >
-              {STAGE1_LEVELS.map((item) => {
+              {ALL_LEVELS.map((item) => {
                 const unlocked = isLevelUnlocked(progress, item.id);
                 const cleared = isCleared(progress, item.id);
                 return (
@@ -695,8 +697,8 @@ export function App(): React.JSX.Element {
               {judging ? '校验中…' : '校验本关'}
             </button>
             <span className="cleared-count">
-              已通关 {STAGE1_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
-              {STAGE1_LEVELS.length}
+              已通关 {ALL_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
+              {ALL_LEVELS.length}
             </span>
           </div>
         )}
@@ -773,6 +775,14 @@ export function App(): React.JSX.Element {
             onChange={(e) => setShowTiming(e.target.checked)}
           />
           时序分析
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={showWave}
+            onChange={(e) => setShowWave(e.target.checked)}
+          />
+          波形
         </label>
         <span className="runner" title="纯 TS 内核跑在 Web Worker 里；file:// 打开时自动回退主线程">
           {runnerKind === 'worker' ? 'Worker 仿真' : '主线程仿真'}
@@ -862,6 +872,15 @@ export function App(): React.JSX.Element {
                 : []
             }
           />
+          {showWave && judgeResult && (
+            <WaveformPanel
+              result={judgeResult}
+              portNames={[
+                ...Object.keys(judgeResult.rows[0]?.inputs ?? {}),
+                ...new Set(judgeResult.rows.flatMap((r) => Object.keys(r.expected))),
+              ]}
+            />
+          )}
           {showTruth && <TruthTable snapshot={snapshot} />}
         </div>
       </div>

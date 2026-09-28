@@ -7,7 +7,7 @@
  *  - 判定一侧验证关卡数据能通过工作台自己的请求通道（Worker/主线程共用）判定通过。
  */
 
-import { findLevel, STAGE1_LEVELS } from '@lc/content';
+import { ALL_LEVELS, findLevel } from '@lc/content';
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
@@ -102,7 +102,7 @@ describe('关卡内容与进度', () => {
   });
 
   it('工作台判定通道：每个关卡的参考解都能通过（含硬核时序）', () => {
-    for (const level of STAGE1_LEVELS) {
+    for (const level of ALL_LEVELS) {
       const response = handleRequest({
         id: 1,
         type: 'judge',
@@ -225,13 +225,13 @@ describe('关卡界面', () => {
 
     // 关卡下拉：第一关可选，其余锁住
     const select = document.querySelector('.level-select') as HTMLSelectElement;
-    expect(select.options.length).toBe(STAGE1_LEVELS.length);
+    expect(select.options.length).toBe(ALL_LEVELS.length);
     expect(select.options[0]?.disabled).toBe(false);
     expect(select.options[1]?.disabled).toBe(true);
 
     // 预算进度：成本 0 / 预算 5（第 1 关最优 4）
     expect(document.querySelector('.budget-text')?.textContent).toContain('预算 5');
-    expect(screen.getByText(/已通关 0\/7/)).toBeTruthy();
+    expect(screen.getByText(/已通关 0\/10/)).toBeTruthy();
   });
 
   it('点「校验本关」会走判定通道并报告未通过（空电路）', async () => {
@@ -267,6 +267,6 @@ describe('关卡界面', () => {
     const select = document.querySelector('.level-select') as HTMLSelectElement;
     expect(select.value).toBe('s1-and');
     expect(select.options[1]?.disabled).toBe(false);
-    expect(screen.getByText(/已通关 1\/7/)).toBeTruthy();
+    expect(screen.getByText(/已通关 1\/10/)).toBeTruthy();
   });
 });

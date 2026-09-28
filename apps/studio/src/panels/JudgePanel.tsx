@@ -81,10 +81,44 @@ export function JudgePanel({
                   )}
                 </td>
               </tr>
-              {result.isSequential && (
+              <tr>
+                <td>结构</td>
+                <td className="num">
+                  {result.isSequential ? (
+                    <span className="dim">含记忆（时序电路）</span>
+                  ) : (
+                    <span className="dim">纯组合逻辑</span>
+                  )}
+                </td>
+              </tr>
+              {result.timing.maxGlitches !== null && (
                 <tr>
-                  <td>结构</td>
-                  <td className="num bad">含记忆（时序电路）</td>
+                  <td>空翻/毛刺</td>
+                  <td className="num">
+                    {result.timing.glitches} 次跳变
+                    {result.timing.glitchRows.length > 0 ? (
+                      <span className="bad">
+                        {' '}
+                        第 {result.timing.glitchRows.map((i) => i + 1).join('、')} 组超标
+                      </span>
+                    ) : (
+                      <span className="hi"> 无空翻</span>
+                    )}
+                  </td>
+                </tr>
+              )}
+              {result.timing.setupPs !== null && (
+                <tr>
+                  <td>建立/保持</td>
+                  <td className="num">
+                    {(result.timing.setupPs / 1000).toFixed(1)}ns /{' '}
+                    {result.timing.holdPs === null
+                      ? '—'
+                      : `${(result.timing.holdPs / 1000).toFixed(1)}ns`}
+                    {result.timing.edgeTriggered === false && (
+                      <span className="bad"> 非边沿触发</span>
+                    )}
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -94,6 +128,20 @@ export function JudgePanel({
             <ul className="diags">
               {result.errors.map((message) => (
                 <li key={message} className="error">
+                  {message}
+                </li>
+              ))}
+            </ul>
+          )}
+          {(result.timing.notes.length > 0 || result.timing.setupPs !== null) && (
+            <ul className="diags">
+              {result.timing.setupPs !== null && (
+                <li className="info">
+                  建立/保持时间是仿真扫描实测（步长 0.5ns）：数值越小说明电路越快
+                </li>
+              )}
+              {result.timing.notes.map((message) => (
+                <li key={message} className="info">
                   {message}
                 </li>
               ))}
@@ -127,6 +175,11 @@ export function JudgePanel({
                       你 {n}
                     </th>
                   ))}
+                  {result.timing.maxGlitches !== null && (
+                    <th key="glitch" className="sep" title="本窗口内输出跳变次数（>1 = 毛刺/空翻）">
+                      跳变
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -151,6 +204,15 @@ export function JudgePanel({
                         {String(row.actual[n])}
                       </td>
                     ))}
+                    {result.timing.maxGlitches !== null && (
+                      <td
+                        key="glitch"
+                        className={`sep ${row.glitches > 1 && row.index > 0 ? 'bad' : 'dim'}`}
+                        title="本窗口内输出跳变次数"
+                      >
+                        {row.index === 0 ? '上电' : row.glitches}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
