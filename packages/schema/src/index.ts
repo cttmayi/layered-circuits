@@ -1,3 +1,4 @@
+export { z } from 'zod';
 export * from './builder.js';
 export * from './design.js';
 export * from './level.js';

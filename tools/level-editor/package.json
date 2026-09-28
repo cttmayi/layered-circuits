@@ -1,0 +1,16 @@
+{
+  "name": "@lc/level-editor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "lc-level": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@lc/compiler": "workspace:*",
+    "@lc/content": "workspace:*",
+    "@lc/opt-solver": "workspace:*",
+    "@lc/schema": "workspace:*",
+    "@lc/sim-core": "workspace:*"
+  }
+}
