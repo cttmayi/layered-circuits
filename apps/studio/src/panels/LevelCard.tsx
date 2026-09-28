@@ -1,6 +1,7 @@
 import { commissionOf, contractOf } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { useState } from 'react';
+import { sideJobsOf } from '../level/sideJobs';
 
 export interface LevelCardProps {
   level: Level;
@@ -8,6 +9,11 @@ export interface LevelCardProps {
   costHalf: number;
   /** 黑盒侦察是否已完成（未完成时图纸的输出列是看不清的） */
   reconDone: boolean;
+  /** 当前接的支线单（null = 只做主线） */
+  sideJob: string | null;
+  /** 已完成的支线单 key 列表 */
+  doneSideJobs: string[];
+  onPickSideJob: (key: string | null) => void;
   onShowHint: () => void;
 }
 
@@ -18,11 +24,15 @@ export function LevelCard({
   level,
   costHalf,
   reconDone,
+  sideJob,
+  doneSideJobs,
+  onPickSideJob,
   onShowHint,
 }: LevelCardProps): React.JSX.Element {
   const [showTeaching, setShowTeaching] = useState(false);
   const commission = commissionOf(level);
   const contract = contractOf(level);
+  const jobs = sideJobsOf(level);
   const budget = level.budgetHalf;
   const ratio = budget > 0 ? Math.min(1, costHalf / budget) : 0;
   const over = costHalf > budget;
@@ -107,6 +117,30 @@ export function LevelCard({
           ))}
         </tbody>
       </table>
+
+      <div className="side-jobs">
+        <h4>支线单（可选）</h4>
+        {jobs.map((job) => {
+          const active = sideJob === job.key;
+          const done = doneSideJobs.includes(job.key);
+          return (
+            <button
+              key={job.key}
+              type="button"
+              className={active ? 'side-job active' : 'side-job'}
+              onClick={() => onPickSideJob(active ? null : job.key)}
+            >
+              <span className="side-job-head">
+                {job.title}
+                <em>+{job.bonusHalf / 2} 元</em>
+                {done && <b>已完成</b>}
+              </span>
+              <span className="side-job-note">{job.note}</span>
+            </button>
+          );
+        })}
+        {sideJob && <p className="dim small">已接支线：验收按支线条件判（点一下可取消）</p>}
+      </div>
 
       <div className="group-row">
         <button type="button" onClick={() => setShowTeaching((v) => !v)}>

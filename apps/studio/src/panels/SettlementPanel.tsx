@@ -10,6 +10,7 @@
 import type { JudgeResult } from '@lc/compiler';
 import type { Level } from '@lc/schema';
 import { gradeOf, profitOf } from '../level/progress';
+import type { SideJob } from '../level/sideJobs';
 
 export interface SettlementPanelProps {
   level: Level;
@@ -17,6 +18,9 @@ export interface SettlementPanelProps {
   stars: number;
   /** 图纸是不是玩家自己测出来的 */
   reconMeasured: boolean;
+  /** 本次交付接的支线单（没接就是 null） */
+  sideJob: SideJob | null;
+  sideJobDone: boolean;
   levelName: string;
   result: JudgeResult;
   /** 上一次通关的分数（判断是否破纪录）；首次通关传 null */
@@ -30,6 +34,8 @@ export function SettlementPanel({
   level,
   stars,
   reconMeasured,
+  sideJob,
+  sideJobDone,
   levelName,
   result,
   previousScore,
@@ -97,6 +103,13 @@ export function SettlementPanel({
               : '先做到功能 + 成本达标，再追时序'}
         </em>
       </p>
+
+      {sideJob && (
+        <p className={sideJobDone ? 'record' : 'dim small'}>
+          支线「{sideJob.title}」
+          {sideJobDone ? `达成，奖金 +${sideJob.bonusHalf / 2} 元` : '未达成（条件见委托单）'}
+        </p>
+      )}
 
       <p className="panel-note">
         {reconMeasured

@@ -40,11 +40,13 @@ import {
   reconCount,
   recordAttempt,
   recordClear,
+  recordSideJob,
   saveProgress,
   setRecon,
   starsOf,
 } from './level/progress';
 import { docFor, type GameMode, initialSession, levelOf, storageKeyFor } from './level/session';
+import { applySideJob, findSideJob } from './level/sideJobs';
 import { Inspector } from './panels/Inspector';
 import { JudgePanel } from './panels/JudgePanel';
 import { LevelCard } from './panels/LevelCard';
@@ -123,6 +125,8 @@ export function App(): React.JSX.Element {
   const [settlement, setSettlement] = useState<JudgeResult | null>(null);
   /** 本次交付的星数（结算页展示） */
   const [settlementStars, setSettlementStars] = useState(0);
+  /** 当前接的支线单（同一时刻最多一条，验收按支线条件判） */
+  const [sideJobKey, setSideJobKey] = useState<string | null>(null);
   /** 封装过场：电路被压成一颗芯片落进组件库 */
   const [chipDrop, setChipDrop] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 900, height: 600 });
@@ -597,16 +601,21 @@ export function App(): React.JSX.Element {
   };
 
   // ---- 关卡校验：判定跑在 Worker/主线程，用的就是画布上这份电路 ----
+  /** 判定用的关卡：接了支线单就套上支线条件（规则与主线同源，只是更严） */
+  const activeSideJob = findSideJob(currentLevel, sideJobKey);
+  const judgedLevel =
+    currentLevel && activeSideJob ? applySideJob(currentLevel, activeSideJob) : currentLevel;
+
   const runJudge = async (): Promise<void> => {
-    if (!currentLevel) return;
+    if (!judgedLevel) return;
     setJudging(true);
-    setProgress((prev) => recordAttempt(prev, currentLevel.id));
+    setProgress((prev) => recordAttempt(prev, judgedLevel.id));
     try {
       const response = await runner.send({
         type: 'judge',
-        design: toDesign(doc, { id: `level-${currentLevel.id}`, name: currentLevel.title }),
+        design: toDesign(doc, { id: `level-${judgedLevel.id}`, name: judgedLevel.title }),
         library: doc.library.map((m) => m.template),
-        level: currentLevel,
+        level: judgedLevel,
         hardcore: forcedHardcore || mode === 'timing',
       });
       if (response.error || !response.judge) {
@@ -666,15 +675,19 @@ export function App(): React.JSX.Element {
     commit({ ...doc, library: addModule(doc.library, stored) });
     // 星级：功能（交付成功）/ 成本（满分）/ 时序（硬核或时序达标）
     const stars = starsOf(judgeResult, forcedHardcore || mode === 'timing');
-    setProgress((prev) =>
-      recordClear(
+    setProgress((prev) => {
+      const cleared = recordClear(
         { ...prev, library: addModule(prev.library, stored) },
         currentLevel.id,
         judgeResult.score,
         judgeResult.costHalf,
         stars,
-      ),
-    );
+      );
+      // 支线单达成 → 额外奖金入钱包
+      return activeSideJob
+        ? recordSideJob(cleared, currentLevel.id, activeSideJob.key, activeSideJob.bonusHalf)
+        : cleared;
+    });
     const index = ALL_LEVELS.findIndex((l) => l.id === currentLevel.id);
     const next = ALL_LEVELS[index + 1];
     // 过场：芯片落进组件库 → 结算页（客户验收报告 + 钱 + 评级）
@@ -890,6 +903,11 @@ export function App(): React.JSX.Element {
                   level={currentLevel}
                   costHalf={snapshot?.cost.half ?? 0}
                   reconDone={Boolean(progress.recon[currentLevel.id])}
+                  sideJob={sideJobKey}
+                  doneSideJobs={Object.keys(progress.sideJobs)
+                    .filter((id) => id.startsWith(`${currentLevel.id}:`))
+                    .map((id) => id.slice(currentLevel.id.length + 1))}
+                  onPickSideJob={setSideJobKey}
                   onShowHint={() => setToast(currentLevel.hint)}
                 />
                 <ReconPanel
@@ -955,6 +973,8 @@ export function App(): React.JSX.Element {
               level={currentLevel}
               stars={settlementStars}
               reconMeasured={progress.recon[currentLevel.id] === 'measured'}
+              sideJob={activeSideJob}
+              sideJobDone={Boolean(progress.sideJobs[`${currentLevel.id}:${activeSideJob?.key}`])}
               levelName={currentLevel.unlock?.name ?? currentLevel.title}
               result={settlement}
               previousScore={levelRecord?.score ?? null}
@@ -970,7 +990,7 @@ export function App(): React.JSX.Element {
           )}
           {currentLevel && !settlement && (
             <JudgePanel
-              level={currentLevel}
+              level={judgedLevel ?? currentLevel}
               result={judgeResult}
               busy={judging}
               record={levelRecord}

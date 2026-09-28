@@ -954,3 +954,64 @@ body,
   background: #7fd6a0;
   border-radius: 2px;
 }
+
+/* ---- 支线单 ---- */
+.side-jobs h4 {
+  margin: 8px 0 4px;
+  font-size: 12px;
+  color: #d9a95c;
+}
+
+.side-job {
+  display: block;
+  width: 100%;
+  padding: 4px 7px;
+  margin-bottom: 4px;
+  color: #cfe0f0;
+  text-align: left;
+  background: #161e26;
+  border: 1px dashed #37485a;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.side-job.active {
+  border-style: solid;
+  border-color: #6cb2ff;
+  background: #17232e;
+}
+
+.side-job-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.side-job-head em {
+  font-style: normal;
+  color: #f2c14e;
+}
+
+.side-job-head b {
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #0d141a;
+  background: #7fd6a0;
+  border-radius: 2px;
+}
+
+.side-job-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #8b9bab;
+}
+
+.map-recon.map-side {
+  color: #0d141a;
+  background: #d9a95c;
+}

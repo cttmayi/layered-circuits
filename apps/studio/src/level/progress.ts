@@ -72,6 +72,35 @@ export interface Progress {
   walletHalf: number;
   /** 黑盒侦察记录：关卡 id → measured（自主测绘）| skipped（看了答案） */
   recon: Record<string, ReconState>;
+  /** 支线单完成记录：`关卡id:支线key` → 拿到的奖金（半单位）；也用于任务墙徽章 */
+  sideJobs: Record<string, number>;
+}
+
+/** 钱包 = 每关最好一次的利润 + 各支线单奖金（都由存档推导，不重复发钱） */
+export function walletOf(progress: Progress): number {
+  const fromLevels = ALL_LEVELS.reduce(
+    (sum, level) => sum + (progress.cleared[level.id]?.bestProfitHalf ?? 0),
+    0,
+  );
+  const fromJobs = Object.values(progress.sideJobs).reduce((sum, bonus) => sum + bonus, 0);
+  return fromLevels + fromJobs;
+}
+
+/** 支线单完成数 */
+export function sideJobCount(progress: Progress): number {
+  return Object.keys(progress.sideJobs).length;
+}
+
+export function recordSideJob(
+  progress: Progress,
+  levelId: string,
+  key: string,
+  bonusHalf: number,
+): Progress {
+  const id = `${levelId}:${key}`;
+  const sideJobs = { ...progress.sideJobs, [id]: Math.max(progress.sideJobs[id] ?? 0, bonusHalf) };
+  const next = { ...progress, sideJobs };
+  return { ...next, walletHalf: walletOf(next) };
 }
 
 /** 自主测绘的关卡数（图纸全靠自己测出来的） */
@@ -84,7 +113,7 @@ export function setRecon(progress: Progress, levelId: string, state: ReconState)
 }
 
 export function emptyProgress(): Progress {
-  return { cleared: {}, attempts: {}, library: [], walletHalf: 0, recon: {} };
+  return { cleared: {}, attempts: {}, library: [], walletHalf: 0, recon: {}, sideJobs: {} };
 }
 
 export function loadProgress(): Progress {
@@ -98,6 +127,7 @@ export function loadProgress(): Progress {
       library: Array.isArray(parsed.library) ? (parsed.library as StoredModule[]) : [],
       walletHalf: typeof parsed.walletHalf === 'number' ? parsed.walletHalf : 0,
       recon: (parsed.recon as Record<string, ReconState>) ?? {},
+      sideJobs: (parsed.sideJobs as Record<string, number>) ?? {},
     };
   } catch {
     return emptyProgress();
@@ -147,12 +177,9 @@ export function recordClear(
     clearedAt: previous?.clearedAt ?? Date.now(),
   };
   const cleared = { ...progress.cleared, [levelId]: record };
-  // 钱包 = 每关最好一次的利润之和（重挑战刷新纪录时会重算，不会重复发钱）
-  const walletHalf = ALL_LEVELS.reduce(
-    (sum, item) => sum + (cleared[item.id]?.bestProfitHalf ?? 0),
-    0,
-  );
-  return { ...progress, cleared, walletHalf };
+  const next = { ...progress, cleared };
+  // 钱包 = 每关最好一次的利润 + 支线奖金（重挑战刷新纪录时会重算，不会重复发钱）
+  return { ...next, walletHalf: walletOf(next) };
 }
 
 export function recordAttempt(progress: Progress, levelId: string): Progress {
@@ -326,6 +353,7 @@ export function importSave(text: string): { progress: Progress; error?: string }
     library: Array.isArray(raw.library) ? (raw.library as StoredModule[]) : [],
     walletHalf: typeof raw.walletHalf === 'number' ? raw.walletHalf : 0,
     recon: (raw.recon as Record<string, ReconState>) ?? {},
+    sideJobs: (raw.sideJobs as Record<string, number>) ?? {},
   };
   return { progress };
 }

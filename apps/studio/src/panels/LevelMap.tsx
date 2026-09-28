@@ -6,7 +6,13 @@
  */
 
 import { ALL_LEVELS } from '@lc/content';
-import { isLevelUnlocked, MAX_STARS_PER_LEVEL, type Progress, reconCount } from '../level/progress';
+import {
+  isLevelUnlocked,
+  MAX_STARS_PER_LEVEL,
+  type Progress,
+  reconCount,
+  sideJobCount,
+} from '../level/progress';
 
 export interface LevelMapProps {
   progress: Progress;
@@ -42,7 +48,8 @@ export function LevelMap({ progress, currentLevelId, onPick }: LevelMapProps): R
       <h3>任务墙</h3>
       <p className="panel-note">
         已交付 {Object.keys(progress.cleared).length}/{ALL_LEVELS.length} · 星 {earned}/
-        {ALL_LEVELS.length * MAX_STARS_PER_LEVEL} · 自主测绘 {reconCount(progress)}
+        {ALL_LEVELS.length * MAX_STARS_PER_LEVEL} · 自主测绘 {reconCount(progress)} · 支线{' '}
+        {sideJobCount(progress)}
       </p>
       {stages.map((stage) => {
         const levels = ALL_LEVELS.filter((level) => level.stage === stage);
@@ -69,6 +76,13 @@ export function LevelMap({ progress, currentLevelId, onPick }: LevelMapProps): R
                       {KIND_LABEL[level.kind] ? (
                         <span className="map-kind">{KIND_LABEL[level.kind]}</span>
                       ) : null}
+                      {Object.keys(progress.sideJobs).some((id) =>
+                        id.startsWith(`${level.id}:`),
+                      ) && (
+                        <span className="map-recon map-side" title="这张单接了支线">
+                          支线
+                        </span>
+                      )}
                       {progress.recon[level.id] === 'measured' && (
                         <span className="map-recon" title="这张图纸是你自己测出来的">
                           测绘

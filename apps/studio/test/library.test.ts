@@ -7,6 +7,8 @@
  *  - 坏存档不许污染现有进度（导入失败必须原样返回错误）。
  */
 
+import { ALL_LEVELS } from '@lc/content';
+import type { Level } from '@lc/schema';
 import { describe, expect, it } from 'vitest';
 import type { StoredModule } from '../src/editor/model';
 import {
@@ -26,8 +28,11 @@ import {
   rankOf,
   recordAttempt,
   recordClear,
+  recordSideJob,
+  sideJobCount,
   starsOf,
 } from '../src/level/progress';
+import { applySideJob, type SideJob, sideJobsOf } from '../src/level/sideJobs';
 
 function makeModule(name: string, hash: string, extra: Partial<StoredModule> = {}): StoredModule {
   return {
@@ -212,5 +217,37 @@ describe('三星目标与称号（P1）', () => {
     expect(rankOf(progress).title).toBe('学徒'); // 只通了 2 单，还不够 3 单
     progress = recordClear(progress, 's1-or', 100, 8, 3);
     expect(rankOf(progress).title).toBe('维修铺师傅');
+  });
+});
+
+describe('支线单（加急 / 手工 / 省料）', () => {
+  it('加急单压缩交期，手工单禁用组件库，早期关卡改成省料单', () => {
+    const notLevel = ALL_LEVELS[0] as Level;
+    const jobs = sideJobsOf(notLevel);
+    expect(jobs.map((j) => j.key)).toEqual(['rush', 'lean']); // 第 1 关本来就不给用积木
+
+    const rush = jobs[0] as SideJob;
+    const rushed = applySideJob(notLevel, rush);
+    expect(rushed.timingBudgetPs).toBe(Math.floor((notLevel.timingBudgetPs ?? 0) * 0.75));
+    expect(rushed.budgetHalf).toBe(notLevel.budgetHalf); // 加急不动款项
+
+    const lean = applySideJob(notLevel, jobs[1] as SideJob);
+    expect(lean.budgetHalf).toBe(notLevel.optimalHalf); // 省料单要求做到对标成本
+
+    // 后面的关卡能用手工单：模块通道被彻底关掉
+    const laterLevel = ALL_LEVELS.find((l) => l.moduleAccess !== 'none') as Level;
+    const manual = sideJobsOf(laterLevel).find((j) => j.key === 'manual') as SideJob;
+    expect(applySideJob(laterLevel, manual).moduleAccess).toBe('none');
+  });
+
+  it('支线奖金入钱包（每关每支线只发一次，取最大）', () => {
+    let progress = emptyProgress();
+    progress = recordClear(progress, 's1-not', 100, 8, 3);
+    const before = progress.walletHalf;
+    progress = recordSideJob(progress, 's1-not', 'rush', 4);
+    expect(progress.walletHalf).toBe(before + 4);
+    progress = recordSideJob(progress, 's1-not', 'rush', 4); // 重复达成不重复发钱
+    expect(progress.walletHalf).toBe(before + 4);
+    expect(sideJobCount(progress)).toBe(1);
   });
 });
