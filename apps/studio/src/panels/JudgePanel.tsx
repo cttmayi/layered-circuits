@@ -27,7 +27,7 @@ export function JudgePanel({
   const outputNames = [...new Set(level.vectors.flatMap((v) => Object.keys(v.expect ?? {})))];
 
   return (
-    <section className="panel">
+    <section className="panel judge">
       <h3>本关校验</h3>
       <div className="group-row">
         <button type="button" className="primary" onClick={onJudge} disabled={busy}>
