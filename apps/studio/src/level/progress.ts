@@ -16,7 +16,29 @@ export interface LevelRecord {
   score: number;
   /** 历史最低成本（半单位） */
   bestCostHalf: number;
+  /** 这一单赚到的钱（半单位口径：款项 − 材料费），取历史最好 */
+  bestProfitHalf: number;
   clearedAt: number;
+}
+
+/** 评级（免费试错的压力来源）：分数 → S/A/B/C */
+export type Grade = 'S' | 'A' | 'B' | 'C';
+
+export function gradeOf(score: number): Grade {
+  if (score >= 100) return 'S';
+  if (score >= 90) return 'A';
+  if (score >= 75) return 'B';
+  return 'C';
+}
+
+/** 这一单的款项（半单位）：成本挑战关没有预算，按对标成本结算 */
+export function paymentOf(level: Level): number {
+  return level.kind === 'cost' ? level.optimalHalf : level.budgetHalf;
+}
+
+/** 利润 = 款项 − 材料费（可为负：客户买的是「能用」，亏钱不拦你交付，但会记在账上） */
+export function profitOf(level: Level, costHalf: number): number {
+  return paymentOf(level) - costHalf;
 }
 
 export interface Progress {
@@ -25,10 +47,12 @@ export interface Progress {
   /** 尝试次数（含失败），只用于展示 */
   attempts: Record<string, number>;
   library: StoredModule[];
+  /** 钱包：每关最好一次的利润之和（不刷单：重挑战只抬高纪录，不重复发钱） */
+  walletHalf: number;
 }
 
 export function emptyProgress(): Progress {
-  return { cleared: {}, attempts: {}, library: [] };
+  return { cleared: {}, attempts: {}, library: [], walletHalf: 0 };
 }
 
 export function loadProgress(): Progress {
@@ -40,6 +64,7 @@ export function loadProgress(): Progress {
       cleared: parsed.cleared && typeof parsed.cleared === 'object' ? parsed.cleared : {},
       attempts: parsed.attempts && typeof parsed.attempts === 'object' ? parsed.attempts : {},
       library: Array.isArray(parsed.library) ? (parsed.library as StoredModule[]) : [],
+      walletHalf: typeof parsed.walletHalf === 'number' ? parsed.walletHalf : 0,
     };
   } catch {
     return emptyProgress();
@@ -78,12 +103,21 @@ export function recordClear(
   costHalf: number,
 ): Progress {
   const previous = progress.cleared[levelId];
+  const level = ALL_LEVELS.find((l) => l.id === levelId);
+  const profit = level ? profitOf(level, costHalf) : 0;
   const record: LevelRecord = {
     score: Math.max(previous?.score ?? 0, score),
     bestCostHalf: previous ? Math.min(previous.bestCostHalf, costHalf) : costHalf,
+    bestProfitHalf: previous ? Math.max(previous.bestProfitHalf, profit) : profit,
     clearedAt: previous?.clearedAt ?? Date.now(),
   };
-  return { ...progress, cleared: { ...progress.cleared, [levelId]: record } };
+  const cleared = { ...progress.cleared, [levelId]: record };
+  // 钱包 = 每关最好一次的利润之和（重挑战刷新纪录时会重算，不会重复发钱）
+  const walletHalf = ALL_LEVELS.reduce(
+    (sum, item) => sum + (cleared[item.id]?.bestProfitHalf ?? 0),
+    0,
+  );
+  return { ...progress, cleared, walletHalf };
 }
 
 export function recordAttempt(progress: Progress, levelId: string): Progress {
@@ -219,6 +253,7 @@ export function importSave(text: string): { progress: Progress; error?: string }
     cleared: raw.cleared && typeof raw.cleared === 'object' ? raw.cleared : {},
     attempts: raw.attempts && typeof raw.attempts === 'object' ? raw.attempts : {},
     library: Array.isArray(raw.library) ? (raw.library as StoredModule[]) : [],
+    walletHalf: typeof raw.walletHalf === 'number' ? raw.walletHalf : 0,
   };
   return { progress };
 }

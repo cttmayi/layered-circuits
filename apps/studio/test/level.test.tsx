@@ -210,7 +210,7 @@ describe('关卡界面', () => {
     render(<App />);
 
     // 关卡卡片：目标说明 + 目标真值表 a→y（0→1 / 1→0）
-    expect(screen.getByText(/第 1 阶段 · 非门/)).toBeTruthy();
+    expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
     const targetTable = document.querySelector('.level-card .truth') as HTMLTableElement;
     expect(targetTable).toBeTruthy();
     const cells = [...targetTable.querySelectorAll('tbody tr')].map((tr) =>
@@ -232,22 +232,26 @@ describe('关卡界面', () => {
     expect(select.options[0]?.disabled).toBe(false);
     expect(select.options[1]?.disabled).toBe(true);
 
-    // 预算进度：成本 0 / 预算 5（第 1 关最优 4）
-    expect(document.querySelector('.budget-text')?.textContent).toContain('预算 5');
+    // 用料进度：材料费 0 / 款项 5 元（第 1 关对标成本 4）
+    const budgetText = document.querySelector('.budget-text')?.textContent ?? '';
+    expect(budgetText).toContain('款项');
+    expect(budgetText).toContain('5');
     expect(screen.getByText(new RegExp(`已通关 0/${LEVEL_TOTAL}`))).toBeTruthy();
   });
 
-  it('点「校验本关」会走判定通道并报告未通过（空电路）', async () => {
+  it('点「交付验收」会走判定通道并报告被打回（空电路）', async () => {
     render(<App />);
-    const judgeButtons = screen.getAllByText('校验本关');
+    const judgeButtons = screen.getAllByText('交付验收');
     judgeButtons[0]?.click();
-    await waitFor(() => expect(screen.getByText('还没通过')).toBeTruthy(), { timeout: 5000 });
+    await waitFor(() => expect(screen.getByText(/客户打回了|还没验收/)).toBeTruthy(), {
+      timeout: 5000,
+    });
     // 空电路缺输出端口接法 → 至少给出功能或端口层面的错误
     expect(document.querySelectorAll('.diags .error').length).toBeGreaterThan(0);
 
     // 切到自由模式后不再有校验按钮（关卡约束也随之解除）
     screen.getByText('自由模式').click();
-    await waitFor(() => expect(screen.queryByText('校验本关')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('交付验收')).toBeNull());
     // 「电容」在元件库按钮和成本表里都会出现，取按钮那个（避免跑并发时的时序差异）
     const capButton = screen
       .getAllByText('电容')
@@ -269,7 +273,7 @@ describe('关卡界面', () => {
     render(<App />);
 
     // 默认应该直接进入「已解锁但还没通关」的第 2 关（与门）
-    await waitFor(() => expect(screen.getByText(/第 1 阶段 · 与门/)).toBeTruthy(), {
+    await waitFor(() => expect(screen.getByText(/委托单 · 与门/)).toBeTruthy(), {
       timeout: 5000,
     });
     const select = document.querySelector('.level-select') as HTMLSelectElement;

@@ -46,6 +46,7 @@ import { JudgePanel } from './panels/JudgePanel';
 import { LevelCard } from './panels/LevelCard';
 import { LibraryPanel } from './panels/LibraryPanel';
 import { Palette } from './panels/Palette';
+import { SettlementPanel } from './panels/SettlementPanel';
 import { TruthTable } from './panels/TruthTable';
 import { WaveformPanel } from './panels/WaveformPanel';
 import type { SimSnapshot, StudioResponse } from './sim/protocol';
@@ -98,6 +99,13 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     if (forcedHardcore) setMode('timing');
   }, [forcedHardcore]);
+
+  // 换关时关掉上一单的结算页与过场（依赖 levelId 就是为了「换单即清屏」）
+  useEffect(() => {
+    void levelId;
+    setSettlement(null);
+    setChipDrop(null);
+  }, [levelId]);
   const [showTruth, setShowTruth] = useState(true);
   const [showWave, setShowWave] = useState(false);
   const [showTiming, setShowTiming] = useState(false);
@@ -105,6 +113,10 @@ export function App(): React.JSX.Element {
   const [resultDoc, setResultDoc] = useState<Doc | null>(null);
   const [runnerKind, setRunnerKind] = useState(runner.kind);
   const [toast, setToast] = useState<string | null>(null);
+  /** 结算页：交付并封装之后出现（客户验收报告 + 钱 + 评级） */
+  const [settlement, setSettlement] = useState<JudgeResult | null>(null);
+  /** 封装过场：电路被压成一颗芯片落进组件库 */
+  const [chipDrop, setChipDrop] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 900, height: 600 });
 
   // ---- 画布尺寸自适应（含 HiDPI） ----
@@ -650,8 +662,12 @@ export function App(): React.JSX.Element {
     });
     const index = ALL_LEVELS.findIndex((l) => l.id === currentLevel.id);
     const next = ALL_LEVELS[index + 1];
+    // 过场：芯片落进组件库 → 结算页（客户验收报告 + 钱 + 评级）
+    setChipDrop(name);
+    window.setTimeout(() => setChipDrop(null), 1400);
+    setSettlement(judgeResult);
     setToast(
-      `已封装【${name}】：成本 ${info.costHalf / 2}，已加入组件库${next ? `，已解锁下一关「${next.title}」` : '，阶段 1 全部通关！'}`,
+      `已交付【${name}】：材料费 ${info.costHalf / 2} 元${next ? `，已解锁下一单「${next.title}」` : '，主线全部完成'}`,
     );
   };
 
@@ -748,11 +764,11 @@ export function App(): React.JSX.Element {
               onClick={() => void runJudge()}
               disabled={judging}
             >
-              {judging ? '校验中…' : '校验本关'}
+              {judging ? '验收中…' : '交付验收'}
             </button>
             <span className="cleared-count">
               已通关 {ALL_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
-              {ALL_LEVELS.length}
+              {ALL_LEVELS.length} · 钱包 {progress.walletHalf / 2} 元
             </span>
           </div>
         )}
@@ -879,6 +895,14 @@ export function App(): React.JSX.Element {
                 ? '再点一个引脚完成连线（Esc 取消）'
                 : '拖动空白处平移 · 滚轮缩放 · 点两个引脚连线 · 点输入符号切换 0/1（Alt 循环 X/Z）'}
           </div>
+          {chipDrop && (
+            <div className="chip-drop">
+              <div className="chip">
+                <span>{chipDrop}</span>
+              </div>
+              <p>交付完成 · 已封装进组件库</p>
+            </div>
+          )}
           {toast && (
             <button type="button" className="toast" onClick={() => setToast(null)}>
               {toast}
@@ -897,7 +921,23 @@ export function App(): React.JSX.Element {
         </div>
 
         <div className="side">
-          {currentLevel && (
+          {currentLevel && settlement && (
+            <SettlementPanel
+              level={currentLevel}
+              levelName={currentLevel.unlock?.name ?? currentLevel.title}
+              result={settlement}
+              previousScore={levelRecord?.score ?? null}
+              walletHalf={progress.walletHalf}
+              nextLevelTitle={
+                ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]?.title
+              }
+              onNextLevel={() => {
+                const next = ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1];
+                if (next) switchTo('level', next.id);
+              }}
+            />
+          )}
+          {currentLevel && !settlement && (
             <JudgePanel
               level={currentLevel}
               result={judgeResult}

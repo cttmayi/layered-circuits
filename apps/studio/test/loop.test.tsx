@@ -3,8 +3,8 @@
  * M1 验收：**核心循环真的可玩**。
  *
  * 这个用例完全用鼠标事件走一遍玩家的操作路径：
- *   进入第 1 关 → 从元件库拖 5 个元件 → 点引脚连 6 条线 → 点「校验本关」→ 看到通过
- *   → 点「通关并封装为【非门】」→ 组件库多出【非门】、成绩写入存档、下一关解锁。
+ *   进入第 1 关 → 从元件库拖 5 个元件 → 点引脚连 6 条线 → 点「交付验收」→ 看到通过
+ *   → 点「交付并封装为【非门】」→ 组件库多出【非门】、成绩写入存档、下一关解锁。
  *
  * 换句话说：它不是在测某个函数，而是在测「这个游戏能不能按设计玩下去」。
  */
@@ -56,7 +56,7 @@ const LEVEL_TOTAL = ALL_LEVELS.length;
 describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁下一关', () => {
   it('用鼠标搭出第 1 关的标准解并通过校验，通关闭环产生可复用的【非门】模块', async () => {
     render(<App />);
-    expect(screen.getByText(/第 1 阶段 · 非门/)).toBeTruthy();
+    expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
 
     // ---- 1. 摆放元件（画布上只有关卡预置的 a / y 端口）----
     place('电阻', 280, 240); // R1 基极限流
@@ -93,15 +93,17 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
       { timeout: 5000 },
     );
 
-    // ---- 3. 校验本关 ----
-    fireEvent.click(screen.getAllByText('校验本关')[0] as HTMLButtonElement);
-    await waitFor(() => expect(screen.getByText('通过！得分 100')).toBeTruthy(), { timeout: 5000 });
+    // ---- 3. 交付验收 ----
+    fireEvent.click(screen.getAllByText('交付验收')[0] as HTMLButtonElement);
+    await waitFor(() => expect(screen.getByText('客户验收通过！100 分')).toBeTruthy(), {
+      timeout: 5000,
+    });
 
     // 逐行对比四要素：功能 / 成本 / 关键路径都达标
     const judgeText = document.querySelector('.judge')?.textContent ?? '';
     expect(judgeText).toContain('全部符合');
     expect(judgeText).toContain('1.50 ns');
-    expect(judgeText).toContain('通过！得分 100');
+    expect(judgeText).toContain('客户验收通过！100 分');
     // 判定面板逐行对比：0→1 与 1→0 都是 ✓
     const judged = [...document.querySelectorAll('.judge .truth tbody tr')].map((tr) =>
       [...tr.querySelectorAll('td')].map((td) => td.textContent),
@@ -114,8 +116,8 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
     const attempts = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? '{}').attempts ?? {};
     expect(attempts['s1-not']).toBe(1);
 
-    // ---- 4. 通关并封装 ----
-    fireEvent.click(screen.getByText('通关并封装为【非门】') as HTMLButtonElement);
+    // ---- 4. 交付并封装 ----
+    fireEvent.click(screen.getByText('交付并封装为【非门】') as HTMLButtonElement);
     await waitFor(
       () => {
         const raw = localStorage.getItem(PROGRESS_KEY);

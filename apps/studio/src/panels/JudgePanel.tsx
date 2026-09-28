@@ -14,7 +14,7 @@ export interface JudgePanelProps {
 
 const CELL: Record<string, string> = { 0: 'lo', 1: 'hi', X: 'bad', Z: 'dim' };
 
-/** 右侧「本关校验」面板：逐行对比、错误原因、通关封装按钮 */
+/** 右侧「验收台」：逐行对比、错误原因、交付与封装按钮（客户不会看你的真值表，但你自己得看） */
 export function JudgePanel({
   level,
   result,
@@ -28,27 +28,31 @@ export function JudgePanel({
 
   return (
     <section className="panel judge">
-      <h3>本关校验</h3>
+      <h3>验收台</h3>
       <div className="group-row">
         <button type="button" className="primary" onClick={onJudge} disabled={busy}>
-          {busy ? '校验中…' : '运行校验'}
+          {busy ? '验收中…' : '交付验收'}
         </button>
         {result?.pass && (
           <button type="button" onClick={onClear}>
-            通关并封装为【{level.unlock?.name ?? level.title}】
+            交付并封装为【{level.unlock?.name ?? level.title}】
           </button>
         )}
       </div>
       {record && record.clearedAt > 0 && (
         <p className="dim small">
-          历史最好：{record.score} 分 · 最低成本 {record.bestCostHalf / 2} · 已尝试 {attempts} 次
+          历史最好：{record.score} 分 · 最低材料费 {record.bestCostHalf / 2} · 已尝试 {attempts} 次
         </p>
       )}
 
       {result && (
         <>
           <p className={result.pass ? 'verdict pass' : 'verdict fail'}>
-            {result.pass ? `通过！得分 ${result.score}` : '还没通过'}
+            {result.pass
+              ? `客户验收通过！${result.score} 分`
+              : result.errors.length > 0
+                ? '客户打回了，看下面的问题清单'
+                : '还没验收'}
           </p>
           <table className="kv">
             <tbody>
@@ -63,10 +67,10 @@ export function JudgePanel({
                 </td>
               </tr>
               <tr>
-                <td>成本</td>
+                <td>材料费</td>
                 <td className="num">
-                  {result.costHalf / 2} / {result.budgetHalf / 2}
-                  {result.overBudget && <span className="bad"> 超预算</span>}
+                  {result.costHalf / 2} / 款项 {result.budgetHalf / 2}
+                  {result.overBudget && <span className="bad"> 超支</span>}
                 </td>
               </tr>
               <tr>

@@ -60,3 +60,31 @@ describe('组件库与成绩面板', () => {
     expect(screen.getByText(/已到最省/)).toBeTruthy();
   });
 });
+
+describe('委托单与结算（P0 游戏化外壳）', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('第 1 关显示成一张委托单：委托方、人话需求、合同条款', () => {
+    render(<App />);
+    expect(screen.getByText('委托单 · 非门')).toBeTruthy();
+    expect(screen.getByText('修表铺 · 老周')).toBeTruthy();
+    expect(screen.getByText(/收音机的指示灯接反了/)).toBeTruthy();
+    expect(screen.getByText('款项')).toBeTruthy();
+    expect(screen.getByText('禁忌')).toBeTruthy();
+    expect(screen.getByText(/5 元（材料费自负/)).toBeTruthy();
+  });
+
+  it('钱包余额显示在顶栏，并且来自存档', () => {
+    localStorage.setItem(
+      PROGRESS_KEY,
+      JSON.stringify({
+        cleared: { 's1-not': { score: 100, bestCostHalf: 8, bestProfitHalf: 2, clearedAt: 1 } },
+        attempts: {},
+        library: [],
+        walletHalf: 2,
+      }),
+    );
+    render(<App />);
+    expect(screen.getByText(/钱包 1 元/)).toBeTruthy();
+  });
+});

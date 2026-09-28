@@ -1,0 +1,103 @@
+/**
+ * 结算页：交付通过之后的那一下「仪式感」。
+ *
+ * 这一屏承担三件事：
+ *  1. 把验收结果翻译成客户语言（能用了 / 便宜 / 快），而不是工程报告；
+ *  2. 算出这一单的钱（款项 − 材料费 = 利润）与钱包余额；
+ *  3. 给评级（S/A/B/C）与破纪录提示 —— 免费试错的压力就来自这里。
+ */
+
+import type { JudgeResult } from '@lc/compiler';
+import type { Level } from '@lc/schema';
+import { type Grade, gradeOf, profitOf } from '../level/progress';
+
+export interface SettlementPanelProps {
+  level: Level;
+  levelName: string;
+  result: JudgeResult;
+  /** 上一次通关的分数（判断是否破纪录）；首次通关传 null */
+  previousScore: number | null;
+  walletHalf: number;
+  onNextLevel: () => void;
+  nextLevelTitle?: string;
+}
+
+export function gradeOfResult(result: JudgeResult): Grade {
+  return gradeOf(result.score);
+}
+
+export function SettlementPanel({
+  level,
+  levelName,
+  result,
+  previousScore,
+  walletHalf,
+  onNextLevel,
+  nextLevelTitle,
+}: SettlementPanelProps): React.JSX.Element {
+  const profit = profitOf(level, result.costHalf);
+  const payment = profit + result.costHalf;
+  const grade = gradeOf(result.score);
+  const brokeRecord = previousScore !== null && result.score > previousScore;
+
+  return (
+    <section className="panel settlement">
+      <h3>验收报告 · {level.title}</h3>
+      <p className="settle-client">
+        「{result.pass ? '东西能用，做得好。' : '这版还不行，麻烦师傅再改改。'}」
+      </p>
+
+      <div className={`grade grade-${grade.toLowerCase()}`}>
+        <span className="grade-letter">{grade}</span>
+        <span className="grade-text">
+          <strong>{result.score} 分</strong>
+          <em>
+            功能 {result.failedRows === 0 ? '✓' : '✗'} · 用料 {result.overBudget ? '超支' : '✓'} ·
+            时序 {result.timingBudgetPs === null || result.timingOk ? '✓' : '✗'}
+          </em>
+        </span>
+      </div>
+
+      <table className="kv">
+        <tbody>
+          <tr>
+            <td>客户付款</td>
+            <td className="num">{payment / 2} 元</td>
+          </tr>
+          <tr>
+            <td>材料费</td>
+            <td className="num">− {result.costHalf / 2} 元</td>
+          </tr>
+          <tr>
+            <td>本单利润</td>
+            <td className="num">
+              <strong className={profit < 0 ? 'bad' : 'hi'}>
+                {profit < 0 ? '' : '+'}
+                {profit / 2} 元
+              </strong>
+            </td>
+          </tr>
+          <tr>
+            <td>钱包余额</td>
+            <td className="num">{walletHalf / 2} 元</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {brokeRecord && (
+        <p className="record">破纪录！比上次多得 {result.score - (previousScore ?? 0)} 分</p>
+      )}
+      {result.score >= 100 && <p className="record">已达对标成本 —— 这是行家做法。</p>}
+
+      <div className="group-row">
+        <button type="button" className="primary" onClick={onNextLevel} disabled={!nextLevelTitle}>
+          {nextLevelTitle ? `接着做下一单：${nextLevelTitle}` : '阶段任务已全部完成'}
+        </button>
+      </div>
+      <p className="panel-note">
+        委托 {level.id} · 交付物【{levelName}】已进组件库
+        {level.kind === 'cost' ? ' · 成本挑战关：不限预算，按对标成本结算' : ''}
+      </p>
+    </section>
+  );
+}

@@ -633,3 +633,177 @@ body,
   font-size: 12px;
   color: #7d8ea3;
 }
+
+/* ---- 委托单（叙事壳） ---- */
+.commission-client {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 2px;
+  font-weight: 600;
+}
+
+.client-tag {
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #0d141a;
+  background: #d9a95c;
+  border-radius: 3px;
+}
+
+.commission-note {
+  margin: 4px 0 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #dfe7ef;
+  background: #1a2229;
+  border-left: 3px solid #d9a95c;
+  border-radius: 3px;
+}
+
+.contract {
+  display: grid;
+  gap: 3px;
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+.contract > div {
+  display: flex;
+  gap: 6px;
+}
+
+.contract dt {
+  flex: 0 0 34px;
+  color: #8b9bab;
+}
+
+.contract dd {
+  margin: 0;
+  color: #cfe0f0;
+}
+
+/* ---- 封装过场：电路压成一颗芯片落进组件库 ---- */
+.chip-drop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 12, 16, 0.72);
+  animation: chip-fade 1.4s ease forwards;
+  pointer-events: none;
+}
+
+.chip-drop p {
+  margin: 0;
+  font-size: 13px;
+  color: #d9a95c;
+  letter-spacing: 1px;
+}
+
+.chip {
+  display: grid;
+  place-items: center;
+  min-width: 92px;
+  height: 56px;
+  padding: 0 12px;
+  font-weight: 700;
+  color: #0d141a;
+  background: linear-gradient(160deg, #e6c078, #c9922f);
+  border: 2px solid #7a5a1c;
+  border-radius: 6px;
+  box-shadow: 0 0 0 4px rgba(217, 169, 92, 0.18);
+  animation: chip-shrink 1.4s cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+}
+
+@keyframes chip-shrink {
+  0% {
+    transform: scale(1.35) translateY(-18px);
+    opacity: 0;
+  }
+  25% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.42) translate(120px, 190px);
+    opacity: 0;
+  }
+}
+
+@keyframes chip-fade {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---- 结算页 ---- */
+.grade {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  margin: 6px 0 8px;
+  background: #1a2229;
+  border-radius: 4px;
+}
+
+.grade-letter {
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.grade-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.grade-text em {
+  font-style: normal;
+  color: #8b9bab;
+}
+
+.grade-s .grade-letter {
+  color: #f2c14e;
+  text-shadow: 0 0 12px rgba(242, 193, 78, 0.5);
+}
+
+.grade-a .grade-letter {
+  color: #58d68d;
+}
+
+.grade-b .grade-letter {
+  color: #6cb2ff;
+}
+
+.grade-c .grade-letter {
+  color: #8b9bab;
+}
+
+.settle-client {
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #dfe7ef;
+  background: #16202a;
+  border-left: 3px solid #6cb2ff;
+  border-radius: 3px;
+}
+
+.record {
+  margin: 6px 0;
+  font-size: 12px;
+  color: #f2c14e;
+}

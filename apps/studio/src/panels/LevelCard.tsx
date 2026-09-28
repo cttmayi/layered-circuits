@@ -1,3 +1,4 @@
+import { commissionOf, contractOf } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { useState } from 'react';
 
@@ -10,9 +11,11 @@ export interface LevelCardProps {
 
 const CELL: Record<string, string> = { 0: 'lo', 1: 'hi', X: 'bad', Z: 'dim' };
 
-/** 左侧「本关目标」卡片：目标说明 + 教学点 + 目标真值表 + 预算进度 */
+/** 左侧「委托单」：委托方 + 人话需求 + 合同条款 + 图纸（真值表）+ 用料进度 */
 export function LevelCard({ level, costHalf, onShowHint }: LevelCardProps): React.JSX.Element {
   const [showTeaching, setShowTeaching] = useState(false);
+  const commission = commissionOf(level);
+  const contract = contractOf(level);
   const budget = level.budgetHalf;
   const ratio = budget > 0 ? Math.min(1, costHalf / budget) : 0;
   const over = costHalf > budget;
@@ -21,8 +24,27 @@ export function LevelCard({ level, costHalf, onShowHint }: LevelCardProps): Reac
 
   return (
     <section className="panel level-card">
-      <h3>第 1 阶段 · {level.title}</h3>
-      <p className="small">{level.brief}</p>
+      <h3>委托单 · {level.title}</h3>
+      <p className="commission-client">
+        <span className="client-tag">委托方</span>
+        {commission.client}
+      </p>
+      <p className="commission-note">「{commission.note}」</p>
+      <dl className="contract">
+        <div>
+          <dt>款项</dt>
+          <dd>{contract.pay}</dd>
+        </div>
+        <div>
+          <dt>交期</dt>
+          <dd>{contract.deadline}</dd>
+        </div>
+        <div>
+          <dt>禁忌</dt>
+          <dd>{contract.taboo}</dd>
+        </div>
+      </dl>
+      <p className="small dim">{level.brief}</p>
 
       <div className="budget">
         <div className="budget-bar">
@@ -33,9 +55,10 @@ export function LevelCard({ level, costHalf, onShowHint }: LevelCardProps): Reac
         </div>
         <div className="budget-text">
           <span>
-            成本 <strong className={over ? 'bad' : 'hi'}>{costHalf / 2}</strong> / 预算 {budget / 2}
+            材料费 <strong className={over ? 'bad' : 'hi'}>{costHalf / 2}</strong> / 款项{' '}
+            {budget / 2}
           </span>
-          <span className="dim">最优 {level.optimalHalf / 2}</span>
+          <span className="dim">对标 {level.optimalHalf / 2}</span>
         </div>
       </div>
 
