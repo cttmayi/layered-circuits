@@ -48,11 +48,13 @@ import {
 } from './level/progress';
 import { docFor, type GameMode, initialSession, levelOf, storageKeyFor } from './level/session';
 import { applySideJob, findSideJob } from './level/sideJobs';
+import { CommissionModal } from './panels/CommissionModal';
 import { Inspector } from './panels/Inspector';
 import { JudgePanel } from './panels/JudgePanel';
 import { LevelCard } from './panels/LevelCard';
 import { LevelMap } from './panels/LevelMap';
 import { LibraryPanel } from './panels/LibraryPanel';
+import { Modal } from './panels/Modal';
 import { Palette } from './panels/Palette';
 import { ReconPanel } from './panels/ReconPanel';
 import { SettlementPanel } from './panels/SettlementPanel';
@@ -116,6 +118,7 @@ export function App(): React.JSX.Element {
     setSettlement(null);
     setChipDrop(null);
   }, [levelId]);
+
   const [showTruth, setShowTruth] = useState(true);
   const [showWave, setShowWave] = useState(false);
   const [showTiming, setShowTiming] = useState(false);
@@ -127,6 +130,11 @@ export function App(): React.JSX.Element {
   const [settlement, setSettlement] = useState<JudgeResult | null>(null);
   /** 本次交付的星数（结算页展示） */
   const [settlementStars, setSettlementStars] = useState(0);
+  /** 接单对话框：每个关卡每会话弹一次 */
+  const [commissionOpen, setCommissionOpen] = useState(false);
+  const commissionSeen = useRef(new Set<string>());
+  /** 中央提示对话框（图纸解开等小节点） */
+  const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
   /** 当前接的支线单（同一时刻最多一条，验收按支线条件判） */
   const [sideJobKey, setSideJobKey] = useState<string | null>(null);
   /** 封装过场：电路被压成一颗芯片落进组件库 */
@@ -591,6 +599,14 @@ export function App(): React.JSX.Element {
   // ---- 关卡：切换关卡 / 自由模式 ----
   const currentLevel = levelOf(gameMode, levelId);
 
+  // 进关弹「新委托」：每个关卡每会话只弹一次，开工后不再打扰
+  useEffect(() => {
+    if (!currentLevel || gameMode !== 'level') return;
+    if (commissionSeen.current.has(currentLevel.id)) return;
+    commissionSeen.current.add(currentLevel.id);
+    setCommissionOpen(true);
+  }, [currentLevel, gameMode]);
+
   const switchTo = (nextMode: GameMode, nextLevelId: string): void => {
     setGameMode(nextMode);
     setLevelId(nextLevelId);
@@ -917,9 +933,15 @@ export function App(): React.JSX.Element {
                   level={currentLevel}
                   state={progress.recon[currentLevel.id]}
                   hasProbe={ownsEquipment(progress, 'probe')}
-                  onMeasured={() =>
-                    setProgress((prev) => setRecon(prev, currentLevel.id, 'measured'))
-                  }
+                  onMeasured={() => {
+                    setProgress((prev) => setRecon(prev, currentLevel.id, 'measured'));
+                    setNotice({
+                      title: '图纸解开了',
+                      body: `这张单的答案是你自己一格格测出来的 —— 黑盒侦察完成，可以开工搭电路了。${
+                        levelRecord?.score !== undefined ? '' : ''
+                      }`,
+                    });
+                  }}
                   onSkip={() => setProgress((prev) => setRecon(prev, currentLevel.id, 'skipped'))}
                 />
               </>
@@ -945,6 +967,23 @@ export function App(): React.JSX.Element {
                 ? '再点一个引脚完成连线（Esc 取消）'
                 : '拖动空白处平移 · 滚轮缩放 · 点两个引脚连线 · 点输入符号切换 0/1（Alt 循环 X/Z）'}
           </div>
+          {commissionOpen && currentLevel && (
+            <CommissionModal
+              key={currentLevel.id}
+              level={currentLevel}
+              onStart={() => setCommissionOpen(false)}
+            />
+          )}
+          {notice && (
+            <Modal title={notice.title} onClose={() => setNotice(null)}>
+              <p>{notice.body}</p>
+              <div className="group-row">
+                <button type="button" className="primary" onClick={() => setNotice(null)}>
+                  知道了
+                </button>
+              </div>
+            </Modal>
+          )}
           {chipDrop && (
             <div className="chip-drop">
               <div className="chip">
@@ -971,6 +1010,17 @@ export function App(): React.JSX.Element {
         </div>
 
         <div className="side">
+          {currentLevel && (
+            <JudgePanel
+              level={judgedLevel ?? currentLevel}
+              result={judgeResult}
+              busy={judging}
+              record={levelRecord}
+              attempts={progress.attempts[currentLevel.id] ?? 0}
+              onJudge={() => void runJudge()}
+              onClear={() => void clearLevel()}
+            />
+          )}
           {currentLevel && settlement && (
             <SettlementPanel
               level={currentLevel}
@@ -989,17 +1039,7 @@ export function App(): React.JSX.Element {
                 const next = ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1];
                 if (next) switchTo('level', next.id);
               }}
-            />
-          )}
-          {currentLevel && !settlement && (
-            <JudgePanel
-              level={judgedLevel ?? currentLevel}
-              result={judgeResult}
-              busy={judging}
-              record={levelRecord}
-              attempts={progress.attempts[currentLevel.id] ?? 0}
-              onJudge={() => void runJudge()}
-              onClear={() => void clearLevel()}
+              onDismiss={() => setSettlement(null)}
             />
           )}
           <WorkshopPanel

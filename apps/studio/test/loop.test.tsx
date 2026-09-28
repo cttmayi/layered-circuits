@@ -133,6 +133,12 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
       { timeout: 5000 },
     );
 
+    // 交付后的结算页是中央弹窗（验收报告），点「关掉」留在本关
+    await waitFor(() => expect(screen.getByText(/验收报告 · 非门/)).toBeTruthy(), {
+      timeout: 5000,
+    });
+    expect(document.querySelector('.modal-box')).toBeTruthy();
+
     // ---- 5. 组件库与解锁状态反馈到界面 ----
     await waitFor(
       () => expect(screen.getByText(new RegExp(`已通关 1/${LEVEL_TOTAL}`))).toBeTruthy(),

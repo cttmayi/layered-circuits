@@ -4,7 +4,7 @@
  * 面板必须在关卡模式里真实出现，版本号、溯源入口、重挑战榜与存档按钮都要能看到。
  */
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { PROGRESS_KEY } from '../src/level/progress';
@@ -66,12 +66,16 @@ describe('委托单与结算（P0 游戏化外壳）', () => {
 
   it('第 1 关显示成一张委托单：委托方、人话需求、合同条款', () => {
     render(<App />);
+    // 进关即弹「新委托」对话框（中央），内容与左侧委托单一致
+    expect(screen.getByText('新委托')).toBeTruthy();
+    expect(screen.getAllByText('修表铺 · 老周').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/收音机的指示灯接反了/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('款项').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('禁忌').length).toBeGreaterThanOrEqual(1);
+    // 点开工关掉对话框，左侧卡片仍在
+    fireEvent.click(screen.getByText('开工'));
+    expect(screen.queryByText('新委托')).toBeNull();
     expect(screen.getByText('委托单 · 非门')).toBeTruthy();
-    expect(screen.getByText('修表铺 · 老周')).toBeTruthy();
-    expect(screen.getByText(/收音机的指示灯接反了/)).toBeTruthy();
-    expect(screen.getByText('款项')).toBeTruthy();
-    expect(screen.getByText('禁忌')).toBeTruthy();
-    expect(screen.getByText(/5 元（材料费自负/)).toBeTruthy();
   });
 
   it('钱包余额显示在顶栏，并且来自存档', () => {

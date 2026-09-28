@@ -52,6 +52,10 @@ describe('黑盒侦察', () => {
       ['0', '1'],
       ['1', '0'],
     ]);
+    // 中央弹窗：图纸解开了（黑盒侦察完成的流程时刻）
+    expect(screen.getByText('图纸解开了')).toBeTruthy();
+    fireEvent.click(screen.getByText('知道了'));
+    expect(screen.queryByText('图纸解开了')).toBeNull();
     // 顶栏与存档都记上了
     expect(screen.getAllByText(/自主测绘 1/).length).toBeGreaterThanOrEqual(1);
     const saved = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? '{}') as {
