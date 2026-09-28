@@ -21,7 +21,9 @@ describe('阶段 1 关卡内容', () => {
     expect(nextLevelId('s1-not')).toBe('s1-and');
     // 阶段 1 的最后一关之后进入阶段 2（时序单元），整条线是一个连续的教学顺序
     expect(nextLevelId('s1-xnor')).toBe('s2-sr-latch');
-    expect(nextLevelId('s2-dff')).toBeNull();
+    // 主线最后一关之后是挑战关（成本挑战 / 高频挑战），挑战关之后才是终点
+    expect(nextLevelId('s2-dff')).toBe('s2-dff-cost');
+    expect(nextLevelId('s2-dff-fast')).toBeNull();
   });
 
   it('每关都带完整规格：真值表、端口约定、教学文案、预算与最优成本', () => {
@@ -49,8 +51,17 @@ describe('阶段 1 关卡内容', () => {
         [],
       );
       expect(result.pass, `${level.id} 参考解必须能通关`).toBe(true);
-      expect(result.costHalf, `${level.id} 参考解成本应等于最优成本`).toBe(level.optimalHalf);
-      expect(result.score, `${level.id} 最优成本应拿满分`).toBe(100);
+      // 参考解是「标准解」：它必须落在预算内。有冷门更省解时（求解器发现的），
+      // optimalHalf 会低于标准解成本 —— 这时标准解依然要能通关，只是拿不到满分。
+      expect(
+        result.costHalf,
+        `${level.id} 参考解成本 ${result.costHalf} 应不超过预算 ${level.budgetHalf}`,
+      ).toBeLessThanOrEqual(level.budgetHalf);
+      expect(result.costHalf, `${level.id} 参考解不该比最优还省`).toBeGreaterThanOrEqual(
+        level.optimalHalf,
+      );
+      expect(result.costHalf, `${level.id} 参考解成本应等于满分线`).toBe(level.optimalHalf);
+      expect(result.score, `${level.id} 标准解应拿满分`).toBe(100);
       // 参考解也必须在硬核时序预算内，否则「双难度」是空话
       if (level.timingBudgetPs !== undefined) {
         expect(
@@ -196,13 +207,15 @@ describe('阶段 1 关卡内容', () => {
     expect(result.errors).toEqual([]);
     expect(result.pass).toBe(true);
     // 4 个与非门模块 = 4 × 7 = 28（成本递归累加，与手搭的参考解一致）
-    expect(result.costHalf).toBe(xorLevel.optimalHalf);
+    expect(result.costHalf).toBe(56);
   });
 
-  it('成本递归与封装：关卡产出的模块成本等于关卡最优成本', () => {
+  it('成本递归与封装：封装的成本口径与预算一致（模块成本 = 递归展开后的基础元件成本）', () => {
     for (const level of STAGE1_LEVELS) {
       const { counts } = computeCosts(level.referenceSolution!, emptyLibrary);
-      expect(costHalfOf(counts), `${level.id} 成本口径`).toBe(level.optimalHalf);
+      const half = costHalfOf(counts);
+      expect(half, `${level.id} 参考解成本`).toBeLessThanOrEqual(level.budgetHalf);
+      expect(half, `${level.id} 不能比最优还省`).toBeGreaterThanOrEqual(level.optimalHalf);
     }
   });
 });

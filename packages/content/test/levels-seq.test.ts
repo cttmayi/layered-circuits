@@ -23,9 +23,12 @@ const level = (id: string) => {
 };
 
 describe('阶段 2 关卡内容', () => {
-  it('三个关卡按「锁存器 → 门控锁存器 → 边沿触发器」排列，端口由向量推导', () => {
+  it('主线三关按「锁存器 → 门控锁存器 → 边沿触发器」排列，后面接两个挑战关', () => {
     const ids = STAGE2_LEVELS.map((l) => l.id);
-    expect(ids).toEqual(['s2-sr-latch', 's2-d-latch', 's2-dff']);
+    expect(ids).toEqual(['s2-sr-latch', 's2-d-latch', 's2-dff', 's2-dff-cost', 's2-dff-fast']);
+    // 挑战关的类型（GDD 4.2 / 4.3）
+    expect(level('s2-dff-cost').kind).toBe('cost');
+    expect(level('s2-dff-fast').kind).toBe('timing');
     expect(levelOrder('s2-sr-latch')).toBeLessThan(levelOrder('s2-d-latch'));
     expect(levelOrder('s2-d-latch')).toBeLessThan(levelOrder('s2-dff'));
 
@@ -33,7 +36,14 @@ describe('阶段 2 关卡内容', () => {
       expect(l.stage).toBe(2);
       expect(l.unlock?.kind).toBe('seq');
       expect(l.moduleAccess).toBe('all');
-      expect(l.budgetHalf).toBeGreaterThanOrEqual(l.optimalHalf);
+      if (l.kind === 'cost') {
+        // 成本挑战关（GDD 4.2）不设预算上限：只比谁更省
+        expect(l.budgetHalf).toBe(0);
+      } else {
+        expect(l.budgetHalf).toBeGreaterThanOrEqual(l.optimalHalf);
+      }
+      expect(l.optimalHalf).toBeGreaterThan(0);
+      expect((l.bestKnownHalf ?? l.optimalHalf) / 2).toBeGreaterThanOrEqual(l.optimalHalf / 2);
       const ports = requiredPorts(l);
       expect(ports.inputs.length).toBeGreaterThan(0);
       expect(ports.outputs.length).toBeGreaterThan(0);

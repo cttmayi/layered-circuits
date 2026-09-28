@@ -81,6 +81,23 @@ export function norGateRef(id = 'ref-nor'): Design {
   return b.build();
 }
 
+/** RTL 或非门：两个三极管并联下拉（成本 7）—— 比「二极管或门 + 反相器」更省，
+ *  这是求解器（tools/opt-solver）搜出来的结论，关卡的最优成本以它为准。 */
+export function norFastRef(id = 'ref-nor-fast'): Design {
+  const b = new DesignBuilder(id, '或非门（并联下拉）');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('res', { a: 'a', b: 'b1' }, 'R1');
+  b.unit('res', { a: 'b', b: 'b2' }, 'R2');
+  b.unit('npn', { c: 'y', b: 'b1', e: 'gnd' }, 'Q1'); // 任一路导通就把输出拉低
+  b.unit('npn', { c: 'y', b: 'b2', e: 'gnd' }, 'Q2');
+  b.unit('res', { a: 'vcc', b: 'y' }, 'R3');
+  b.port('a', 'in', 'a');
+  b.port('b', 'in', 'b');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
 /** 异或门：4 个 RTL 与非门（成本 28；标准解法，也可用自己封装的与非门模块拼） */
 export function xorGateRef(id = 'ref-xor'): Design {
   const b = new DesignBuilder(id, '异或门');

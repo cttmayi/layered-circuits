@@ -86,6 +86,49 @@ export interface JudgeResult {
   warnings: string[];
 }
 
+const UNIT_LABELS: Record<string, string> = {
+  npn: '三极管',
+  res: '电阻',
+  dio: '二极管',
+  cap: '电容',
+};
+
+/**
+ * 模块使用策略：none = 只能用底层元件；listed = 仅白名单；all = 全部。
+ * `bannedModules` 用于复古复用关（GDD 4.4：只许用早期版本的模块）。
+ */
+function checkModulePolicy(
+  design: Design,
+  level: Level,
+  library: ModuleLibrary,
+): { errors: string[] } {
+  const errors: string[] = [];
+  const used = design.instances.filter((i) => i.kind === 'module');
+  if (used.length === 0) return { errors };
+  const nameOf = (hash: string): string => library.get(hash)?.name ?? hash.slice(0, 8);
+  if (level.moduleAccess === 'none') {
+    errors.push('本关只能用底层元件手搭，不能用组件库模块');
+    return { errors };
+  }
+  for (const instance of used) {
+    if (instance.kind !== 'module') continue;
+    const template = library.get(instance.module);
+    const name = nameOf(instance.module);
+    if (level.moduleAccess === 'listed' && level.allowedModules.length > 0) {
+      if (!level.allowedModules.includes(name)) {
+        errors.push(`本关只允许使用【${level.allowedModules.join('、')}】，不能用【${name}】`);
+      }
+    }
+    if (level.bannedModules.includes(name) || level.bannedModules.includes(instance.module)) {
+      errors.push(`复古复用关禁用【${name}】（只许用早期版本的模块）`);
+    }
+    if (level.kind === 'retro' && template && template.version !== '1.0') {
+      errors.push(`复古复用关只许用 1.0 版模块，【${name}】是 v${template.version}`);
+    }
+  }
+  return { errors };
+}
+
 /** 时序关卡的默认采样等待：跟着时钟周期走，至少 100ns */
 function defaultSettle(level: Level): number {
   return Math.max(100_000, clockPeriodPsOf(level) * 2);
@@ -136,6 +179,18 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
   const requiredNames = new Set([...want.inputs, ...want.outputs]);
   const extraPorts = design.ports.filter((p) => !requiredNames.has(p.name)).map((p) => p.name);
 
+  // 1.1) 素材约束（GDD 第 3 节 / 4.4 复古复用关）——约束必须由判定执行，光在 UI 上禁用是拦不住的
+  for (const instance of design.instances) {
+    if (instance.kind !== 'unit') continue;
+    if (!level.allowedUnits.includes(instance.unit)) {
+      errors.push(
+        `本关不提供【${UNIT_LABELS[instance.unit] ?? instance.unit}】，请只用：${level.allowedUnits.join('、')}`,
+      );
+    }
+  }
+  const modulePolicy = checkModulePolicy(design, level, options.library);
+  errors.push(...modulePolicy.errors);
+
   // 2) 功能断言（端口不全时不硬跑，免得报「找不到输入端口」这种内部错误）
   //    一律带 trace：时序关卡要数每个窗口里输出的跳变次数，顺便拿到波形给 UI 用。
   let rows: JudgeRow[] = [];
@@ -177,8 +232,9 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     if (run.unstable) errors.push('电路没有稳定下来（组合环/振荡），判定不可信');
   }
 
-  // 3) 成本预算
-  const overBudget = costHalf > level.budgetHalf;
+  // 3) 成本预算：成本挑战关（GDD 4.2）不设上限，只比谁更省 → 不算「超预算」
+  const budgetEnforced = level.kind !== 'cost';
+  const overBudget = budgetEnforced && costHalf > level.budgetHalf;
   if (overBudget) {
     errors.push(`成本超预算：${costHalf / 2} > ${level.budgetHalf / 2}`);
   }
@@ -287,6 +343,13 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
         }
       }
     }
+  }
+
+  const bestKnown = level.bestKnownHalf ?? level.optimalHalf;
+  if (level.kind === 'cost' && costHalf > bestKnown) {
+    warnings.push(
+      `成本挑战关：还能更省 —— 目前 ${costHalf / 2}，已知最省 ${bestKnown / 2}（成绩会记进重挑战榜）`,
+    );
   }
 
   const pass = errors.length === 0;

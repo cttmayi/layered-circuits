@@ -9,6 +9,7 @@
  * 换句话说：它不是在测某个函数，而是在测「这个游戏能不能按设计玩下去」。
  */
 
+import { ALL_LEVELS } from '@lc/content';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
@@ -48,6 +49,9 @@ function wire(ax: number, ay: number, bx: number, by: number): void {
 beforeEach(() => {
   localStorage.clear();
 });
+
+/** 关卡总数直接取内容包，避免每加一关就回来改测试 */
+const LEVEL_TOTAL = ALL_LEVELS.length;
 
 describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁下一关', () => {
   it('用鼠标搭出第 1 关的标准解并通过校验，通关闭环产生可复用的【非门】模块', async () => {
@@ -128,7 +132,10 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
     );
 
     // ---- 5. 组件库与解锁状态反馈到界面 ----
-    await waitFor(() => expect(screen.getByText(/已通关 1\/10/)).toBeTruthy(), { timeout: 5000 });
+    await waitFor(
+      () => expect(screen.getByText(new RegExp(`已通关 1/${LEVEL_TOTAL}`))).toBeTruthy(),
+      { timeout: 5000 },
+    );
     const select = document.querySelector('.level-select') as HTMLSelectElement;
     expect(select.options[1]?.disabled).toBe(false); // 与门已解锁
     // 封装出的【非门】出现在元件库「我的模块」里，成本 4，可以直接拖到下一关复用

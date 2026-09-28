@@ -137,3 +137,88 @@ export function docForLevel(level: Level, library: StoredModule[]): Doc {
 export function symIsLocked(doc: Doc, id: string): boolean {
   return Boolean(doc.syms.find((s) => s.id === id)?.locked);
 }
+
+// ---- 本地重挑战榜与存档导入导出（M3-E，GDD 4.2 / 4.5 的单机版） ----
+
+export interface LeaderboardRow {
+  levelId: string;
+  title: string;
+  kind: Level['kind'];
+  cleared: boolean;
+  /** 历史最低成本（半单位）；没通关过为 null */
+  bestCostHalf: number | null;
+  bestScore: number;
+  attempts: number;
+  /** 满分线（标准解成本） */
+  optimalHalf: number;
+  /** 已知最省（求解器/社区结论），用于「还能更省」的追赶目标 */
+  bestKnownHalf: number;
+  /** 是否已经做到已知最省 */
+  atBestKnown: boolean;
+}
+
+/** 本地重挑战榜：一关一行的历史最好成绩（通关的才知道成本） */
+export function leaderboard(progress: Progress): LeaderboardRow[] {
+  return ALL_LEVELS.map((level) => {
+    const record = progress.cleared[level.id];
+    const bestKnownHalf = level.bestKnownHalf ?? level.optimalHalf;
+    const cleared = (record?.clearedAt ?? 0) > 0;
+    return {
+      levelId: level.id,
+      title: level.title,
+      kind: level.kind,
+      cleared,
+      bestCostHalf: cleared ? (record?.bestCostHalf ?? null) : null,
+      bestScore: record?.score ?? 0,
+      attempts: progress.attempts[level.id] ?? 0,
+      optimalHalf: level.optimalHalf,
+      bestKnownHalf,
+      atBestKnown: cleared && (record?.bestCostHalf ?? Number.POSITIVE_INFINITY) <= bestKnownHalf,
+    };
+  });
+}
+
+/** 存档包格式：进度 + 导出时间 + 版本，便于以后迁移 */
+export interface SaveFile {
+  format: 'layered-circuits-save';
+  schemaVersion: 1;
+  exportedAt: number;
+  progress: Progress;
+}
+
+export function exportSave(progress: Progress, now = Date.now()): string {
+  const save: SaveFile = {
+    format: 'layered-circuits-save',
+    schemaVersion: 1,
+    exportedAt: now,
+    progress,
+  };
+  return JSON.stringify(save, null, 2);
+}
+
+/** 导入存档：认格式、认版本、逐个字段兜底，坏档不覆盖现有进度 */
+export function importSave(text: string): { progress: Progress; error?: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { progress: emptyProgress(), error: '存档不是合法的 JSON' };
+  }
+  const save = parsed as Partial<SaveFile>;
+  if (save.format !== 'layered-circuits-save') {
+    return { progress: emptyProgress(), error: '这不是本作的存档文件' };
+  }
+  if (typeof save.schemaVersion !== 'number' || save.schemaVersion > 1) {
+    return {
+      progress: emptyProgress(),
+      error: `存档版本 ${String(save.schemaVersion)} 太新，当前版本读不了`,
+    };
+  }
+  const raw = (save.progress ?? {}) as Partial<Progress>;
+  const progress: Progress = {
+    cleared: raw.cleared && typeof raw.cleared === 'object' ? raw.cleared : {},
+    attempts: raw.attempts && typeof raw.attempts === 'object' ? raw.attempts : {},
+    library: Array.isArray(raw.library) ? (raw.library as StoredModule[]) : [],
+  };
+  return { progress };
+}

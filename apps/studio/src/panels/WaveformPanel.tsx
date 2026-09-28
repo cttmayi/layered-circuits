@@ -88,13 +88,13 @@ export function WaveformPanel({ result, portNames }: WaveformPanelProps): React.
               {row.name}
             </text>,
           );
-          steps.forEach((step, i) => {
+          steps.forEach((step) => {
             const cx = x(step.timePs);
             const { high: isHigh, weak, unknown } = levelOf(step.signal);
             const y = unknown ? (low + high) / 2 : isHigh ? high : low;
             segments.push(
               <line
-                key={`s${i}`}
+                key={`${row.name}-s${step.timePs}-${step.signal}`}
                 x1={prevX}
                 y1={prevY}
                 x2={cx}
@@ -105,7 +105,7 @@ export function WaveformPanel({ result, portNames }: WaveformPanelProps): React.
             if (y !== prevY) {
               segments.push(
                 <line
-                  key={`t${i}`}
+                  key={`${row.name}-t${step.timePs}-${step.signal}-${prevY}`}
                   x1={cx}
                   y1={prevY}
                   x2={cx}

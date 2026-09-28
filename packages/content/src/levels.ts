@@ -10,12 +10,12 @@
  * 单管反相器成本 4（输出弱 1），加射极跟随器成本 7（输出强 1，级联更稳）。
  */
 
-import { budgetFromOptimal, type Level, type LevelVector, parseLevel } from '@lc/schema';
+import { budgetFromOptimal, type Level, type LevelVector, parseLevel, type Unit } from '@lc/schema';
 import { STAGE2_LEVELS } from './levels-seq.js';
 import {
   andGateRef,
   nandGateRef,
-  norGateRef,
+  norFastRef,
   notGateRef,
   orGateRef,
   xnorGateRef,
@@ -57,8 +57,18 @@ function gateLevel(input: {
   inputs: number;
   fn: (a: 0 | 1, b: 0 | 1) => 0 | 1;
   optimalHalf: number;
+  /** 已知最省成本（求解器结论） */
+  bestKnownHalf?: number;
+  /** 覆写关卡类型（默认 main） */
+  kind?: Level['kind'];
   timingBudgetPs: number;
-  moduleAccess: 'none' | 'all';
+  /** 覆写本关可用元件（例如「只发三极管和电阻」） */
+  allowedUnits?: readonly Unit[];
+  /** 覆写白名单（moduleAccess = 'listed' 时生效） */
+  allowedModules?: readonly string[];
+  /** 复古复用关禁用的模块名 */
+  bannedModules?: readonly string[];
+  moduleAccess: 'none' | 'all' | 'listed';
   reference: Level['referenceSolution'];
   unlockName: string;
   freqHz: number;
@@ -78,16 +88,19 @@ function gateLevel(input: {
     schemaVersion: 1,
     id: input.id,
     stage: 1,
-    kind: 'main',
+    kind: input.kind ?? 'main',
     title: input.title,
     brief: input.brief,
     teaching: input.teaching,
     hint: input.hint,
     mode: 'logic',
     timingBudgetPs: input.timingBudgetPs,
-    allowedUnits: [...STAGE1_UNITS],
+    allowedUnits: [...(input.allowedUnits ?? STAGE1_UNITS)],
     moduleAccess: input.moduleAccess,
+    allowedModules: [...(input.allowedModules ?? [])],
+    bannedModules: [...(input.bannedModules ?? [])],
     budgetHalf: budgetFromOptimal(input.optimalHalf, MAIN_OVERHEAD),
+    ...(input.bestKnownHalf !== undefined ? { bestKnownHalf: input.bestKnownHalf } : {}),
     optimalHalf: input.optimalHalf,
     clock: { freqHz: input.freqHz },
     vectors,
@@ -163,43 +176,81 @@ export const STAGE1_LEVELS: Level[] = [
     title: '或非门',
     brief: '或门取反：两个输入都为低时输出才为高。',
     teaching:
-      '把已经搭好的「或」当作一级，再接一级反相器，就是模块化组合的思路（这一关之后你也能这么做）。',
-    hint: '二极管或门的输出再串一个电阻到 NPN 基极，集电极上拉就是输出（成本 8）。',
+      '两种思路都行：把「或」当一级再接反相器（成本 8，模块化组合的思路），' +
+      '或者干脆让两个三极管并联下拉、任一路导通就把输出拉低（成本 7，更省）。' +
+      '最省的那个是求解器搜出来的结论，你也可以自己找找看。',
+    hint: '最省的做法：两个三极管的集电极都接输出、发射极都接 GND、基极各经一个电阻接 a / b，输出再上拉到 VCC（成本 7）。',
     inputs: 2,
     fn: (a, b) => (a || b ? 0 : 1),
-    optimalHalf: 16,
+    optimalHalf: 14,
     timingBudgetPs: 4000,
     moduleAccess: 'all',
-    reference: norGateRef('ref-nor'),
+    reference: norFastRef('ref-nor'),
     unlockName: '或非门',
     freqHz: 100_000,
   }),
   gateLevel({
     id: 's1-xor',
     title: '异或门',
-    brief: '两个输入不同时输出为高，相同时为低。试试用 4 个与非门拼出来。',
-    teaching: '同一个逻辑功能可以有完全不同的实现；只要功能对、成本在预算内就算过关。',
-    hint: '标准接法：n1 = NAND(a,b)；n2 = NAND(a,n1)；n3 = NAND(b,n1)；y = NAND(n2,n3)。四级共 8 个三极管 + 12 个电阻（成本 28）。',
+    brief:
+      '两个输入不同时输出为高，相同时为低。本关**只发三极管和电阻**，模块也只许用【非门】【与非门】—— 请用与非门把它拼出来。',
+    teaching:
+      '这一关验收的是模块复用：用自己封装好的与非门当积木，比手搭省心得多（成本一样是 4 个与非门）。',
+    hint: '标准接法：n1 = NAND(a,b)；n2 = NAND(a,n1)；n3 = NAND(b,n1)；y = NAND(n2,n3)。四个与非门共 8 个三极管 + 12 个电阻（成本 28）。',
     inputs: 2,
     fn: (a, b) => (a !== b ? 1 : 0),
+    // 满分线 = 标准解（4 个与非门 = 56 半单位）；求解器找到过更省的 42（弱输出与门 + 两个或非门），
+    // 记在 bestKnownHalf 里：谁能做到谁就破榜，但课上教的解法照样满分。
     optimalHalf: 56,
+    bestKnownHalf: 42,
     timingBudgetPs: 7000,
-    moduleAccess: 'all',
+    allowedUnits: ['npn', 'res'],
+    moduleAccess: 'listed',
+    allowedModules: ['非门', '与非门'],
     reference: xorGateRef('ref-xor'),
     unlockName: '异或门',
     freqHz: 100_000,
   }),
+  // 复古复用关（GDD 4.4）：只能用早期手段重做异或门 —— 禁止调用后期封装的与非门模块
+  gateLevel({
+    id: 's1-xor-retro',
+    kind: 'retro',
+    title: '异或门·复古版',
+    brief:
+      '同样的异或门，但这一关**禁用【与非门】模块**：模拟早期版本还没把它封装出来。' +
+      '只能手搭，或者用当时已有的【与门】【或门】模块。',
+    teaching:
+      '复古复用关考的是「被拿走顺手的积木之后还能不能做出来」：' +
+      '组件库的版本管理（M3）就是为了让你随时能回到早期版本重做一遍。',
+    hint: '手搭 4 个 RTL 与非门是标准解（成本 28）；也可以想想用与门/或门拼。',
+    inputs: 2,
+    fn: (a: 0 | 1, b: 0 | 1) => (a !== b ? 1 : 0),
+    optimalHalf: 56,
+    bestKnownHalf: 42,
+    timingBudgetPs: 7000,
+    allowedUnits: ['npn', 'res'],
+    moduleAccess: 'listed',
+    allowedModules: ['非门', '与门', '或门'],
+    bannedModules: ['与非门'],
+    reference: xorGateRef('ref-xor-retro'),
+    unlockName: '异或门（复古版）',
+    freqHz: 20_000_000,
+  }),
+
   gateLevel({
     id: 's1-xnor',
     title: '同或门',
     brief: '异或门取反：两个输入相同时输出为高。这一关用「异或 + 反相」最省。',
     teaching: '组合已有模块是本作的核心玩法：异或门 + 非门，成本 28 + 4 = 32。',
-    hint: '把异或门的输出再接一级单管反相器即可。',
+    hint: '把异或门的输出再接一级单管反相器即可（求解器确认这就是最省的做法）。',
     inputs: 2,
     fn: (a: 0 | 1, b: 0 | 1) => (a === b ? 1 : 0),
     optimalHalf: 64,
+    bestKnownHalf: 56,
     timingBudgetPs: 9000,
-    moduleAccess: 'all',
+    allowedUnits: ['npn', 'res'],
+    moduleAccess: 'listed',
+    allowedModules: ['非门', '与非门', '异或门'],
     reference: xnorGateRef('ref-xnor'),
     unlockName: '同或门',
     freqHz: 100_000,

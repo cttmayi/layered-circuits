@@ -26,6 +26,49 @@ const MAIN_OVERHEAD = 0.2;
 /** 时序关卡的采样等待：锁存器/触发器关卡的向量是「时钟电平保持一段」，按 20MHz 取半周期 25ns */
 const DFF_SETTLE_PS = 25_000;
 
+/** D 触发器的端口与向量（主关、成本挑战关、时序挑战关共用同一套功能规格） */
+const DFF_PORTS = [port('d', 'in'), port('clk', 'in'), port('q', 'out'), port('qn', 'out')];
+
+const DFF_VECTORS = [
+  { inputs: { clk: 0, d: 0 }, settlePs: DFF_SETTLE_PS, note: '建立初态（主锁存器透明）' },
+  {
+    inputs: { clk: 1, d: 0 },
+    expect: { q: 0, qn: 1 },
+    settlePs: DFF_SETTLE_PS,
+    note: '上升沿把 0 搬到输出',
+  },
+  {
+    inputs: { clk: 0, d: 1 },
+    expect: { q: 0, qn: 1 },
+    settlePs: DFF_SETTLE_PS,
+    note: '时钟低电平期间数据变化不影响输出',
+  },
+  {
+    inputs: { clk: 1, d: 1 },
+    expect: { q: 1, qn: 0 },
+    settlePs: DFF_SETTLE_PS,
+    note: '上升沿把 1 搬到输出',
+  },
+  {
+    inputs: { clk: 1, d: 0 },
+    expect: { q: 1, qn: 0 },
+    settlePs: DFF_SETTLE_PS,
+    note: '时钟高电平期间改数据，输出纹丝不动（无空翻）',
+  },
+  {
+    inputs: { clk: 0, d: 0 },
+    expect: { q: 1, qn: 0 },
+    settlePs: DFF_SETTLE_PS,
+    note: '下降沿不搬运',
+  },
+  {
+    inputs: { clk: 1, d: 0 },
+    expect: { q: 0, qn: 1 },
+    settlePs: DFF_SETTLE_PS,
+    note: '下一个上升沿把 0 搬到输出',
+  },
+] satisfies LevelVector[];
+
 function port(name: string, dir: 'in' | 'out'): ModulePort {
   return { id: name, name, dir, width: 1 };
 }
@@ -126,51 +169,81 @@ export const STAGE2_LEVELS: Level[] = [
       setupBudgetPs: 5_000,
       holdBudgetPs: 5_000,
     },
-    vectors: [
-      { inputs: { clk: 0, d: 0 }, settlePs: DFF_SETTLE_PS, note: '建立初态（主锁存器透明）' },
-      {
-        inputs: { clk: 1, d: 0 },
-        expect: { q: 0, qn: 1 },
-        settlePs: DFF_SETTLE_PS,
-        note: '上升沿把 0 搬到输出',
-      },
-      {
-        inputs: { clk: 0, d: 1 },
-        expect: { q: 0, qn: 1 },
-        settlePs: DFF_SETTLE_PS,
-        note: '时钟低电平期间数据变化不影响输出',
-      },
-      {
-        inputs: { clk: 1, d: 1 },
-        expect: { q: 1, qn: 0 },
-        settlePs: DFF_SETTLE_PS,
-        note: '上升沿把 1 搬到输出',
-      },
-      {
-        inputs: { clk: 1, d: 0 },
-        expect: { q: 1, qn: 0 },
-        settlePs: DFF_SETTLE_PS,
-        note: '时钟高电平期间改数据，输出纹丝不动（无空翻）',
-      },
-      {
-        inputs: { clk: 0, d: 0 },
-        expect: { q: 1, qn: 0 },
-        settlePs: DFF_SETTLE_PS,
-        note: '下降沿不搬运',
-      },
-      {
-        inputs: { clk: 1, d: 0 },
-        expect: { q: 0, qn: 1 },
-        settlePs: DFF_SETTLE_PS,
-        note: '下一个上升沿把 0 搬到输出',
-      },
-    ] satisfies LevelVector[],
+    vectors: DFF_VECTORS,
     unlock: {
       name: 'D触发器',
       kind: 'seq',
       stage: 2,
-      ports: [port('d', 'in'), port('clk', 'in'), port('q', 'out'), port('qn', 'out')],
+      ports: DFF_PORTS,
     },
     referenceSolution: dffRef('ref-s2-dff'),
+  }),
+
+  // ---- 挑战关（GDD 4.2 / 4.3）：同样的功能，换一种考核方式 ----
+  parseLevel({
+    schemaVersion: 1,
+    id: 's2-dff-cost',
+    stage: 2,
+    kind: 'cost',
+    title: 'D 触发器·极限成本',
+    brief:
+      '功能要求与主从 D 触发器完全相同，**但没有预算上限**：造得再贵也能通关，比的是谁更省。' +
+      '成绩会记进本地的重挑战榜。',
+    teaching:
+      '成本挑战关考的是「能不能再用少一个元件」：把每个三极管、每个电阻的用途都想清楚，' +
+      '经常能发现某一级其实可以合并。',
+    hint: '参考解用了 68（两个 D 锁存器 + 一个单管反相器）。想更省，可以试试主锁存器只保留必要的门控管，或者复用同一个反相器给两级用。',
+    mode: 'timing',
+    timingBudgetPs: 30_000,
+    allowedUnits: [...STAGE2_UNITS],
+    moduleAccess: 'all',
+    budgetHalf: 0,
+    optimalHalf: 136,
+    clock: { freqHz: 20_000_000 },
+    checks: { clockPort: 'clk', dataPort: 'd', maxGlitches: 1 },
+    vectors: DFF_VECTORS,
+    unlock: {
+      name: 'D触发器（极限版）',
+      kind: 'seq',
+      stage: 2,
+      ports: DFF_PORTS,
+    },
+    referenceSolution: dffRef('ref-s2-dff-cost'),
+  }),
+
+  parseLevel({
+    schemaVersion: 1,
+    id: 's2-dff-fast',
+    stage: 2,
+    kind: 'timing',
+    title: 'D 触发器·高频挑战',
+    brief:
+      '本关**强制硬核工程模式**：必须在 20MHz（周期 50ns）时钟下正确工作 —— 关键路径 + 建立时间要装得下一个时钟周期，而且输出不许有任何空翻。',
+    teaching:
+      '时序电路的「快」不是感觉出来的：数据路径延迟 + 建立时间必须小于时钟周期，' +
+      '这条不等式就是硬核模式里那把尺子。',
+    hint: '参考解的延迟链路是 d → 主锁存器 → 从锁存器 → q，约 6.5ns；把门级数压下来（例如两级都用最少的门控结构）才能腾出更多时序裕量。',
+    mode: 'timing',
+    timingBudgetPs: 20_000,
+    allowedUnits: [...STAGE2_UNITS],
+    moduleAccess: 'all',
+    budgetHalf: budgetFromOptimal(136, MAIN_OVERHEAD),
+    optimalHalf: 136,
+    clock: { freqHz: 20_000_000 },
+    checks: {
+      clockPort: 'clk',
+      dataPort: 'd',
+      maxGlitches: 1,
+      setupBudgetPs: 5_000,
+      holdBudgetPs: 5_000,
+    },
+    vectors: DFF_VECTORS,
+    unlock: {
+      name: 'D触发器（高频版）',
+      kind: 'seq',
+      stage: 2,
+      ports: DFF_PORTS,
+    },
+    referenceSolution: dffRef('ref-s2-dff-fast'),
   }),
 ];

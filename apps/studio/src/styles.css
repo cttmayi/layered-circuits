@@ -184,6 +184,12 @@ body,
   font-size: 11px;
 }
 
+.palette-lock {
+  display: block;
+  font-size: 11px;
+  color: #d98b3a;
+}
+
 .palette-note {
   color: var(--dim);
   font-size: 11px;
@@ -508,4 +514,122 @@ body,
   fill: #9fb0c3;
   font-size: 11px;
   font-family: var(--mono, ui-monospace, monospace);
+}
+
+/* 组件库面板（M3-D / M3-E）：版本、溯源树、重挑战榜、存档 */
+.library-group {
+  border-bottom: 1px solid #26313c;
+}
+
+.library-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 8px;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.library-row:hover {
+  background: #1b242e;
+}
+
+.library-name {
+  font-weight: 600;
+}
+
+.library-meta,
+.library-sub {
+  font-size: 11px;
+  color: #8b9bab;
+}
+
+.library-detail {
+  padding: 4px 10px 8px 16px;
+}
+
+.version-list {
+  margin: 0 0 6px;
+  padding-left: 16px;
+  font-size: 12px;
+}
+
+.version-list em,
+.trace-node em {
+  margin-left: 6px;
+  font-style: normal;
+  color: #8b9bab;
+}
+
+.trace-src {
+  margin-left: 6px;
+  font-size: 11px;
+  color: #d98b3a;
+}
+
+.trace-tree {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.board {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.board th,
+.board td {
+  padding: 3px 4px;
+  border-bottom: 1px solid #26313c;
+  text-align: left;
+}
+
+.board tr.current {
+  background: #1d2a35;
+}
+
+.board-kind,
+.board-next {
+  margin-left: 6px;
+  font-size: 11px;
+  font-style: normal;
+  color: #d98b3a;
+}
+
+.board-best {
+  margin-left: 6px;
+  font-size: 11px;
+  color: #58d68d;
+}
+
+.link {
+  padding: 0;
+  background: none;
+  border: none;
+  color: #6cb2ff;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.library-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.panel-note {
+  font-size: 11px;
+  color: #7d8ea3;
+}
+
+.panel-empty {
+  font-size: 12px;
+  color: #7d8ea3;
 }

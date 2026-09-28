@@ -27,6 +27,9 @@ beforeEach(() => {
   localStorage.clear();
 });
 
+/** 关卡总数直接取内容包，避免每加一关就回来改测试 */
+const LEVEL_TOTAL = ALL_LEVELS.length;
+
 describe('关卡内容与进度', () => {
   it('关卡初始画布预置锁定的输入/输出端口（端口名就是判定接口）', () => {
     const notLevel = findLevel('s1-not')!;
@@ -231,7 +234,7 @@ describe('关卡界面', () => {
 
     // 预算进度：成本 0 / 预算 5（第 1 关最优 4）
     expect(document.querySelector('.budget-text')?.textContent).toContain('预算 5');
-    expect(screen.getByText(/已通关 0\/10/)).toBeTruthy();
+    expect(screen.getByText(new RegExp(`已通关 0/${LEVEL_TOTAL}`))).toBeTruthy();
   });
 
   it('点「校验本关」会走判定通道并报告未通过（空电路）', async () => {
@@ -267,6 +270,6 @@ describe('关卡界面', () => {
     const select = document.querySelector('.level-select') as HTMLSelectElement;
     expect(select.value).toBe('s1-and');
     expect(select.options[1]?.disabled).toBe(false);
-    expect(screen.getByText(/已通关 1\/10/)).toBeTruthy();
+    expect(screen.getByText(new RegExp(`已通关 1/${LEVEL_TOTAL}`))).toBeTruthy();
   });
 });

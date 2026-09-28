@@ -27,9 +27,14 @@ import {
   screenToWorld,
   signalText,
 } from './editor/render';
+import { addModule, storeModule } from './level/library';
 import {
+  docForLevel,
+  exportSave,
+  importSave,
   isCleared,
   isLevelUnlocked,
+  leaderboard,
   type Progress,
   recordAttempt,
   recordClear,
@@ -39,6 +44,7 @@ import { docFor, type GameMode, initialSession, levelOf, storageKeyFor } from '.
 import { Inspector } from './panels/Inspector';
 import { JudgePanel } from './panels/JudgePanel';
 import { LevelCard } from './panels/LevelCard';
+import { LibraryPanel } from './panels/LibraryPanel';
 import { Palette } from './panels/Palette';
 import { TruthTable } from './panels/TruthTable';
 import { WaveformPanel } from './panels/WaveformPanel';
@@ -87,6 +93,11 @@ export function App(): React.JSX.Element {
   const [pendingPin, setPendingPin] = useState<{ inst: string; pin: string } | null>(null);
   const [pendingPoint, setPendingPoint] = useState<{ x: number; y: number } | null>(null);
   const [mode, setMode] = useState<'logic' | 'timing'>('logic');
+  /** 时序挑战关（kind = 'timing'）强制硬核：科普模式会把延迟抹平，考不出时序问题 */
+  const forcedHardcore = levelOf(session.mode, levelId)?.kind === 'timing';
+  useEffect(() => {
+    if (forcedHardcore) setMode('timing');
+  }, [forcedHardcore]);
   const [showTruth, setShowTruth] = useState(true);
   const [showWave, setShowWave] = useState(false);
   const [showTiming, setShowTiming] = useState(false);
@@ -506,9 +517,10 @@ export function App(): React.JSX.Element {
     }
     const name = window.prompt('给这个模块起个名字：', '我的模块');
     if (!name) return;
+    const design = toDesign(doc, { id: `wrap-${name}`, name });
     const response = await runner.send({
       type: 'wrap',
-      design: toDesign(doc, { id: `wrap-${name}`, name }),
+      design,
       library: doc.library.map((m) => m.template),
       name,
       stage: 1,
@@ -518,20 +530,25 @@ export function App(): React.JSX.Element {
       return;
     }
     const info = response.wrapped;
-    const stored = {
-      hash: info.hash,
-      name: info.name,
-      costHalf: info.costHalf,
-      isSequential: info.isSequential,
-      ports: info.ports,
-      template: info.template,
-    };
-    commit({ ...doc, library: [...doc.library.filter((m) => m.hash !== info.hash), stored] });
+    const stored = storeModule(
+      progress.library,
+      {
+        hash: info.hash,
+        name: info.name,
+        costHalf: info.costHalf,
+        isSequential: info.isSequential,
+        ports: info.ports,
+        template: info.template,
+        stage: currentLevel?.stage ?? 1,
+        sources: design.instances
+          .filter((inst) => inst.kind === 'module')
+          .map((inst) => (inst.kind === 'module' ? inst.module : '')),
+      },
+      Date.now(),
+    );
+    commit({ ...doc, library: addModule(doc.library, stored) });
     // 组件库是全局资产：自由模式封装的模块，之后进关卡也能直接用
-    setProgress((prev) => ({
-      ...prev,
-      library: [...prev.library.filter((m) => m.hash !== info.hash), stored],
-    }));
+    setProgress((prev) => ({ ...prev, library: addModule(prev.library, stored) }));
     setToast(
       `已封装「${info.name}」：成本 ${info.costHalf / 2}（半单位 ${info.costHalf}），哈希 #${info.hash.slice(0, 8)}${info.isSequential ? '，判定为时序电路' : ''}`,
     );
@@ -570,7 +587,7 @@ export function App(): React.JSX.Element {
         design: toDesign(doc, { id: `level-${currentLevel.id}`, name: currentLevel.title }),
         library: doc.library.map((m) => m.template),
         level: currentLevel,
-        hardcore: mode === 'timing',
+        hardcore: forcedHardcore || mode === 'timing',
       });
       if (response.error || !response.judge) {
         setToast(`校验失败：${response.error ?? '未知错误'}`);
@@ -609,26 +626,63 @@ export function App(): React.JSX.Element {
       return;
     }
     const info = response.wrapped;
-    const stored = {
-      hash: info.hash,
-      name: info.name,
-      costHalf: info.costHalf,
-      isSequential: info.isSequential,
-      ports: info.ports,
-      template: info.template,
-    };
-    commit({ ...doc, library: [...doc.library.filter((m) => m.hash !== info.hash), stored] });
+    const stored = storeModule(
+      progress.library,
+      {
+        hash: info.hash,
+        name: info.name,
+        costHalf: info.costHalf,
+        isSequential: info.isSequential,
+        ports: info.ports,
+        template: info.template,
+        stage: currentLevel.stage,
+        levelId: currentLevel.id,
+        sources: design.instances
+          .filter((inst) => inst.kind === 'module')
+          .map((inst) => (inst.kind === 'module' ? inst.module : '')),
+      },
+      Date.now(),
+    );
+    commit({ ...doc, library: addModule(doc.library, stored) });
     setProgress((prev) => {
-      const withModule = {
-        ...prev,
-        library: [...prev.library.filter((m) => m.hash !== info.hash), stored],
-      };
+      const withModule = { ...prev, library: addModule(prev.library, stored) };
       return recordClear(withModule, currentLevel.id, judgeResult.score, judgeResult.costHalf);
     });
     const index = ALL_LEVELS.findIndex((l) => l.id === currentLevel.id);
     const next = ALL_LEVELS[index + 1];
     setToast(
       `已封装【${name}】：成本 ${info.costHalf / 2}，已加入组件库${next ? `，已解锁下一关「${next.title}」` : '，阶段 1 全部通关！'}`,
+    );
+  };
+
+  /** 导出存档：直接把 JSON 交给浏览器下载（file:// 打开时也能用） */
+  const doExport = (): void => {
+    const text = exportSave(progress);
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `layered-circuits-save-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setToast(
+      `已导出存档：${ALL_LEVELS.filter((l) => isCleared(progress, l.id)).length} 关通关记录、${progress.library.length} 个模块版本`,
+    );
+  };
+
+  /** 导入存档：覆盖当前进度（坏档直接提示，不动现有数据） */
+  const doImport = (text: string): void => {
+    const { progress: imported, error } = importSave(text);
+    if (error) {
+      setToast(`导入失败：${error}`);
+      return;
+    }
+    saveProgress(imported);
+    setProgress(imported);
+    const level = levelOf(gameMode, levelId) ?? ALL_LEVELS[0];
+    if (level) loadDoc(docForLevel(level, imported.library));
+    setToast(
+      `已导入存档：${imported.library.length} 个模块版本，${Object.keys(imported.cleared).length} 关通关记录`,
     );
   };
 
@@ -707,7 +761,8 @@ export function App(): React.JSX.Element {
             type="button"
             className={mode === 'logic' ? 'active' : ''}
             onClick={() => setMode('logic')}
-            title="忽略延迟，只看逻辑"
+            disabled={forcedHardcore}
+            title={forcedHardcore ? '本关强制硬核工程模式（时序挑战关）' : '忽略延迟，只看逻辑'}
           >
             科普模式
           </button>
@@ -717,7 +772,7 @@ export function App(): React.JSX.Element {
             onClick={() => setMode('timing')}
             title="带 1ns/0.5ns/0.8ns 延迟的硬核模式"
           >
-            硬核模式
+            硬核模式{forcedHardcore ? '（本关强制）' : ''}
           </button>
         </div>
         <div className="group">
@@ -853,6 +908,14 @@ export function App(): React.JSX.Element {
               onClear={() => void clearLevel()}
             />
           )}
+          <LibraryPanel
+            library={doc.library}
+            rows={leaderboard(progress)}
+            currentLevelId={currentLevel?.id}
+            onExport={doExport}
+            onImport={doImport}
+            onJumpToLevel={(id) => switchTo('level', id)}
+          />
           <Inspector
             snapshot={snapshot}
             units={units}

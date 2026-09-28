@@ -57,8 +57,16 @@ export const LevelSchema = z.object({
   bannedModules: z.array(z.string()).default([]),
   /** 预算上限（半分整数口径） */
   budgetHalf: z.number().int().min(0),
-  /** 理论最优成本（求解器产出，半分整数口径） */
+  /**
+   * 满分线 / 标准解成本（半分整数口径）。
+   * 约定：它等于「本关教的那套解法」的成本，必须由参考解证明可达（内容测试盯着）。
+   */
   optimalHalf: z.number().int().min(0),
+  /**
+   * 已知最省成本（半分整数口径）：求解器或社区找到的更好解法。
+   * 用途：重挑战榜的目标值、「还能更省」提示；不影响满分线（否则课上教的解法会拿不到高分）。
+   */
+  bestKnownHalf: z.number().int().min(0).optional(),
   clock: z.object({ freqHz: z.number().positive() }).optional(),
   /**
    * 时序检查（M2）：硬核模式下逐个执行。

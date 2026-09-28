@@ -27,11 +27,20 @@ export interface StoredPort {
 export interface StoredModule {
   hash: string;
   name: string;
+  /** 组件库版本管理（M3）：同名模块再次封装时 minor +1，老版本留在库里（复古复用关要用） */
+  version: string;
+  /** 产出这一版时的阶段（阶段 3 的层级复用会按阶段过滤） */
+  stage: number;
   costHalf: number;
   isSequential: boolean;
   ports: StoredPort[];
   /** 完整模板（可结构化克隆的纯 JSON），回传给 worker 建库 */
   template: unknown;
+  /** 溯源：这一版是在哪一关产出的 */
+  levelId?: string;
+  /** 溯源树的子节点：封装时用到的下层模块哈希 */
+  sources: string[];
+  createdAt: number;
 }
 
 export interface Sym {

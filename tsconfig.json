@@ -22,8 +22,16 @@
       "@lc/schema": ["packages/schema/src/index.ts"],
       "@lc/sim-core": ["packages/sim-core/src/index.ts"],
       "@lc/compiler": ["packages/compiler/src/index.ts"],
-      "@lc/content": ["packages/content/src/index.ts"]
+      "@lc/content": ["packages/content/src/index.ts"],
+      "@lc/opt-solver": ["tools/opt-solver/src/index.ts"],
+      "@lc/level-editor": ["tools/level-editor/src/index.ts"]
     }
   },
-  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "vitest.config.ts"]
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/test/**/*.ts",
+    "tools/*/src/**/*.ts",
+    "tools/*/test/**/*.ts",
+    "vitest.config.ts"
+  ]
 }

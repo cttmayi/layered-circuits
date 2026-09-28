@@ -28,6 +28,22 @@ export function Palette({
 }: PaletteProps): React.JSX.Element {
   const unitAllowed = (unit: UnitKind): boolean => !level || level.allowedUnits.includes(unit);
   const modulesAllowed = level?.moduleAccess !== 'none';
+  /** 模块关卡的可用性：白名单 / 复古关禁用（与判定里的策略保持一致） */
+  const moduleAllowed = (name: string): boolean => {
+    if (!level) return true;
+    if (level.moduleAccess === 'none') return false;
+    if (level.bannedModules.includes(name)) return false;
+    if (level.kind === 'retro' && level.moduleAccess === 'listed') {
+      return level.allowedModules.includes(name);
+    }
+    return level.allowedModules.length === 0 || level.allowedModules.includes(name);
+  };
+  const moduleLockReason = (name: string): string => {
+    if (!level) return '不可用';
+    if (level.bannedModules.includes(name)) return '复古复用关禁用了这个后期积木';
+    if (level.allowedModules.length > 0) return `本关只允许：${level.allowedModules.join('、')}`;
+    return '本关不允许使用模块';
+  };
   const lockReason = (unit: UnitKind): string => {
     if (unit === 'cap') return '电容是时钟专用元件，本阶段不开放';
     return '本关卡不允许使用该元件';
@@ -102,25 +118,29 @@ export function Palette({
           搭好电路后点「封装为模块」，就能像元件一样复用，成本会自动递归累加。
         </p>
       )}
-      {library.map((mod) => (
-        <button
-          key={mod.hash}
-          type="button"
-          className={isArmed('module', mod.hash) ? 'palette-item active' : 'palette-item'}
-          disabled={!modulesAllowed}
-          onClick={() => pick('module', undefined, mod.hash)}
-          title={`哈希 #${mod.hash}`}
-        >
-          <span className="palette-name">
-            {mod.name} {mod.isSequential && <em>时序</em>}
-          </span>
-          <span className="palette-cost">成本 {mod.costHalf / 2}</span>
-          <span className="palette-note">
-            {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
-            {mod.ports.filter((p) => p.dir === 'out').length} 出 · #{mod.hash.slice(0, 6)}
-          </span>
-        </button>
-      ))}
+      {library.map((mod) => {
+        const locked = !modulesAllowed || !moduleAllowed(mod.name);
+        return (
+          <button
+            key={mod.hash}
+            type="button"
+            className={isArmed('module', mod.hash) ? 'palette-item active' : 'palette-item'}
+            disabled={locked}
+            onClick={() => pick('module', undefined, mod.hash)}
+            title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}`}
+          >
+            <span className="palette-name">
+              {mod.name} v{mod.version} {mod.isSequential && <em>时序</em>}
+            </span>
+            <span className="palette-cost">成本 {mod.costHalf / 2}</span>
+            <span className="palette-note">
+              {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
+              {mod.ports.filter((p) => p.dir === 'out').length} 出 · #{mod.hash.slice(0, 6)}
+            </span>
+            {locked && <span className="palette-lock">{moduleLockReason(mod.name)}</span>}
+          </button>
+        );
+      })}
     </aside>
   );
 }
