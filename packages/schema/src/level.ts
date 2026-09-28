@@ -60,6 +60,24 @@ export const LevelSchema = z.object({
   /** 理论最优成本（求解器产出，半分整数口径） */
   optimalHalf: z.number().int().min(0),
   clock: z.object({ freqHz: z.number().positive() }).optional(),
+  /**
+   * 时序检查（M2）：硬核模式下逐个执行。
+   * 全部来自真仿真测量，不是数据手册里的标称值。
+   */
+  checks: z
+    .object({
+      /** 时钟端口名（建立/保持测量与空翻检查都要它） */
+      clockPort: z.string().optional(),
+      /** 数据端口名（建立/保持测量用） */
+      dataPort: z.string().optional(),
+      /** 每个向量窗口内输出允许的最大跳变次数；超出即判定竞争冒险/空翻 */
+      maxGlitches: z.number().int().min(0).optional(),
+      /** 建立时间预算（ps）：实测建立时间必须 ≤ 它 */
+      setupBudgetPs: z.number().int().positive().optional(),
+      /** 保持时间预算（ps）：实测保持时间必须 ≤ 它 */
+      holdBudgetPs: z.number().int().positive().optional(),
+    })
+    .default({}),
   vectors: z.array(LevelVectorSchema).default([]),
   /** 通关后解锁并封装为模块的元信息 */
   unlock: z

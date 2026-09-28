@@ -9,6 +9,7 @@ import type { Diagnostic } from './engine.js';
 import { type SimMode, Simulator } from './engine.js';
 import type { FlatNet } from './ir.js';
 import type { Logic } from './signal.js';
+import { toWaveform, type Waveform } from './waveform.js';
 
 export interface TestVector {
   /** 端口名 → 逻辑值；未列出的输入保持上一次的值（便于测时序保持） */
@@ -35,6 +36,12 @@ export interface VectorRow {
   mismatches: VectorMismatch[];
   ok: boolean;
   timePs: number;
+  /**
+   * 本向量的时间窗口（ps）：时序模式下从「上一次采样」到「本次采样」，
+   * 逻辑模式下恒为 [0, 0]（无延迟，谈不上窗口）。
+   * 竞争冒险检查就是数这个窗口里输出跳变了几次。
+   */
+  window: { fromPs: number; toPs: number };
 }
 
 export interface VectorRunResult {
@@ -43,6 +50,8 @@ export interface VectorRunResult {
   diagnostics: Diagnostic[];
   /** 逻辑模式下是否出现未收敛（组合环/振荡） */
   unstable: boolean;
+  /** trace: true 时的波形（每个网络一条阶梯曲线） */
+  waveform?: Waveform;
 }
 
 export interface RunVectorsOptions {
@@ -77,12 +86,16 @@ export function runVectors(
 
   for (let i = 0; i < vectors.length; i++) {
     const vector = vectors[i] as TestVector;
-    for (const [port, value] of Object.entries(vector.inputs)) sim.setInput(port, value);
+    const fromPs = clockPs;
     if (options.mode === 'timing') {
+      // 激励在窗口起点精确生效 → 波形窗口/建立保持时间测量才有意义
+      for (const [port, value] of Object.entries(vector.inputs))
+        sim.setInputAt(port, value, fromPs);
       clockPs += vector.settlePs ?? defaultSettlePs;
       if (!sim.advanceTo(clockPs, maxEventsPerVector)) unstable = true;
-    } else if (!sim.settle()) {
-      unstable = true;
+    } else {
+      for (const [port, value] of Object.entries(vector.inputs)) sim.setInput(port, value);
+      if (!sim.settle()) unstable = true;
     }
 
     const actual = sim.readAllOutputs();
@@ -103,6 +116,7 @@ export function runVectors(
       mismatches,
       ok,
       timePs: sim.time,
+      window: options.mode === 'timing' ? { fromPs, toPs: clockPs } : { fromPs: 0, toPs: 0 },
     };
     if (vector.note !== undefined) row.note = vector.note;
     rows.push(row);
@@ -111,7 +125,10 @@ export function runVectors(
   const diagnostics = [...sim.allDiagnostics];
   if (diagnostics.some((d) => d.kind === 'unstable')) unstable = true;
 
-  return { pass, rows, diagnostics, unstable };
+  const result: VectorRunResult = { pass, rows, diagnostics, unstable };
+  // 波形带上全部网络：面板默认画端口，排查时再展开内部节点
+  if (options.trace && sim.trace) result.waveform = toWaveform(sim.trace, net);
+  return result;
 }
 
 /** 穷举 n 位输入的全部组合，方便生成真值表向量 */

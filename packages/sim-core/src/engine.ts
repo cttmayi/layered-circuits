@@ -110,6 +110,8 @@ export class Simulator {
   private readonly maxDiagnosticsPerKind: number;
   private readonly inPorts = new Map<string, FlatPort>();
   private readonly outPorts = new Map<string, FlatPort>();
+  /** 三极管基极「曾处于悬空」的节点 → 元素下标（仿真停下时才判定并报告） */
+  private readonly floatingBase = new Map<number, number>();
 
   constructor(net: FlatNet, options: SimOptions) {
     this.net = net;
@@ -140,6 +142,24 @@ export class Simulator {
 
   // ---------------------------------------------------------------- 生命周期
 
+  /** 上电：源在 t=0 建立，其余元件按延迟逐级传播（见构造函数注释） */
+  private powerUp(): void {
+    if (this.mode === 'logic') {
+      for (let e = 0; e < this.net.elemCount; e++) this.schedule(e, 0);
+      this.settle();
+      return;
+    }
+    for (let e = 0; e < this.net.elemCount; e++) {
+      const kind = this.net.elemKind[e] as number;
+      const delay =
+        kind === ElementKind.POWER || kind === ElementKind.INPUT
+          ? 0
+          : (this.net.elemDelayPs[e] as number);
+      this.schedule(e, delay);
+    }
+    this.drainUntil(0);
+  }
+
   reset(): void {
     this.nodeSig.fill(SIG_Z);
     this.contrib.fill(SIG_Z);
@@ -163,10 +183,12 @@ export class Simulator {
       this.trace.signals.length = 0;
     }
 
-    // 上电：所有元素在 t = 0 求值一次
-    for (let e = 0; e < this.net.elemCount; e++) this.schedule(e, 0);
-    if (this.mode === 'logic') this.settle();
-    else this.drainUntil(0);
+    // 上电：
+    // - 逻辑模式：所有元素在 t = 0 迭代到收敛（无延迟可言）；
+    // - 时序模式：只有电源/输入引脚这类「源」在 t = 0 立刻建立，其余元件靠自身的
+    //   传播延迟逐级推进。这样波形上看到的建立过程是真实的（每一级各占自己的延迟），
+    //   而不是全体挤在同一时刻 —— 竞争冒险/空翻才看得出来。
+    this.powerUp();
   }
 
   /** 逻辑模式：迭代到收敛。返回是否收敛（false = 振荡/组合环） */
@@ -190,6 +212,7 @@ export class Simulator {
     }
     this.fifo = [];
     this.fifoHead = 0;
+    this.reportFloatingBases();
     return true;
   }
 
@@ -241,6 +264,32 @@ export class Simulator {
   /** 批量设置输入（逻辑模式下一次收敛；时序模式下逐个生效） */
   setInputs(values: Record<string, Logic>): void {
     for (const [key, value] of Object.entries(values)) this.setInput(key, value);
+  }
+
+  /**
+   * 在指定时刻施加输入（时序模式专用）。
+   *
+   * 为什么需要它：激励必须落在**确定的时刻**上，否则「输入何时变化」取决于上一个向量
+   * 最后一次事件的时刻（2000ps 还是 2001ps 全看电路内部节奏），波形窗口、建立/保持时间
+   * 测量都会跟着漂。逻辑模式下等价于 setInput。
+   */
+  setInputAt(portIdOrName: string, value: Logic, atPs: number): void {
+    if (this.mode === 'logic') {
+      this.setInput(portIdOrName, value);
+      return;
+    }
+    const port = this.inPorts.get(portIdOrName);
+    if (!port) throw new Error(`未找到输入端口：${portIdOrName}`);
+    if (atPs > this.timePs) {
+      this.advanceTo(atPs);
+      // 队列可能已经空了：时间仍然要推到 atPs，激励才有确定的落点
+      this.timePs = atPs;
+    }
+    const encoded = value === 'Z' ? 3 : value === 'X' ? VX : (value as number);
+    if (this.net.elemParam[port.elem] === encoded) return;
+    this.net.elemParam[port.elem] = encoded;
+    this.schedule(port.elem, this.timePs);
+    this.drainUntil(this.timePs);
   }
 
   readPort(portIdOrName: string): Logic {
@@ -329,7 +378,27 @@ export class Simulator {
       this.evalElement(top.elem, top.time);
     }
     // 队列已空时不要推进 timePs：调用方（波形/延迟测量）需要「最后一次事件发生的时刻」
+    if (this.heap.length === 0) this.reportFloatingBases();
     return true;
+  }
+
+  /**
+   * 报告「仿真停下来时仍无驱动」的三极管基极。
+   * 为什么不在求值时立刻报警：时序模式下上电要一级一级传播，中途基极短暂悬空是正常的，
+   * 只有稳定后仍然悬空才说明玩家真的忘了接。
+   */
+  private reportFloatingBases(): void {
+    for (const [node, elem] of this.floatingBase) {
+      if ((this.nodeSig[node] as number) !== SIG_Z) continue;
+      this.diagnose(
+        'floating-input',
+        'warning',
+        `三极管 ${this.elemLabel(elem)} 的基极悬空（未连接任何驱动），按截止处理`,
+        node,
+        elem,
+        this.timePs,
+      );
+    }
   }
 
   private pushHeap(entry: HeapEntry): void {
@@ -385,14 +454,8 @@ export class Simulator {
       case ElementKind.NPN: {
         const gate = this.nodeSig[p1] as number;
         if (gate === SIG_Z) {
-          this.diagnose(
-            'floating-input',
-            'warning',
-            `三极管 ${this.elemLabel(e)} 的基极悬空（未连接任何驱动），按截止处理`,
-            p1,
-            e,
-            atPs,
-          );
+          // 建立过程中节点本来就可能是悬空态，先记下来；等仿真停下来再判定是否真的没驱动
+          this.floatingBase.set(p1, e);
         } else if (logicValueOf(gate) === VX) {
           // 基极电平未知 → 通断未知，向两端注入弱 X
           d0 = SIG_WEAK_X;

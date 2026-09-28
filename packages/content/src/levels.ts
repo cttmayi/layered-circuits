@@ -11,6 +11,7 @@
  */
 
 import { budgetFromOptimal, type Level, type LevelVector, parseLevel } from '@lc/schema';
+import { STAGE2_LEVELS } from './levels-seq.js';
 import {
   andGateRef,
   nandGateRef,
@@ -205,24 +206,27 @@ export const STAGE1_LEVELS: Level[] = [
   }),
 ];
 
+/** 全部关卡（阶段 1 组合逻辑 + 阶段 2 时序单元），顺序即解锁顺序 */
+export const ALL_LEVELS: Level[] = [...STAGE1_LEVELS, ...STAGE2_LEVELS];
+
 /** 关卡要求的端口（判定与内容自检共用；实现见 @lc/compiler 的 requiredPorts） */
 export { requiredPorts as requiredPortsOf } from '@lc/compiler';
 
 export function levelsOfStage(stage: number): Level[] {
-  return STAGE1_LEVELS.filter((level) => level.stage === stage);
+  return ALL_LEVELS.filter((level) => level.stage === stage);
 }
 
 export function findLevel(id: string): Level | undefined {
-  return STAGE1_LEVELS.find((level) => level.id === id);
+  return ALL_LEVELS.find((level) => level.id === id);
 }
 
 /** 关卡顺序（解锁顺序 = 数组顺序） */
 export function levelOrder(id: string): number {
-  return STAGE1_LEVELS.findIndex((level) => level.id === id);
+  return ALL_LEVELS.findIndex((level) => level.id === id);
 }
 
 export function nextLevelId(id: string): string | null {
   const index = levelOrder(id);
-  if (index < 0 || index + 1 >= STAGE1_LEVELS.length) return null;
-  return (STAGE1_LEVELS[index + 1] as Level).id;
+  if (index < 0 || index + 1 >= ALL_LEVELS.length) return null;
+  return (ALL_LEVELS[index + 1] as Level).id;
 }

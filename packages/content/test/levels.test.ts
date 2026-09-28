@@ -19,7 +19,9 @@ describe('阶段 1 关卡内容', () => {
     expect(STAGE1_LEVELS.every((level) => level.stage === 1)).toBe(true);
     expect(STAGE1_LEVELS[0]?.id).toBe('s1-not');
     expect(nextLevelId('s1-not')).toBe('s1-and');
-    expect(nextLevelId('s1-xnor')).toBeNull();
+    // 阶段 1 的最后一关之后进入阶段 2（时序单元），整条线是一个连续的教学顺序
+    expect(nextLevelId('s1-xnor')).toBe('s2-sr-latch');
+    expect(nextLevelId('s2-dff')).toBeNull();
   });
 
   it('每关都带完整规格：真值表、端口约定、教学文案、预算与最优成本', () => {
