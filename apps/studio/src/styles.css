@@ -898,3 +898,59 @@ body,
 .stars-1 {
   color: #6b7885;
 }
+
+/* ---- 黑盒侦察 ---- */
+.probe {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+  background: #16202a;
+  border-radius: 4px;
+}
+
+.probe-lamp {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: #f2c14e;
+}
+
+.recon-table td {
+  padding: 1px 2px;
+  text-align: center;
+}
+
+.probe-btn {
+  padding: 1px 6px;
+  font-size: 11px;
+  background: #26313c;
+  border: 1px solid #37485a;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.record-cell {
+  width: 26px;
+  padding: 1px 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: #cfe0f0;
+  background: #1b242c;
+  border: 1px solid #37485a;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.recon-table tr.wrong .record-cell {
+  color: #ff8b8b;
+  border-color: #7d3a3a;
+}
+
+.map-recon {
+  padding: 0 4px;
+  font-size: 10px;
+  color: #0d141a;
+  background: #7fd6a0;
+  border-radius: 2px;
+}

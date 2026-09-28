@@ -70,10 +70,21 @@ export interface Progress {
   library: StoredModule[];
   /** 钱包：每关最好一次的利润之和（不刷单：重挑战只抬高纪录，不重复发钱） */
   walletHalf: number;
+  /** 黑盒侦察记录：关卡 id → measured（自主测绘）| skipped（看了答案） */
+  recon: Record<string, ReconState>;
+}
+
+/** 自主测绘的关卡数（图纸全靠自己测出来的） */
+export function reconCount(progress: Progress): number {
+  return Object.values(progress.recon).filter((state) => state === 'measured').length;
+}
+
+export function setRecon(progress: Progress, levelId: string, state: ReconState): Progress {
+  return { ...progress, recon: { ...progress.recon, [levelId]: state } };
 }
 
 export function emptyProgress(): Progress {
-  return { cleared: {}, attempts: {}, library: [], walletHalf: 0 };
+  return { cleared: {}, attempts: {}, library: [], walletHalf: 0, recon: {} };
 }
 
 export function loadProgress(): Progress {
@@ -86,6 +97,7 @@ export function loadProgress(): Progress {
       attempts: parsed.attempts && typeof parsed.attempts === 'object' ? parsed.attempts : {},
       library: Array.isArray(parsed.library) ? (parsed.library as StoredModule[]) : [],
       walletHalf: typeof parsed.walletHalf === 'number' ? parsed.walletHalf : 0,
+      recon: (parsed.recon as Record<string, ReconState>) ?? {},
     };
   } catch {
     return emptyProgress();
@@ -247,6 +259,9 @@ export function rankOf(progress: Progress): Rank {
   };
 }
 
+/** 黑盒侦察状态：图纸是自己测出来的，还是直接看了答案 */
+export type ReconState = 'measured' | 'skipped';
+
 /** 本地重挑战榜：一关一行的历史最好成绩（通关的才知道成本） */
 export function leaderboard(progress: Progress): LeaderboardRow[] {
   return ALL_LEVELS.map((level) => {
@@ -310,6 +325,7 @@ export function importSave(text: string): { progress: Progress; error?: string }
     attempts: raw.attempts && typeof raw.attempts === 'object' ? raw.attempts : {},
     library: Array.isArray(raw.library) ? (raw.library as StoredModule[]) : [],
     walletHalf: typeof raw.walletHalf === 'number' ? raw.walletHalf : 0,
+    recon: (raw.recon as Record<string, ReconState>) ?? {},
   };
   return { progress };
 }

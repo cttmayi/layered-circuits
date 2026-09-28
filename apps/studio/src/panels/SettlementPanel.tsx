@@ -15,6 +15,8 @@ export interface SettlementPanelProps {
   level: Level;
   /** 本次交付拿到的星数（0~3） */
   stars: number;
+  /** 图纸是不是玩家自己测出来的 */
+  reconMeasured: boolean;
   levelName: string;
   result: JudgeResult;
   /** 上一次通关的分数（判断是否破纪录）；首次通关传 null */
@@ -27,6 +29,7 @@ export interface SettlementPanelProps {
 export function SettlementPanel({
   level,
   stars,
+  reconMeasured,
   levelName,
   result,
   previousScore,
@@ -93,6 +96,12 @@ export function SettlementPanel({
               ? `还差一颗星：${result.score < 100 ? '把材料费压到对标成本' : '用硬核模式交付'}`
               : '先做到功能 + 成本达标，再追时序'}
         </em>
+      </p>
+
+      <p className="panel-note">
+        {reconMeasured
+          ? '图纸是你自己一格格测出来的 —— 这单做得干净。'
+          : '图纸用了客户给的答案，下回试试自己测。'}
       </p>
 
       {brokeRecord && (

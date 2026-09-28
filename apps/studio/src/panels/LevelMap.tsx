@@ -6,7 +6,7 @@
  */
 
 import { ALL_LEVELS } from '@lc/content';
-import { isLevelUnlocked, MAX_STARS_PER_LEVEL, type Progress } from '../level/progress';
+import { isLevelUnlocked, MAX_STARS_PER_LEVEL, type Progress, reconCount } from '../level/progress';
 
 export interface LevelMapProps {
   progress: Progress;
@@ -42,7 +42,7 @@ export function LevelMap({ progress, currentLevelId, onPick }: LevelMapProps): R
       <h3>任务墙</h3>
       <p className="panel-note">
         已交付 {Object.keys(progress.cleared).length}/{ALL_LEVELS.length} · 星 {earned}/
-        {ALL_LEVELS.length * MAX_STARS_PER_LEVEL}
+        {ALL_LEVELS.length * MAX_STARS_PER_LEVEL} · 自主测绘 {reconCount(progress)}
       </p>
       {stages.map((stage) => {
         const levels = ALL_LEVELS.filter((level) => level.stage === stage);
@@ -69,6 +69,11 @@ export function LevelMap({ progress, currentLevelId, onPick }: LevelMapProps): R
                       {KIND_LABEL[level.kind] ? (
                         <span className="map-kind">{KIND_LABEL[level.kind]}</span>
                       ) : null}
+                      {progress.recon[level.id] === 'measured' && (
+                        <span className="map-recon" title="这张图纸是你自己测出来的">
+                          测绘
+                        </span>
+                      )}
                       <span className={`map-stars ${state}`}>
                         {cleared
                           ? `${'★'.repeat(stars)}${'☆'.repeat(MAX_STARS_PER_LEVEL - stars)}`

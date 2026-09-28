@@ -209,7 +209,7 @@ describe('关卡界面', () => {
   it('默认进入第 1 关：显示目标真值表、锁住未开放元件、关卡选择只有第一关可选', async () => {
     render(<App />);
 
-    // 关卡卡片：目标说明 + 目标真值表 a→y（0→1 / 1→0）
+    // 关卡卡片：委托单 + 图纸（黑盒侦察没做完前，输出列是看不清的）
     expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
     const targetTable = document.querySelector('.level-card .truth') as HTMLTableElement;
     expect(targetTable).toBeTruthy();
@@ -217,8 +217,8 @@ describe('关卡界面', () => {
       [...tr.querySelectorAll('td')].map((td) => td.textContent),
     );
     expect(cells).toEqual([
-      ['0', '1'],
-      ['1', '0'],
+      ['0', '?'],
+      ['1', '?'],
     ]);
 
     // 阶段 1 不开放电容：按钮被禁用并给出原因

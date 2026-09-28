@@ -1,0 +1,74 @@
+// @vitest-environment jsdom
+/**
+ * 黑盒侦察：图纸输出列先遮住，玩家用测试仪测 + 自己填，核对通过才算「自主测绘」。
+ */
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { App } from '../src/App';
+import { PROGRESS_KEY } from '../src/level/progress';
+
+function recordCells(): HTMLButtonElement[] {
+  return [...document.querySelectorAll('.recon-table .record-cell')] as HTMLButtonElement[];
+}
+
+describe('黑盒侦察', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('第 1 关：图纸输出列是问号，测试仪测出来后才能填', () => {
+    render(<App />);
+    expect(screen.getByText('黑盒侦察')).toBeTruthy();
+    // 未测之前没有读数
+    expect(screen.getByText('还没测过')).toBeTruthy();
+    expect(recordCells().map((c) => c.textContent)).toEqual(['?', '?']);
+    // 核对按钮在没填完之前是禁用的
+    expect((screen.getByText('核对图纸') as HTMLButtonElement).disabled).toBe(true);
+
+    // 测第 1 组 → 读出 y=1
+    const probeButtons = [...document.querySelectorAll('.probe-btn')] as HTMLButtonElement[];
+    if (probeButtons[0]) fireEvent.click(probeButtons[0]);
+    expect(document.querySelector('.probe-lamp')?.textContent).toBe('y=1');
+  });
+
+  it('填错会被指出来，填对则解锁图纸并记入「自主测绘」', () => {
+    render(<App />);
+    const cells = recordCells();
+    // 故意把两行都填 0（第 1 行应该是 1）
+    if (cells[0]) fireEvent.click(cells[0]);
+    if (cells[1]) fireEvent.click(cells[1]);
+    fireEvent.click(screen.getByText('核对图纸'));
+    expect(screen.getByText(/第 1 组填错了/)).toBeTruthy();
+
+    // 改成正确值：非门是 0→1、1→0。第一行刚才填了 0，再点一下变 1；第二行 0 已经对了。
+    const cellsAgain = recordCells();
+    if (cellsAgain[0]) fireEvent.click(cellsAgain[0]);
+    fireEvent.click(screen.getByText('核对图纸'));
+
+    // 图纸解锁：委托单上的输出列露出真值
+    const targetTable = document.querySelector('.level-card .truth') as HTMLTableElement;
+    const rows = [...targetTable.querySelectorAll('tbody tr')].map((tr) =>
+      [...tr.querySelectorAll('td')].map((td) => td.textContent),
+    );
+    expect(rows).toEqual([
+      ['0', '1'],
+      ['1', '0'],
+    ]);
+    // 顶栏与存档都记上了
+    expect(screen.getAllByText(/自主测绘 1/).length).toBeGreaterThanOrEqual(1);
+    const saved = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? '{}') as {
+      recon?: Record<string, string>;
+    };
+    expect(saved.recon?.['s1-not']).toBe('measured');
+  });
+
+  it('「直接看答案」也能解锁图纸，但记成 skipped（不算自主测绘）', () => {
+    render(<App />);
+    fireEvent.click(screen.getByText('直接看答案'));
+    const targetTable = document.querySelector('.level-card .truth') as HTMLTableElement;
+    expect(targetTable.textContent).toContain('1');
+    expect(screen.getAllByText(/自主测绘 0/).length).toBeGreaterThanOrEqual(1);
+    const saved = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? '{}') as {
+      recon?: Record<string, string>;
+    };
+    expect(saved.recon?.['s1-not']).toBe('skipped');
+  });
+});

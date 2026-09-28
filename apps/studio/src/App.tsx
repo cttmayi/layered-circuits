@@ -37,9 +37,11 @@ import {
   leaderboard,
   type Progress,
   rankOf,
+  reconCount,
   recordAttempt,
   recordClear,
   saveProgress,
+  setRecon,
   starsOf,
 } from './level/progress';
 import { docFor, type GameMode, initialSession, levelOf, storageKeyFor } from './level/session';
@@ -49,6 +51,7 @@ import { LevelCard } from './panels/LevelCard';
 import { LevelMap } from './panels/LevelMap';
 import { LibraryPanel } from './panels/LibraryPanel';
 import { Palette } from './panels/Palette';
+import { ReconPanel } from './panels/ReconPanel';
 import { SettlementPanel } from './panels/SettlementPanel';
 import { TruthTable } from './panels/TruthTable';
 import { WaveformPanel } from './panels/WaveformPanel';
@@ -781,7 +784,8 @@ export function App(): React.JSX.Element {
             </button>
             <span className="cleared-count">
               已通关 {ALL_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
-              {ALL_LEVELS.length} · 钱包 {progress.walletHalf / 2} 元 · {rankOf(progress).title}
+              {ALL_LEVELS.length} · 钱包 {progress.walletHalf / 2} 元 · {rankOf(progress).title} ·
+              自主测绘 {reconCount(progress)}
             </span>
           </div>
         )}
@@ -881,11 +885,23 @@ export function App(): React.JSX.Element {
           level={currentLevel}
           header={
             currentLevel && (
-              <LevelCard
-                level={currentLevel}
-                costHalf={snapshot?.cost.half ?? 0}
-                onShowHint={() => setToast(currentLevel.hint)}
-              />
+              <>
+                <LevelCard
+                  level={currentLevel}
+                  costHalf={snapshot?.cost.half ?? 0}
+                  reconDone={Boolean(progress.recon[currentLevel.id])}
+                  onShowHint={() => setToast(currentLevel.hint)}
+                />
+                <ReconPanel
+                  key={currentLevel.id}
+                  level={currentLevel}
+                  state={progress.recon[currentLevel.id]}
+                  onMeasured={() =>
+                    setProgress((prev) => setRecon(prev, currentLevel.id, 'measured'))
+                  }
+                  onSkip={() => setProgress((prev) => setRecon(prev, currentLevel.id, 'skipped'))}
+                />
+              </>
             )
           }
         />
@@ -938,6 +954,7 @@ export function App(): React.JSX.Element {
             <SettlementPanel
               level={currentLevel}
               stars={settlementStars}
+              reconMeasured={progress.recon[currentLevel.id] === 'measured'}
               levelName={currentLevel.unlock?.name ?? currentLevel.title}
               result={settlement}
               previousScore={levelRecord?.score ?? null}

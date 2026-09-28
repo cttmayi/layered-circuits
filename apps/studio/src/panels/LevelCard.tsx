@@ -6,13 +6,20 @@ export interface LevelCardProps {
   level: Level;
   /** 当前电路成本（半单位） */
   costHalf: number;
+  /** 黑盒侦察是否已完成（未完成时图纸的输出列是看不清的） */
+  reconDone: boolean;
   onShowHint: () => void;
 }
 
 const CELL: Record<string, string> = { 0: 'lo', 1: 'hi', X: 'bad', Z: 'dim' };
 
 /** 左侧「委托单」：委托方 + 人话需求 + 合同条款 + 图纸（真值表）+ 用料进度 */
-export function LevelCard({ level, costHalf, onShowHint }: LevelCardProps): React.JSX.Element {
+export function LevelCard({
+  level,
+  costHalf,
+  reconDone,
+  onShowHint,
+}: LevelCardProps): React.JSX.Element {
   const [showTeaching, setShowTeaching] = useState(false);
   const commission = commissionOf(level);
   const contract = contractOf(level);
@@ -62,6 +69,9 @@ export function LevelCard({ level, costHalf, onShowHint }: LevelCardProps): Reac
         </div>
       </div>
 
+      {!reconDone && (
+        <p className="dim small">图纸折角了：输出列看不清 —— 去下面的「黑盒侦察」自己测出来。</p>
+      )}
       <table className="truth">
         <thead>
           <tr>
@@ -86,8 +96,11 @@ export function LevelCard({ level, costHalf, onShowHint }: LevelCardProps): Reac
                 </td>
               ))}
               {outputNames.map((n) => (
-                <td key={n} className={`sep ${CELL[String(v.expect?.[n])] ?? ''}`}>
-                  {String(v.expect?.[n])}
+                <td
+                  key={n}
+                  className={reconDone ? `sep ${CELL[String(v.expect?.[n])] ?? ''}` : 'sep dim'}
+                >
+                  {reconDone ? String(v.expect?.[n]) : '?'}
                 </td>
               ))}
             </tr>
