@@ -1,0 +1,4 @@
+# 复制为 .npmrc 并改成你自己的绝对路径（.npmrc 已被 gitignore）
+# 目的：把 pnpm store / npm cache 放在工作区内，避免写入 $HOME
+store-dir=/absolute/path/to/Layered_Circuits/.pnpm-store
+cache=/absolute/path/to/Layered_Circuits/.npm-cache

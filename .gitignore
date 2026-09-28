@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# 本地工具缓存（沙箱内需放在工作区）
+.pnpm-store/
+.npm-cache/
+.npmrc
+
+# 系统
+.DS_Store
+*.log

@@ -1,0 +1,144 @@
+/**
+ * 关卡判定 / 真值表测试夹具。
+ *
+ * 关卡断言的最小闭环：给定一组激励向量，跑完仿真后采样输出端口，与期望逻辑比对。
+ * 逻辑模式一次收敛；时序模式施加激励后推进 settlePs 再采样（M2 会在此基础上加波形时序断言）。
+ */
+
+import type { Diagnostic } from './engine.js';
+import { type SimMode, Simulator } from './engine.js';
+import type { FlatNet } from './ir.js';
+import type { Logic } from './signal.js';
+
+export interface TestVector {
+  /** 端口名 → 逻辑值；未列出的输入保持上一次的值（便于测时序保持） */
+  inputs: Record<string, Logic>;
+  /** 期望输出；缺省表示本向量只做激励不判定 */
+  expect?: Record<string, Logic>;
+  /** 时序模式：施加激励后等待多久采样（ps）。默认取 defaultSettlePs */
+  settlePs?: number;
+  note?: string;
+}
+
+export interface VectorMismatch {
+  port: string;
+  expected: Logic;
+  actual: Logic;
+}
+
+export interface VectorRow {
+  index: number;
+  note?: string;
+  inputs: Record<string, Logic>;
+  expected: Record<string, Logic>;
+  actual: Record<string, Logic>;
+  mismatches: VectorMismatch[];
+  ok: boolean;
+  timePs: number;
+}
+
+export interface VectorRunResult {
+  pass: boolean;
+  rows: VectorRow[];
+  diagnostics: Diagnostic[];
+  /** 逻辑模式下是否出现未收敛（组合环/振荡） */
+  unstable: boolean;
+}
+
+export interface RunVectorsOptions {
+  mode: SimMode;
+  trace?: boolean;
+  /** 时序模式默认采样等待时间（ps），默认 100ns */
+  defaultSettlePs?: number;
+  maxIterations?: number;
+  /** 时序模式每个向量的事件预算，超出即判定「未稳定」（防止振荡电路卡死） */
+  maxEventsPerVector?: number;
+}
+
+/** 跑一组向量，返回逐行结果（含诊断，供 UI 直接展示） */
+export function runVectors(
+  net: FlatNet,
+  vectors: readonly TestVector[],
+  options: RunVectorsOptions,
+): VectorRunResult {
+  const sim = new Simulator(net, {
+    mode: options.mode,
+    trace: options.trace ?? false,
+    ...(options.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
+  });
+
+  const defaultSettlePs = options.defaultSettlePs ?? 100_000;
+  const maxEventsPerVector = options.maxEventsPerVector ?? 500_000;
+  const rows: VectorRow[] = [];
+  let unstable = false;
+  let pass = true;
+  // 时序模式自己维护逻辑时钟：sim.time 反映「最后一次事件」的时刻，不能用它累加
+  let clockPs = 0;
+
+  for (let i = 0; i < vectors.length; i++) {
+    const vector = vectors[i] as TestVector;
+    for (const [port, value] of Object.entries(vector.inputs)) sim.setInput(port, value);
+    if (options.mode === 'timing') {
+      clockPs += vector.settlePs ?? defaultSettlePs;
+      if (!sim.advanceTo(clockPs, maxEventsPerVector)) unstable = true;
+    } else if (!sim.settle()) {
+      unstable = true;
+    }
+
+    const actual = sim.readAllOutputs();
+    const expected = vector.expect ?? {};
+    const mismatches: VectorMismatch[] = [];
+    for (const [port, want] of Object.entries(expected)) {
+      const got = actual[port];
+      if (got !== want) mismatches.push({ port, expected: want, actual: got ?? 'Z' });
+    }
+    const ok = mismatches.length === 0;
+    if (!ok) pass = false;
+
+    const row: VectorRow = {
+      index: i,
+      inputs: { ...vector.inputs },
+      expected: { ...expected },
+      actual,
+      mismatches,
+      ok,
+      timePs: sim.time,
+    };
+    if (vector.note !== undefined) row.note = vector.note;
+    rows.push(row);
+  }
+
+  const diagnostics = [...sim.allDiagnostics];
+  if (diagnostics.some((d) => d.kind === 'unstable')) unstable = true;
+
+  return { pass, rows, diagnostics, unstable };
+}
+
+/** 穷举 n 位输入的全部组合，方便生成真值表向量 */
+export function allInputCombinations(ports: readonly string[]): Array<Record<string, Logic>> {
+  const out: Array<Record<string, Logic>> = [];
+  const total = 1 << ports.length;
+  for (let mask = 0; mask < total; mask++) {
+    const combo: Record<string, Logic> = {};
+    for (let b = 0; b < ports.length; b++) {
+      combo[ports[b] as string] = ((mask >> (ports.length - 1 - b)) & 1) as 0 | 1;
+    }
+    out.push(combo);
+  }
+  return out;
+}
+
+/** 便捷函数：单次逻辑模式仿真，返回输出端口逻辑值 */
+export function evaluateOnce(
+  net: FlatNet,
+  inputs: Record<string, Logic>,
+  options: Partial<RunVectorsOptions> = {},
+): Record<string, Logic> {
+  const result = runVectors(net, [{ inputs }], {
+    mode: options.mode ?? 'logic',
+    ...(options.trace !== undefined ? { trace: options.trace } : {}),
+    ...(options.defaultSettlePs !== undefined ? { defaultSettlePs: options.defaultSettlePs } : {}),
+    ...(options.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
+  });
+  return (result.rows[0] as VectorRow).actual;
+}
