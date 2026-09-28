@@ -248,7 +248,12 @@ describe('关卡界面', () => {
     // 切到自由模式后不再有校验按钮（关卡约束也随之解除）
     screen.getByText('自由模式').click();
     await waitFor(() => expect(screen.queryByText('校验本关')).toBeNull());
-    expect((screen.getByText('电容').closest('button') as HTMLButtonElement).disabled).toBe(false);
+    // 「电容」在元件库按钮和成本表里都会出现，取按钮那个（避免跑并发时的时序差异）
+    const capButton = screen
+      .getAllByText('电容')
+      .map((node) => node.closest('button'))
+      .find((node): node is HTMLButtonElement => node !== null);
+    expect(capButton?.disabled).toBe(false);
   });
 
   it('通关后解锁下一关：进度写入 localStorage，关卡下拉可选第二关', async () => {
