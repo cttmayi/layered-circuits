@@ -3,6 +3,7 @@
   "files": {
     "includes": [
       "**/*.ts",
+      "**/*.tsx",
       "**/*.json",
       "!**/node_modules",
       "!**/.pnpm-store",

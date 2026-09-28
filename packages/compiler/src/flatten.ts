@@ -41,6 +41,8 @@ export interface CompileOptions {
 export interface CompileResult {
   net: FlatNet;
   diagnostics: CompileDiagnostic[];
+  /** 顶层网络的网表节点编号（nodeIndex → 网 id），编辑器用它把节点电平映射回连线 */
+  netIds: string[];
 }
 
 const UNIT_ELEMENT_KIND: Record<Unit, number> = {
@@ -249,7 +251,14 @@ export function compileDesign(design: Design, options: CompileOptions): CompileR
     }
   }
 
-  return { net: asm.build(), diagnostics };
+  // 4) 顶层网 id → 节点编号（编辑器用来把节点电平画回连线上）
+  const net = asm.build();
+  const netIds = new Array<string>(net.nodeCount).fill('');
+  for (const [netId, node] of topNetNode) {
+    if (node >= 0 && node < net.nodeCount) netIds[node] = netId;
+  }
+
+  return { net, diagnostics, netIds };
 }
 
 function nodeForNetSafe(
@@ -260,5 +269,7 @@ function nodeForNetSafe(
 ): number {
   const existing = netNode.get(netId);
   if (existing !== undefined) return existing;
-  return asm.node(`${portName}:${netId}`);
+  const node = asm.node(`${portName}:${netId}`);
+  netNode.set(netId, node);
+  return node;
 }

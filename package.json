@@ -8,12 +8,14 @@
     "node": ">=20"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p apps/studio/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "check": "pnpm typecheck && pnpm lint && pnpm test"
+    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "build": "pnpm --filter @lc/studio build",
+    "dev": "pnpm --filter @lc/studio dev"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
