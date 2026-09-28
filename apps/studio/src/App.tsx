@@ -27,6 +27,7 @@ import {
   screenToWorld,
   signalText,
 } from './editor/render';
+import { buyEquipment, ownsEquipment } from './level/equipment';
 import { addModule, storeModule } from './level/library';
 import {
   docForLevel,
@@ -57,6 +58,7 @@ import { ReconPanel } from './panels/ReconPanel';
 import { SettlementPanel } from './panels/SettlementPanel';
 import { TruthTable } from './panels/TruthTable';
 import { WaveformPanel } from './panels/WaveformPanel';
+import { WorkshopPanel } from './panels/WorkshopPanel';
 import type { SimSnapshot, StudioResponse } from './sim/protocol';
 import { createRunner } from './sim/runner';
 
@@ -797,8 +799,8 @@ export function App(): React.JSX.Element {
             </button>
             <span className="cleared-count">
               已通关 {ALL_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
-              {ALL_LEVELS.length} · 钱包 {progress.walletHalf / 2} 元 · {rankOf(progress).title} ·
-              自主测绘 {reconCount(progress)}
+              {ALL_LEVELS.length} · 可用余额 {(progress.walletHalf - progress.spentHalf) / 2} 元 ·{' '}
+              {rankOf(progress).title} · 自主测绘 {reconCount(progress)}
             </span>
           </div>
         )}
@@ -914,6 +916,7 @@ export function App(): React.JSX.Element {
                   key={currentLevel.id}
                   level={currentLevel}
                   state={progress.recon[currentLevel.id]}
+                  hasProbe={ownsEquipment(progress, 'probe')}
                   onMeasured={() =>
                     setProgress((prev) => setRecon(prev, currentLevel.id, 'measured'))
                   }
@@ -999,6 +1002,18 @@ export function App(): React.JSX.Element {
               onClear={() => void clearLevel()}
             />
           )}
+          <WorkshopPanel
+            progress={progress}
+            onBuy={(id) => {
+              const result = buyEquipment(progress, id);
+              setProgress(result.progress);
+              if (result.error) setToast(result.error);
+              else
+                setToast(
+                  `已买下设备（可用余额 ${(result.progress.walletHalf - result.progress.spentHalf) / 2} 元）`,
+                );
+            }}
+          />
           <LevelMap
             progress={progress}
             currentLevelId={currentLevel?.id ?? ''}
@@ -1034,6 +1049,7 @@ export function App(): React.JSX.Element {
           {showWave && judgeResult && (
             <WaveformPanel
               result={judgeResult}
+              hasScope={ownsEquipment(progress, 'scope')}
               portNames={[
                 ...Object.keys(judgeResult.rows[0]?.inputs ?? {}),
                 ...new Set(judgeResult.rows.flatMap((r) => Object.keys(r.expected))),

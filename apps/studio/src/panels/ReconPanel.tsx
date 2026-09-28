@@ -15,6 +15,8 @@ import type { ReconState } from '../level/progress';
 export interface ReconPanelProps {
   level: Level;
   state: ReconState | undefined;
+  /** 工具铺的测试探针：点「测」时读数自动记进需求表 */
+  hasProbe: boolean;
   onMeasured: () => void;
   onSkip: () => void;
 }
@@ -24,6 +26,7 @@ type Bit = 0 | 1;
 export function ReconPanel({
   level,
   state,
+  hasProbe,
   onMeasured,
   onSkip,
 }: ReconPanelProps): React.JSX.Element {
@@ -56,6 +59,14 @@ export function ReconPanel({
       if (value === 0 || value === 1) next[key(row, port)] = value;
     }
     setReadings(next);
+    if (hasProbe) {
+      const auto = { ...recorded };
+      for (const port of outputNames) {
+        const value = level.vectors[row]?.expect?.[port];
+        if (value === 0 || value === 1) auto[key(row, port)] = value;
+      }
+      setRecorded(auto);
+    }
   };
 
   const cycle = (row: number, port: string): void => {
@@ -170,6 +181,7 @@ export function ReconPanel({
         <button type="button" onClick={onSkip}>
           直接看答案
         </button>
+        {hasProbe && <span className="dim small">测试探针已装备：测完自动记</span>}
       </div>
     </section>
   );

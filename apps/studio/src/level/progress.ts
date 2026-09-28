@@ -74,6 +74,10 @@ export interface Progress {
   recon: Record<string, ReconState>;
   /** 支线单完成记录：`关卡id:支线key` → 拿到的奖金（半单位）；也用于任务墙徽章 */
   sideJobs: Record<string, number>;
+  /** 工具铺：已购买的设备 id */
+  equipment: string[];
+  /** 已经花掉的钱（半单位）；可用余额 = walletHalf − spentHalf */
+  spentHalf: number;
 }
 
 /** 钱包 = 每关最好一次的利润 + 各支线单奖金（都由存档推导，不重复发钱） */
@@ -113,7 +117,16 @@ export function setRecon(progress: Progress, levelId: string, state: ReconState)
 }
 
 export function emptyProgress(): Progress {
-  return { cleared: {}, attempts: {}, library: [], walletHalf: 0, recon: {}, sideJobs: {} };
+  return {
+    cleared: {},
+    attempts: {},
+    library: [],
+    walletHalf: 0,
+    recon: {},
+    sideJobs: {},
+    equipment: [],
+    spentHalf: 0,
+  };
 }
 
 export function loadProgress(): Progress {
@@ -128,6 +141,8 @@ export function loadProgress(): Progress {
       walletHalf: typeof parsed.walletHalf === 'number' ? parsed.walletHalf : 0,
       recon: (parsed.recon as Record<string, ReconState>) ?? {},
       sideJobs: (parsed.sideJobs as Record<string, number>) ?? {},
+      equipment: Array.isArray(parsed.equipment) ? (parsed.equipment as string[]) : [],
+      spentHalf: typeof parsed.spentHalf === 'number' ? parsed.spentHalf : 0,
     };
   } catch {
     return emptyProgress();
@@ -354,6 +369,8 @@ export function importSave(text: string): { progress: Progress; error?: string }
     walletHalf: typeof raw.walletHalf === 'number' ? raw.walletHalf : 0,
     recon: (raw.recon as Record<string, ReconState>) ?? {},
     sideJobs: (raw.sideJobs as Record<string, number>) ?? {},
+    equipment: Array.isArray(raw.equipment) ? (raw.equipment as string[]) : [],
+    spentHalf: typeof raw.spentHalf === 'number' ? raw.spentHalf : 0,
   };
   return { progress };
 }

@@ -85,7 +85,7 @@ describe('委托单与结算（P0 游戏化外壳）', () => {
       }),
     );
     render(<App />);
-    expect(screen.getByText(/钱包 1 元/)).toBeTruthy();
+    expect(screen.getAllByText(/可用余额 1 元/).length).toBeGreaterThanOrEqual(1);
   });
 });
 
