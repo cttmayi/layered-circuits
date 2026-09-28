@@ -11,12 +11,18 @@ function recordCells(): HTMLButtonElement[] {
   return [...document.querySelectorAll('.recon-table .record-cell')] as HTMLButtonElement[];
 }
 
+/** 进关弹「新委托」→ 点开工 → 图纸没测出来时直接进入居中的黑盒侦察对话框 */
+function openRecon(): void {
+  fireEvent.click(screen.getByText('开工'));
+  expect(screen.getByRole('dialog', { name: '黑盒侦察' })).toBeTruthy();
+}
+
 describe('黑盒侦察', () => {
   beforeEach(() => localStorage.clear());
 
   it('第 1 关：图纸输出列是问号，测试仪测出来后才能填', () => {
     render(<App />);
-    expect(screen.getByText('黑盒侦察')).toBeTruthy();
+    openRecon();
     // 未测之前没有读数
     expect(screen.getByText('还没测过')).toBeTruthy();
     expect(recordCells().map((c) => c.textContent)).toEqual(['?', '?']);
@@ -31,6 +37,7 @@ describe('黑盒侦察', () => {
 
   it('填错会被指出来，填对则解锁图纸并记入「自主测绘」', () => {
     render(<App />);
+    openRecon();
     const cells = recordCells();
     // 故意把两行都填 0（第 1 行应该是 1）
     if (cells[0]) fireEvent.click(cells[0]);
@@ -66,6 +73,7 @@ describe('黑盒侦察', () => {
 
   it('「直接看答案」也能解锁图纸，但记成 skipped（不算自主测绘）', () => {
     render(<App />);
+    openRecon();
     fireEvent.click(screen.getByText('直接看答案'));
     const targetTable = document.querySelector('.level-card .truth') as HTMLTableElement;
     expect(targetTable.textContent).toContain('1');

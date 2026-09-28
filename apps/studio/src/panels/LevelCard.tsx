@@ -11,6 +11,8 @@ export interface LevelCardProps {
   reconDone: boolean;
   /** 当前接的支线单（null = 只做主线） */
   sideJob: string | null;
+  /** 打开黑盒侦察对话框（图纸还没测出来时的入口） */
+  onOpenRecon: () => void;
   /** 已完成的支线单 key 列表 */
   doneSideJobs: string[];
   onPickSideJob: (key: string | null) => void;
@@ -26,6 +28,7 @@ export function LevelCard({
   reconDone,
   sideJob,
   doneSideJobs,
+  onOpenRecon,
   onPickSideJob,
   onShowHint,
 }: LevelCardProps): React.JSX.Element {
@@ -143,6 +146,11 @@ export function LevelCard({
       </div>
 
       <div className="group-row">
+        {!reconDone && (
+          <button type="button" className="primary" onClick={onOpenRecon}>
+            黑盒侦察（测图纸）
+          </button>
+        )}
         <button type="button" onClick={() => setShowTeaching((v) => !v)}>
           {showTeaching ? '收起原理' : '原理讲解'}
         </button>

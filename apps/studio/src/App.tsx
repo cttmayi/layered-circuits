@@ -135,6 +135,8 @@ export function App(): React.JSX.Element {
   const commissionSeen = useRef(new Set<string>());
   /** 中央提示对话框（图纸解开等小节点） */
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
+  /** 黑盒侦察对话框（开工后若图纸未测则直接进入） */
+  const [reconOpen, setReconOpen] = useState(false);
   /** 当前接的支线单（同一时刻最多一条，验收按支线条件判） */
   const [sideJobKey, setSideJobKey] = useState<string | null>(null);
   /** 封装过场：电路被压成一颗芯片落进组件库 */
@@ -927,22 +929,7 @@ export function App(): React.JSX.Element {
                     .map((id) => id.slice(currentLevel.id.length + 1))}
                   onPickSideJob={setSideJobKey}
                   onShowHint={() => setToast(currentLevel.hint)}
-                />
-                <ReconPanel
-                  key={currentLevel.id}
-                  level={currentLevel}
-                  state={progress.recon[currentLevel.id]}
-                  hasProbe={ownsEquipment(progress, 'probe')}
-                  onMeasured={() => {
-                    setProgress((prev) => setRecon(prev, currentLevel.id, 'measured'));
-                    setNotice({
-                      title: '图纸解开了',
-                      body: `这张单的答案是你自己一格格测出来的 —— 黑盒侦察完成，可以开工搭电路了。${
-                        levelRecord?.score !== undefined ? '' : ''
-                      }`,
-                    });
-                  }}
-                  onSkip={() => setProgress((prev) => setRecon(prev, currentLevel.id, 'skipped'))}
+                  onOpenRecon={() => setReconOpen(true)}
                 />
               </>
             )
@@ -971,8 +958,35 @@ export function App(): React.JSX.Element {
             <CommissionModal
               key={currentLevel.id}
               level={currentLevel}
-              onStart={() => setCommissionOpen(false)}
+              onStart={(job) => {
+                setSideJobKey(job);
+                setCommissionOpen(false);
+                // 图纸还没测出来 → 直接进黑盒侦察（操作在对话框里完成）
+                if (!progress.recon[currentLevel.id]) setReconOpen(true);
+              }}
             />
+          )}
+          {reconOpen && currentLevel && (
+            <Modal title="黑盒侦察" onClose={() => setReconOpen(false)}>
+              <ReconPanel
+                key={currentLevel.id}
+                level={currentLevel}
+                state={progress.recon[currentLevel.id]}
+                hasProbe={ownsEquipment(progress, 'probe')}
+                onMeasured={() => {
+                  setProgress((prev) => setRecon(prev, currentLevel.id, 'measured'));
+                  setReconOpen(false);
+                  setNotice({
+                    title: '图纸解开了',
+                    body: `这张单的答案是你自己一格格测出来的 —— 黑盒侦察完成，可以开工搭电路了。`,
+                  });
+                }}
+                onSkip={() => {
+                  setProgress((prev) => setRecon(prev, currentLevel.id, 'skipped'));
+                  setReconOpen(false);
+                }}
+              />
+            </Modal>
           )}
           {notice && (
             <Modal title={notice.title} onClose={() => setNotice(null)}>

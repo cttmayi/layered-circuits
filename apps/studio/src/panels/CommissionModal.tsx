@@ -4,25 +4,33 @@
 
 import { commissionOf, contractOf } from '@lc/content';
 import type { Level } from '@lc/schema';
+import { useState } from 'react';
 import { sideJobsOf } from '../level/sideJobs';
 import { Modal } from './Modal';
 
 export interface CommissionModalProps {
   level: Level;
-  onStart: () => void;
+  /** 开工：把「接不接支线」的决定带出去（null = 只做主线） */
+  onStart: (sideJobKey: string | null) => void;
 }
 
 export function CommissionModal({ level, onStart }: CommissionModalProps): React.JSX.Element {
   const commission = commissionOf(level);
   const contract = contractOf(level);
   const jobs = sideJobsOf(level);
+  const [selected, setSelected] = useState<string | null>(null);
   return (
     <Modal
       title="新委托"
-      onClose={onStart}
+      onClose={() => onStart(null)}
       footer={
-        <button type="button" className="primary" onClick={onStart}>
-          开工
+        <button
+          type="button"
+          className="primary"
+          onClick={() => onStart(selected)}
+          disabled={selected !== null && !jobs.some((job) => job.key === selected)}
+        >
+          开工{selected ? `（接：${jobs.find((j) => j.key === selected)?.title}）` : ''}
         </button>
       }
     >
@@ -46,16 +54,34 @@ export function CommissionModal({ level, onStart }: CommissionModalProps): React
         </div>
       </dl>
       <div className="modal-jobs">
-        <strong>支线单（可选）</strong>
+        <strong>支线单（可选，接了更赚，也判得更严）</strong>
         <ul>
-          {jobs.map((job) => (
-            <li key={job.key}>
-              {job.title}（+{job.bonusHalf / 2} 元）：{job.note}
-            </li>
-          ))}
+          {jobs.map((job) => {
+            const active = selected === job.key;
+            return (
+              <li key={job.key}>
+                <button
+                  type="button"
+                  className={active ? 'job-option active' : 'job-option'}
+                  onClick={() => setSelected(active ? null : job.key)}
+                >
+                  <span className="job-option-head">
+                    {job.title}（+{job.bonusHalf / 2} 元）
+                    {active && <b>已接</b>}
+                  </span>
+                  <span className="job-option-note">{job.note}</span>
+                </button>
+              </li>
+            );
+          })}
+          {selected === null && (
+            <li className="dim small">不接支线，只做主线（预算按委托单上的来）。</li>
+          )}
         </ul>
       </div>
-      <p className="dim small">开工后：左侧委托单随时可看，图纸折角了要用黑盒侦察测出来。</p>
+      <p className="dim small">
+        开工后如果图纸还是折角的，会直接进入「黑盒侦察」：用测试仪把每一组输出测出来。
+      </p>
     </Modal>
   );
 }

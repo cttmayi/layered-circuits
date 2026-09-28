@@ -137,3 +137,37 @@ describe('任务墙与星级（P1）', () => {
     expect(screen.getByText(/已交付 1\/13 · 星 3\/39/)).toBeTruthy();
   });
 });
+
+describe('接单对话框里直接选支线（操作在中间完成）', () => {
+  beforeEach(() => localStorage.clear());
+
+  /** 点击对话框里包含指定文本的那个按钮（卡片上也有同名文本，要取弹窗里的） */
+  function inModal(text: RegExp): HTMLButtonElement | undefined {
+    for (const node of screen.getAllByText(text)) {
+      if (!node.closest('.modal-box')) continue;
+      const button = node.closest('button');
+      if (button) return button as HTMLButtonElement;
+    }
+    return undefined;
+  }
+
+  it('在「新委托」对话框里接加急单，开工后支线状态生效', () => {
+    render(<App />);
+    const job = inModal(/加急单/);
+    expect(job).toBeTruthy();
+    if (job) fireEvent.click(job);
+    const start = screen.getByText(/开工（接：加急单）/);
+    fireEvent.click(start);
+    // 支线已生效：委托单上显示已接
+    expect(screen.queryByText('新委托')).toBeNull();
+    expect(screen.getByText(/已接支线/)).toBeTruthy();
+  });
+
+  it('不接支线开工：只做主线', () => {
+    render(<App />);
+    const start = inModal(/^开工$/);
+    if (start) fireEvent.click(start);
+    expect(screen.queryByText('新委托')).toBeNull();
+    expect(screen.queryByText(/已接支线/)).toBeNull();
+  });
+});

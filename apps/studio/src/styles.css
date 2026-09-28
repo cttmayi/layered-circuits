@@ -1182,3 +1182,48 @@ body,
   border: none;
   cursor: pointer;
 }
+
+/* 接单对话框里的支线选择按钮 */
+.job-option {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  margin: 3px 0;
+  color: #cfe0f0;
+  text-align: left;
+  background: #161e26;
+  border: 1px dashed #37485a;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.job-option.active {
+  border-style: solid;
+  border-color: #6cb2ff;
+  background: #17232e;
+}
+
+.job-option-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.job-option-head b {
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #0d141a;
+  background: #7fd6a0;
+  border-radius: 2px;
+}
+
+.job-option-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #8b9bab;
+}
