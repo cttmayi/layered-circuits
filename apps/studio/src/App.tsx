@@ -1026,6 +1026,9 @@ export function App(): React.JSX.Element {
                 onSkip={() => {
                   setProgress((prev) => setRecon(prev, currentLevel.id, 'skipped'));
                   setReconOpen(false);
+                  setToast(
+                    '图纸解开了（直接看答案）—— 左侧图纸卡的输出列现在能看了；这单不算自主测绘。',
+                  );
                 }}
               />
             </Modal>

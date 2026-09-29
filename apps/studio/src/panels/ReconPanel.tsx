@@ -115,7 +115,9 @@ export function ReconPanel({
     <section className="panel recon">
       <h3>黑盒侦察</h3>
       <p className="panel-note">
-        客户把图纸折了个角：输出那一列看不清了。用测试仪测出每一组输入的结果，自己把需求表填出来。
+        这单的图纸缺了「输出」列（显示 ?），你得先搞清楚客户要什么功能：
+        点每行的「测」，把测试仪读到的输出填进「记录」列，再点「核对图纸」——
+        全对就解开图纸，你才知道该搭成什么样。嫌麻烦可「直接看答案」（不算自主测绘）。
       </p>
 
       <div className="probe">
