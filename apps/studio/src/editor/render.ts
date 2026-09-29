@@ -18,6 +18,7 @@ import {
   type StoredModule,
   type Sym,
   symKindKey,
+  type Wire,
 } from './model';
 
 export interface Camera {
@@ -161,7 +162,7 @@ export function hitTest(scene: Scene, wx: number, wy: number, tolerance = 9): Ho
     const a = pinWorld(doc, wire.a.inst, wire.a.pin);
     const b = pinWorld(doc, wire.b.inst, wire.b.pin);
     if (!a || !b) continue;
-    for (const [p, q] of routeSegments(a, b)) {
+    for (const [p, q] of routeSegments(a, b, wire.id.length)) {
       if (distanceToSegment(wx, wy, p, q) <= wireTol) return { kind: 'wire', id: wire.id };
     }
   }
@@ -177,13 +178,23 @@ function pinWorld(doc: Doc, inst: string, pin: string): { x: number; y: number }
 }
 
 /** 导线走线：折线（先水平再垂直再水平），示意更接近原理图 */
+/** 走线用的稳定小偏移：同一方向的多条平行线错开，避免拐点/公共段完全叠在一起 */
+function seedOffset(seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i += 1) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  const off = ((h & 3) + 1) * 4; // 4 / 8 / 12 / 16
+  return h & 4 ? off : -off;
+}
+
 function routeSegments(
   a: { x: number; y: number },
   b: { x: number; y: number },
+  seed = 0,
 ): Array<[{ x: number; y: number }, { x: number; y: number }]> {
   if (Math.abs(a.x - b.x) < 1 || Math.abs(a.y - b.y) < 1) return [[a, b]];
+  const off = seed === 0 ? 0 : seedOffset(String(seed));
   if (Math.abs(a.y - b.y) < 26) {
-    const mx = (a.x + b.x) / 2;
+    const mx = (a.x + b.x) / 2 + off;
     return [
       [a, { x: mx, y: a.y }],
       [
@@ -193,7 +204,7 @@ function routeSegments(
       [{ x: mx, y: b.y }, b],
     ];
   }
-  const my = (a.y + b.y) / 2;
+  const my = (a.y + b.y) / 2 + off;
   return [
     [a, { x: a.x, y: my }],
     [
@@ -202,6 +213,15 @@ function routeSegments(
     ],
     [{ x: b.x, y: my }, b],
   ];
+}
+
+/** 线段去重 key（端点取整到 0.5，同一条公共段只画一次，消灭扇出重影） */
+function segKey(p: { x: number; y: number }, q: { x: number; y: number }): string {
+  const a = [Math.round(p.x * 2) / 2, Math.round(p.y * 2) / 2];
+  const b = [Math.round(q.x * 2) / 2, Math.round(q.y * 2) / 2];
+  return a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
+    ? `${a[0]},${a[1]}>${b[0]},${b[1]}`
+    : `${b[0]},${b[1]}>${a[0]},${a[1]}`;
 }
 
 function distanceToSegment(
@@ -227,29 +247,73 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
 
   if (scene.grid) drawGrid(ctx, scene);
 
-  // 导线
+  // 导线：先按「线段去重」画一遍底色（公共段只画一次，不再叠成重影），
+  // 再单独高亮 hover / 选中的线。
+  const segments: Array<{ wire: Wire; a: { x: number; y: number }; b: { x: number; y: number } }> =
+    [];
+  const seen = new Set<string>();
+  const line = (from: { x: number; y: number }, to: { x: number; y: number }): void => {
+    const sp = worldToScreen(camera, width, height, from.x, from.y);
+    const sq = worldToScreen(camera, width, height, to.x, to.y);
+    ctx.beginPath();
+    ctx.moveTo(sp.x, sp.y);
+    ctx.lineTo(sq.x, sq.y);
+    ctx.stroke();
+  };
   for (const wire of doc.wires) {
     const a = pinWorld(doc, wire.a.inst, wire.a.pin);
     const b = pinWorld(doc, wire.b.inst, wire.b.pin);
     if (!a || !b) continue;
-    const selected = scene.selectedWires.includes(wire.id);
-    const hovered = scene.hover?.kind === 'wire' && scene.hover.id === wire.id;
-    const style = signalStyle(scene.pinSignals.get(pinKey(wire.a)) ?? SIG_Z);
-    ctx.save();
-    ctx.strokeStyle = selected ? PALETTE.selection : hovered ? PALETTE.hover : style.color;
-    ctx.lineWidth =
-      (selected || hovered ? style.width + 1.5 : style.width) * Math.min(1.6, camera.scale);
+    for (const [p, q] of routeSegments(a, b, wire.id.length)) segments.push({ wire, a: p, b: q });
+  }
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const seg of segments) {
+    const key = segKey(seg.a, seg.b);
+    if (seen.has(key)) continue; // 同一条公共段，只画一次
+    seen.add(key);
+    const style = signalStyle(scene.pinSignals.get(pinKey(seg.wire.a)) ?? SIG_Z);
+    ctx.strokeStyle = style.color;
+    ctx.lineWidth = style.width * Math.min(1.6, camera.scale);
     ctx.setLineDash(style.dash.map((d) => d * camera.scale));
-    ctx.lineCap = 'round';
-    for (const [p, q] of routeSegments(a, b)) {
-      const sp = worldToScreen(camera, width, height, p.x, p.y);
-      const sq = worldToScreen(camera, width, height, q.x, q.y);
-      ctx.beginPath();
-      ctx.moveTo(sp.x, sp.y);
-      ctx.lineTo(sq.x, sq.y);
-      ctx.stroke();
+    line(seg.a, seg.b);
+  }
+  for (const seg of segments) {
+    const selected = scene.selectedWires.includes(seg.wire.id);
+    const hovered = scene.hover?.kind === 'wire' && scene.hover.id === seg.wire.id;
+    if (!selected && !hovered) continue;
+    ctx.strokeStyle = selected ? PALETTE.selection : PALETTE.hover;
+    ctx.lineWidth =
+      (signalStyle(scene.pinSignals.get(pinKey(seg.wire.a)) ?? SIG_Z).width + 1.5) *
+      Math.min(1.6, camera.scale);
+    ctx.setLineDash([]);
+    line(seg.a, seg.b);
+  }
+  ctx.restore();
+
+  // 连接点圆点：同一引脚被 ≥2 根线共用时画一个实心点，连接关系一目了然
+  const jointCount = new Map<string, number>();
+  for (const wire of doc.wires) {
+    for (const end of [wire.a, wire.b]) {
+      const key = `${end.inst}:${end.pin}`;
+      jointCount.set(key, (jointCount.get(key) ?? 0) + 1);
     }
-    ctx.restore();
+  }
+  for (const wire of doc.wires) {
+    for (const end of [wire.a, wire.b]) {
+      const key = `${end.inst}:${end.pin}`;
+      if ((jointCount.get(key) ?? 0) < 2) continue;
+      const p = pinWorld(doc, end.inst, end.pin);
+      if (!p) continue;
+      const sp = worldToScreen(camera, width, height, p.x, p.y);
+      const r = Math.max(2.6, 4.5 * camera.scale);
+      ctx.save();
+      ctx.fillStyle = '#9fb2c4';
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   // 连线中的橡皮筋
