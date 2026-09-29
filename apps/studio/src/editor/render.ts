@@ -158,11 +158,12 @@ export function hitTest(scene: Scene, wx: number, wy: number, tolerance = 9): Ho
       return { kind: 'sym', id: sym.id };
   }
   const wireTol = 6 / scene.camera.scale + 2;
+  const obstacles = routeObstacles(doc);
   for (const wire of doc.wires) {
     const a = pinWorld(doc, wire.a.inst, wire.a.pin);
     const b = pinWorld(doc, wire.b.inst, wire.b.pin);
     if (!a || !b) continue;
-    for (const [p, q] of routeSegments(a, b, wire.id.length)) {
+    for (const [p, q] of routeSegments(a, b, wire.id.length, obstacles, wire.a.inst, wire.b.inst)) {
       if (distanceToSegment(wx, wy, p, q) <= wireTol) return { kind: 'wire', id: wire.id };
     }
   }
@@ -186,33 +187,149 @@ function seedOffset(seed: string): number {
   return h & 4 ? off : -off;
 }
 
-function routeSegments(
+export interface RouteObstacle {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** 画布上所有元件的矩形（含锁定的端口/电源轨），当作走线障碍 */
+export function routeObstacles(doc: Doc): RouteObstacle[] {
+  return doc.syms
+    .map((sym) => {
+      const f = footprintOf(sym, doc.library);
+      const m = 5; // 边距：离元件太近也算撞
+      return { id: sym.id, x: f.x - m, y: f.y - m, w: f.w + m * 2, h: f.h + m * 2 };
+    })
+    .filter((o) => o.w > 0 && o.h > 0);
+}
+
+export function segHitsRect(
+  p: { x: number; y: number },
+  q: { x: number; y: number },
+  r: RouteObstacle,
+): boolean {
+  const [x0, x1] = p.x <= q.x ? [p.x, q.x] : [q.x, p.x];
+  const [y0, y1] = p.y <= q.y ? [p.y, q.y] : [q.y, p.y];
+  if (x1 < r.x || x0 > r.x + r.w || y1 < r.y || y0 > r.y + r.h) return false;
+  // 矩形内含端点也算撞（只有两端点所属元件会被跳过）
+  if (x0 >= r.x && x1 <= r.x + r.w && y0 >= r.y && y1 <= r.y + r.h) return true;
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  // 逐边判断线段与矩形边的相交（轴对齐矩形，简化为 4 条边 + 端点包含）
+  const edges: Array<[{ x: number; y: number }, { x: number; y: number }]> = [
+    [
+      { x: r.x, y: r.y },
+      { x: r.x + r.w, y: r.y },
+    ],
+    [
+      { x: r.x + r.w, y: r.y },
+      { x: r.x + r.w, y: r.y + r.h },
+    ],
+    [
+      { x: r.x + r.w, y: r.y + r.h },
+      { x: r.x, y: r.y + r.h },
+    ],
+    [
+      { x: r.x, y: r.y + r.h },
+      { x: r.x, y: r.y },
+    ],
+  ];
+  for (const [u, v] of edges) {
+    const den = dx * (v.y - u.y) - dy * (v.x - u.x);
+    if (den === 0) continue;
+    const t = ((u.x - p.x) * (v.y - u.y) - (u.y - p.y) * (v.x - u.x)) / den;
+    const u2 = ((u.x - p.x) * dy - (u.y - p.y) * dx) / den;
+    if (t >= 0 && t <= 1 && u2 >= 0 && u2 <= 1) return true;
+  }
+  return false;
+}
+
+function routeClear(
+  segs: Array<[{ x: number; y: number }, { x: number; y: number }]>,
+  obstacles: RouteObstacle[],
+  skipA: string,
+  skipB: string,
+): boolean {
+  for (const [p, q] of segs) {
+    for (const ob of obstacles) {
+      if (ob.id === skipA || ob.id === skipB) continue;
+      if (segHitsRect(p, q, ob)) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * 避障布线：优先走「不穿过任何元件」的折线。
+ * 候选依次尝试 —— 直连 / 横先 Z / 竖先 Z / 各自向两侧挪 48/96/144，
+ * 第一个不撞元件矩形（两端点所属元件除外）的方案胜出；都不行再退回默认中点线。
+ */
+export function routeSegments(
   a: { x: number; y: number },
   b: { x: number; y: number },
   seed = 0,
+  obstacles: RouteObstacle[] = [],
+  skipA = '',
+  skipB = '',
 ): Array<[{ x: number; y: number }, { x: number; y: number }]> {
-  if (Math.abs(a.x - b.x) < 1 || Math.abs(a.y - b.y) < 1) return [[a, b]];
   const off = seed === 0 ? 0 : seedOffset(String(seed));
-  if (Math.abs(a.y - b.y) < 26) {
-    const mx = (a.x + b.x) / 2 + off;
-    return [
-      [a, { x: mx, y: a.y }],
-      [
-        { x: mx, y: a.y },
-        { x: mx, y: b.y },
-      ],
-      [{ x: mx, y: b.y }, b],
-    ];
+  const alignedX = Math.abs(a.x - b.x) < 1;
+  const alignedY = Math.abs(a.y - b.y) < 1;
+  const candidates: Array<Array<[{ x: number; y: number }, { x: number; y: number }]>> = [];
+  if (alignedX || alignedY) {
+    candidates.push([[a, b]]);
+    for (const d of [48, -48, 96, -96, 144, -144]) {
+      if (alignedX)
+        candidates.push([
+          [a, { x: a.x + d, y: a.y }],
+          [
+            { x: a.x + d, y: a.y },
+            { x: a.x + d, y: b.y },
+          ],
+          [{ x: a.x + d, y: b.y }, b],
+        ]);
+      else
+        candidates.push([
+          [a, { x: a.x, y: a.y + d }],
+          [
+            { x: a.x, y: a.y + d },
+            { x: b.x, y: a.y + d },
+          ],
+          [{ x: b.x, y: a.y + d }, b],
+        ]);
+    }
+  } else {
+    const mx0 = (a.x + b.x) / 2 + off;
+    const my0 = (a.y + b.y) / 2 + off;
+    const pick = (mx: number, my: number): void => {
+      candidates.push([
+        [a, { x: mx, y: a.y }],
+        [
+          { x: mx, y: a.y },
+          { x: mx, y: b.y },
+        ],
+        [{ x: mx, y: b.y }, b],
+      ]);
+      candidates.push([
+        [a, { x: a.x, y: my }],
+        [
+          { x: a.x, y: my },
+          { x: b.x, y: my },
+        ],
+        [{ x: b.x, y: my }, b],
+      ]);
+    };
+    pick(mx0, my0);
+    for (const d of [48, -48, 96, -96, 144, -144]) pick(mx0 + d, my0 + d);
   }
-  const my = (a.y + b.y) / 2 + off;
-  return [
-    [a, { x: a.x, y: my }],
-    [
-      { x: a.x, y: my },
-      { x: b.x, y: my },
-    ],
-    [{ x: b.x, y: my }, b],
-  ];
+  for (const cand of candidates) {
+    if (!obstacles.length || routeClear(cand, obstacles, skipA, skipB)) return cand;
+  }
+  // 兜底：默认中点折线（旧行为），保证永远画得出线
+  return candidates[0] ?? [[a, b]];
 }
 
 /** 线段去重 key（端点取整到 0.5，同一条公共段只画一次，消灭扇出重影） */
@@ -278,6 +395,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
     if (net) activeNets.add(net);
   }
   const netDimmed = activeNets.size > 0;
+  const obstacles = routeObstacles(doc);
 
   const segments: Array<{ wire: Wire; a: { x: number; y: number }; b: { x: number; y: number } }> =
     [];
@@ -294,7 +412,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
     const a = pinWorld(doc, wire.a.inst, wire.a.pin);
     const b = pinWorld(doc, wire.b.inst, wire.b.pin);
     if (!a || !b) continue;
-    for (const [p, q] of routeSegments(a, b, wire.id.length)) segments.push({ wire, a: p, b: q });
+    for (const [p, q] of routeSegments(a, b, wire.id.length, obstacles, wire.a.inst, wire.b.inst))
+      segments.push({ wire, a: p, b: q });
   }
   ctx.save();
   ctx.lineCap = 'round';
