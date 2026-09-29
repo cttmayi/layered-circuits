@@ -720,6 +720,14 @@ export function App(): React.JSX.Element {
     );
   };
 
+  /** 复制当前电路 JSON：方便贴给我检查布线 / 分享 / 调试 */
+  const copyCircuit = (): void => {
+    void navigator.clipboard
+      .writeText(JSON.stringify(doc))
+      .then(() => setToast('当前电路已复制到剪贴板（粘贴给我即可检查）'))
+      .catch(() => setToast('复制失败：请用控制台 copy(localStorage.getItem(KEY))'));
+  };
+
   /** 导出存档：直接把 JSON 交给浏览器下载（file:// 打开时也能用） */
   const doExport = (): void => {
     const text = exportSave(progress);
@@ -788,6 +796,9 @@ export function App(): React.JSX.Element {
             自由模式
           </button>
         </div>
+        <button type="button" onClick={copyCircuit} title="复制当前电路 JSON（贴给我检查布线）">
+          复制电路
+        </button>
         {gameMode === 'level' && (
           <div className="group">
             <select
