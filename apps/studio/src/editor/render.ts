@@ -806,3 +806,160 @@ export function symPinSignals(
     signal: scene.pinSignals.get(pinKey({ inst: sym.id, pin, bit: 0 })),
   }));
 }
+
+/**
+ * 拖拽图标：把元件符号画到小画布上，作为 setDragImage 的拖影
+ * （默认拖影是整张元件库卡片，换成符号本体更好认）
+ */
+export function drawIcon(kind: string, ctx: CanvasRenderingContext2D, size: number): void {
+  const s = size / 64;
+  ctx.save();
+  ctx.clearRect(0, 0, size, size);
+  ctx.translate(size / 2, size / 2);
+  ctx.scale(s, s);
+  ctx.strokeStyle = PALETTE.body;
+  ctx.fillStyle = PALETTE.fill;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  switch (kind) {
+    case 'npn': {
+      ctx.beginPath();
+      ctx.arc(0, 0, 19, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(-9, -11);
+      ctx.lineTo(-9, 11);
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-19, 0);
+      ctx.lineTo(-9, 0);
+      ctx.moveTo(-9, -7);
+      ctx.lineTo(0, -17);
+      ctx.lineTo(0, -26);
+      ctx.moveTo(-9, 7);
+      ctx.lineTo(0, 17);
+      ctx.lineTo(0, 26);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-1.5, 12.5);
+      ctx.lineTo(4.5, 17.5);
+      ctx.lineTo(-4, 19.5);
+      ctx.closePath();
+      ctx.fillStyle = PALETTE.body;
+      ctx.fill();
+      break;
+    }
+    case 'res': {
+      ctx.beginPath();
+      ctx.moveTo(0, -26);
+      ctx.lineTo(0, -11);
+      ctx.moveTo(0, 11);
+      ctx.lineTo(0, 26);
+      ctx.stroke();
+      ctx.fillRect(-9, -11, 18, 22);
+      ctx.strokeRect(-9, -11, 18, 22);
+      break;
+    }
+    case 'dio': {
+      ctx.beginPath();
+      ctx.moveTo(-26, 0);
+      ctx.lineTo(-10, 0);
+      ctx.moveTo(10, 0);
+      ctx.lineTo(26, 0);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-10, -9);
+      ctx.lineTo(-10, 9);
+      ctx.lineTo(10, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(10, -9);
+      ctx.lineTo(10, 9);
+      ctx.stroke();
+      break;
+    }
+    case 'cap': {
+      ctx.beginPath();
+      ctx.moveTo(-26, 0);
+      ctx.lineTo(-4, 0);
+      ctx.moveTo(4, 0);
+      ctx.lineTo(26, 0);
+      ctx.stroke();
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(-4, -9);
+      ctx.lineTo(-4, 9);
+      ctx.moveTo(4, -9);
+      ctx.lineTo(4, 9);
+      ctx.stroke();
+      break;
+    }
+    case 'vcc': {
+      ctx.beginPath();
+      ctx.moveTo(0, 14);
+      ctx.lineTo(0, 2);
+      ctx.stroke();
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(-9, 2);
+      ctx.lineTo(9, 2);
+      ctx.stroke();
+      break;
+    }
+    case 'gnd': {
+      ctx.beginPath();
+      ctx.moveTo(0, -14);
+      ctx.lineTo(0, -2);
+      ctx.stroke();
+      ctx.lineWidth = 4;
+      for (const [idx, w] of [10, 6.5, 3].entries()) {
+        ctx.beginPath();
+        ctx.moveTo(-w, -2 + idx * 3.2);
+        ctx.lineTo(w, -2 + idx * 3.2);
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'input': {
+      ctx.fillStyle = PALETTE.portInFill;
+      ctx.strokeStyle = PALETTE.portInStroke;
+      ctx.fillRect(-20, -13, 30, 26);
+      ctx.strokeRect(-20, -13, 30, 26);
+      ctx.strokeStyle = PALETTE.body;
+      ctx.beginPath();
+      ctx.moveTo(10, 0);
+      ctx.lineTo(26, 0);
+      ctx.stroke();
+      break;
+    }
+    case 'output': {
+      ctx.fillStyle = PALETTE.portOutFill;
+      ctx.strokeStyle = PALETTE.portOutStroke;
+      ctx.fillRect(-10, -13, 30, 26);
+      ctx.strokeRect(-10, -13, 30, 26);
+      ctx.strokeStyle = PALETTE.body;
+      ctx.beginPath();
+      ctx.moveTo(-26, 0);
+      ctx.lineTo(-10, 0);
+      ctx.stroke();
+      break;
+    }
+    case 'module': {
+      ctx.fillRect(-24, -16, 48, 32);
+      ctx.strokeRect(-24, -16, 48, 32);
+      ctx.fillStyle = PALETTE.textDim;
+      ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('模块', 0, 4);
+      break;
+    }
+    default:
+      break;
+  }
+  ctx.restore();
+}

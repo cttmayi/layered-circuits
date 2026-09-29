@@ -1,5 +1,6 @@
 import type { Level } from '@lc/schema';
 import type { PlaceKind, StoredModule, UnitKind } from '../editor/model';
+import { drawIcon } from '../editor/render';
 
 export interface PaletteProps {
   placing: PlaceKind | null;
@@ -20,6 +21,16 @@ export function dragPayload(pickKind: PlaceKind): string {
     : pickKind.kind === 'module'
       ? `module:${pickKind.hash}`
       : pickKind.kind;
+}
+
+/** 拖影：把符号画到小画布上，跟随鼠标（默认是整张卡片） */
+export function dragImage(kind: string): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (ctx) drawIcon(kind, ctx, 64);
+  return canvas;
 }
 
 const UNITS: Array<{ unit: UnitKind; name: string; cost: string; note: string }> = [
@@ -93,6 +104,7 @@ export function Palette({
             onDragStart={(e) => {
               e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'unit', unit: item.unit }));
               e.dataTransfer.effectAllowed = 'copy';
+              e.dataTransfer.setDragImage(dragImage(item.unit), 32, 32);
             }}
             title={locked ? lockReason(item.unit) : `${item.note}（拖到画布放置，或点击后点画布）`}
             className={isArmed('unit', item.unit) ? 'palette-item active' : 'palette-item'}
@@ -127,6 +139,7 @@ export function Palette({
             onDragStart={(e) => {
               e.dataTransfer.setData(DRAG_MIME, kind);
               e.dataTransfer.effectAllowed = 'copy';
+              e.dataTransfer.setDragImage(dragImage(kind), 32, 32);
             }}
             title={locked ? portLockReason : `${note}（拖到画布放置）`}
             className={isArmed(kind) ? 'palette-item active' : 'palette-item'}
@@ -161,6 +174,7 @@ export function Palette({
             onDragStart={(e) => {
               e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'module', hash: mod.hash }));
               e.dataTransfer.effectAllowed = 'copy';
+              e.dataTransfer.setDragImage(dragImage('module'), 32, 32);
             }}
             onClick={() => pick('module', undefined, mod.hash)}
             title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}（拖到画布放置）`}
