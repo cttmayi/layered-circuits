@@ -1104,6 +1104,9 @@ body,
 }
 
 .modal-box {
+  /* 关键：必须在全屏遮罩按钮（position:absolute）之上，否则点击全被遮罩吞掉 */
+  position: relative;
+  z-index: 1;
   width: min(480px, calc(100vw - 40px));
   max-height: min(84vh, 640px);
   overflow: auto;
