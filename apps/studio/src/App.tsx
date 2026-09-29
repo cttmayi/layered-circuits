@@ -1004,8 +1004,7 @@ export function App(): React.JSX.Element {
               onStart={(job) => {
                 setSideJobKey(job);
                 setCommissionOpen(false);
-                // 图纸还没测出来 → 直接进黑盒侦察（操作在对话框里完成）
-                if (!progress.recon[currentLevel.id]) setReconOpen(true);
+                // 开工 = 直接开搭；图纸没测出来时，左侧图纸卡有显眼的「黑盒侦察」按钮，想测再测
               }}
             />
           )}

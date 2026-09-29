@@ -80,7 +80,7 @@ export function CommissionModal({ level, onStart }: CommissionModalProps): React
         </ul>
       </div>
       <p className="dim small">
-        开工后如果图纸还是折角的，会直接进入「黑盒侦察」：用测试仪把每一组输出测出来。
+        开工后直接开搭；图纸没解开时，左侧图纸卡上有「黑盒侦察」按钮，想测图纸随时点。
       </p>
     </Modal>
   );

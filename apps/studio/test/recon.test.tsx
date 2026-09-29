@@ -11,9 +11,10 @@ function recordCells(): HTMLButtonElement[] {
   return [...document.querySelectorAll('.recon-table .record-cell')] as HTMLButtonElement[];
 }
 
-/** 进关弹「新委托」→ 点开工 → 图纸没测出来时直接进入居中的黑盒侦察对话框 */
+/** 进关弹「新委托」→ 点开工 → 图纸卡上的「黑盒侦察（测图纸）」按钮打开居中对话框 */
 function openRecon(): void {
   fireEvent.click(screen.getByText('开工'));
+  fireEvent.click(screen.getByText('黑盒侦察（测图纸）'));
   expect(screen.getByRole('dialog', { name: '黑盒侦察' })).toBeTruthy();
 }
 

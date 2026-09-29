@@ -122,7 +122,7 @@ export function LevelCard({
 
       <div className="group-row">
         {!reconDone && (
-          <button type="button" className="primary" onClick={onOpenRecon}>
+          <button type="button" className="primary recon-entry" onClick={onOpenRecon}>
             黑盒侦察（测图纸）
           </button>
         )}
