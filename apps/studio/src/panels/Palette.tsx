@@ -48,6 +48,8 @@ export function Palette({
     if (unit === 'cap') return '电容是时钟专用元件，本阶段不开放';
     return '本关卡不允许使用该元件';
   };
+  /** 输入/输出引脚：关卡模式下端口已预置（a/b/y 是契约），不开放自加 */
+  const portLockReason = '本关端口已预置（a/b/y），不能自己加';
 
   const isArmed = (kind: string, extra?: string): boolean => {
     if (!placing) return false;
@@ -97,17 +99,25 @@ export function Palette({
           ['input', '输入引脚', '可点击切换电平'],
           ['output', '输出引脚', '显示实时电平'],
         ] as Array<[string, string, string]>
-      ).map(([kind, name, note]) => (
-        <button
-          key={kind}
-          type="button"
-          className={isArmed(kind) ? 'palette-item active' : 'palette-item'}
-          onClick={() => pick(kind)}
-        >
-          <span className="palette-name">{name}</span>
-          <span className="palette-note">{note}</span>
-        </button>
-      ))}
+      ).map(([kind, name, note]) => {
+        // 关卡模式下端口已预置（a/b/y 是契约），输入/输出引脚不开放自加；VCC/GND 保留就近取电
+        const locked = (kind === 'input' || kind === 'output') && Boolean(level);
+        return (
+          <button
+            key={kind}
+            type="button"
+            disabled={locked}
+            title={locked ? portLockReason : note}
+            className={isArmed(kind) ? 'palette-item active' : 'palette-item'}
+            onClick={() => pick(kind)}
+          >
+            <span className="palette-name">
+              {name} {locked && <em className="locked">本关不可用</em>}
+            </span>
+            <span className="palette-note">{locked ? portLockReason : note}</span>
+          </button>
+        );
+      })}
 
       <h3>我的模块（{library.length}）</h3>
       {level && !modulesAllowed && (
