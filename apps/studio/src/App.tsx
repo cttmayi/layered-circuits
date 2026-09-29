@@ -108,7 +108,9 @@ export function App(): React.JSX.Element {
   const [selectedWires, setSelectedWires] = useState<string[]>([]);
   const [hover, setHover] = useState<HoverTarget | null>(null);
   const [placing, setPlacing] = useState<PlaceKind | null>(null);
-  const [pendingPin, setPendingPin] = useState<{ inst: string; pin: string } | null>(null);
+  const [pendingPin, setPendingPin] = useState<{ inst: string; pin: string; bit?: number } | null>(
+    null,
+  );
   const [pendingPoint, setPendingPoint] = useState<{ x: number; y: number } | null>(null);
   const [mode, setMode] = useState<'logic' | 'timing'>('logic');
   /** 时序挑战关（kind = 'timing'）强制硬核：科普模式会把延迟抹平，考不出时序问题 */
@@ -447,13 +449,16 @@ export function App(): React.JSX.Element {
       const sym = findSym(doc, target.id);
       if (!sym) return;
       if (!pendingPin) {
-        setPendingPin({ inst: target.id, pin: target.pin as string });
+        setPendingPin({ inst: target.id, pin: target.pin as string, bit: target.bit ?? 0 });
         setPendingPoint({ x: wx, y: wy });
       } else {
         const from = pendingPin;
-        const samePinClicked = from.inst === target.id && from.pin === target.pin;
+        const samePinClicked =
+          from.inst === target.id &&
+          from.pin === target.pin &&
+          (from.bit ?? 0) === (target.bit ?? 0);
         if (!samePinClicked) {
-          addWire(from, { inst: target.id, pin: target.pin as string });
+          addWire(from, { inst: target.id, pin: target.pin as string, bit: target.bit ?? 0 });
         }
         setPendingPin(null);
         setPendingPoint(null);
@@ -587,16 +592,53 @@ export function App(): React.JSX.Element {
   };
 
   // ---- 编辑动作 ----
-  const addWire = (a: { inst: string; pin: string }, b: { inst: string; pin: string }): void => {
-    const refA = { inst: a.inst, pin: a.pin, bit: 0 };
-    const refB = { inst: b.inst, pin: b.pin, bit: 0 };
-    const exists = doc.wires.some(
-      (w) =>
-        (samePin(w.a, refA) && samePin(w.b, refB)) || (samePin(w.a, refB) && samePin(w.b, refA)),
-    );
-    if (exists) return;
-    const id = `w${doc.wires.length + 1}-${a.inst}.${a.pin}-${b.inst}.${b.pin}`;
-    commit({ ...doc, wires: [...doc.wires, { id, a: refA, b: refB }] });
+  /** 端口位宽（端口符号 / 模块端口，用于总线接线） */
+  const pinWidth = (inst: string, pin: string): number => {
+    const sym = findSym(doc, inst);
+    if (!sym) return 1;
+    if (sym.kind === 'input' || sym.kind === 'output') return sym.width ?? 1;
+    if (sym.kind === 'module') {
+      const stored = doc.library.find((m) => m.hash === sym.module);
+      return stored?.ports.find((p) => p.name === pin)?.width ?? 1;
+    }
+    return 1;
+  };
+
+  const addWire = (
+    a: { inst: string; pin: string; bit?: number },
+    b: { inst: string; pin: string; bit?: number },
+  ): void => {
+    const widthA = pinWidth(a.inst, a.pin);
+    const widthB = pinWidth(b.inst, b.pin);
+    // 总线对总线（同宽 >1）：lane 对齐一次连整根（第三章）；其余按单 lane
+    const pairs =
+      widthA > 1 && widthA === widthB
+        ? Array.from({ length: widthA }, (_, bit) => ({
+            a: { inst: a.inst, pin: a.pin, bit },
+            b: { inst: b.inst, pin: b.pin, bit },
+          }))
+        : [
+            {
+              a: { inst: a.inst, pin: a.pin, bit: a.bit ?? 0 },
+              b: { inst: b.inst, pin: b.pin, bit: b.bit ?? 0 },
+            },
+          ];
+    const news = pairs.filter(({ a: pa, b: pb }) => {
+      const refA = { inst: pa.inst, pin: pa.pin, bit: pa.bit };
+      const refB = { inst: pb.inst, pin: pb.pin, bit: pb.bit };
+      return !doc.wires.some(
+        (w) =>
+          (samePin(w.a, refA) && samePin(w.b, refB)) || (samePin(w.a, refB) && samePin(w.b, refA)),
+      );
+    });
+    if (news.length === 0) return;
+    const base = doc.wires.length;
+    const wires = news.map((n, i) => ({
+      id: `w${base + i + 1}-${n.a.inst}.${n.a.pin}[${n.a.bit}]-${n.b.inst}.${n.b.pin}[${n.b.bit}]`,
+      a: { inst: n.a.inst, pin: n.a.pin, bit: n.a.bit },
+      b: { inst: n.b.inst, pin: n.b.pin, bit: n.b.bit },
+    }));
+    commit({ ...doc, wires: [...doc.wires, ...wires] });
   };
 
   const toggleInput = (id: string): void => {

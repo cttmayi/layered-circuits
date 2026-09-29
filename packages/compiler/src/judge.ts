@@ -8,7 +8,7 @@
  * 所以「面板上看到的现象」就是「判定的依据」，不会出现两套真相。
  */
 
-import type { Design, Level, ModuleLibrary } from '@lc/schema';
+import type { Design, Level, LevelVector, ModuleLibrary } from '@lc/schema';
 import { costHalfOf, scoreOf } from '@lc/schema';
 import { type Logic, runVectors, type SimMode, transitionsIn, type Waveform } from '@lc/sim-core';
 import { computeCosts } from './cost.js';
@@ -152,6 +152,47 @@ export function requiredPorts(level: Level): { inputs: string[]; outputs: string
   return { inputs: [...inputs], outputs: [...outputs] };
 }
 
+/** 端口名 → 位宽（多 bit 端口名与向量键一致） */
+export function portWidthsOf(level: Level): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const p of level.ports) map.set(p.name, p.width);
+  return map;
+}
+
+/**
+ * 把数值向量展开成逐位 lane 键（第三章总线）：
+ * 端口位宽 W>1 时，值 n 拆成 a[0]..a[W-1]（小端：第 i 位 = n >> i & 1）。
+ * 1 位端口保持原值不变（向后兼容既有关卡）。
+ */
+/** 展开后的向量：inputs/expect 全部是逐位 lane 值（0/1/X/Z），可直接喂仿真 */
+export type ExpandedVector = Omit<LevelVector, 'inputs' | 'expect'> & {
+  inputs: Record<string, 0 | 1 | 'X' | 'Z'>;
+  expect?: Record<string, 0 | 1 | 'X' | 'Z'>;
+};
+
+export function expandVectors(
+  vectors: readonly LevelVector[],
+  widths: Map<string, number>,
+): ExpandedVector[] {
+  const expand = (
+    rec: Record<string, number | 'X' | 'Z' | 0 | 1 | 2 | 3> | undefined,
+  ): Record<string, 0 | 1 | 'X' | 'Z'> | undefined => {
+    if (!rec) return undefined;
+    const out: Record<string, 0 | 1 | 'X' | 'Z'> = {};
+    for (const [name, value] of Object.entries(rec)) {
+      const w = widths.get(name);
+      if (w && w > 1) {
+        const n = typeof value === 'number' ? value : value === 'X' || value === 'Z' ? 0 : value;
+        for (let bit = 0; bit < w; bit++) out[`${name}[${bit}]`] = ((n >> bit) & 1) as 0 | 1;
+      } else {
+        out[name] = value as 0 | 1 | 'X' | 'Z';
+      }
+    }
+    return out;
+  };
+  return vectors.map((v) => ({ ...v, inputs: expand(v.inputs) ?? {}, expect: expand(v.expect) }));
+}
+
 export function judgeDesign(design: Design, level: Level, options: JudgeOptions): JudgeResult {
   const mode: SimMode = options.mode ?? level.mode;
   const errors: string[] = [];
@@ -179,6 +220,17 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
   const requiredNames = new Set([...want.inputs, ...want.outputs]);
   const extraPorts = design.ports.filter((p) => !requiredNames.has(p.name)).map((p) => p.name);
 
+  // 1.0) 位宽检查（第三章总线）：多 bit 端口的宽度必须与关卡声明一致
+  const widthOf = portWidthsOf(level);
+  let widthBad = false;
+  for (const [name, width] of widthOf) {
+    const found = design.ports.find((q) => q.name === name);
+    if (found && found.width !== width) {
+      errors.push(`端口 ${name} 的位宽不对：关卡要 ${width} 位，你接的是 ${found.width} 位`);
+      widthBad = true;
+    }
+  }
+
   // 1.1) 素材约束（GDD 第 3 节 / 4.4 复古复用关）——约束必须由判定执行，光在 UI 上禁用是拦不住的
   for (const instance of design.instances) {
     if (instance.kind !== 'unit') continue;
@@ -193,12 +245,13 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
 
   // 2) 功能断言（端口不全时不硬跑，免得报「找不到输入端口」这种内部错误）
   //    一律带 trace：时序关卡要数每个窗口里输出的跳变次数，顺便拿到波形给 UI 用。
+  //    第三章总线：数值向量先按位宽展开成 lane 键（a: 5 → a[0..3]），再逐位比对。
   let rows: JudgeRow[] = [];
   let failedRows = 0;
   let waveform: ReturnType<typeof runVectors>['waveform'];
   const outputNodes = net.ports.filter((p) => p.dir === 'out').map((p) => p.node);
-  if (missingInputs.length === 0 && missingOutputs.length === 0) {
-    const run = runVectors(net, level.vectors, {
+  if (missingInputs.length === 0 && missingOutputs.length === 0 && !widthBad) {
+    const run = runVectors(net, expandVectors(level.vectors, widthOf), {
       mode,
       defaultSettlePs: defaultSettle(level),
       trace: true,

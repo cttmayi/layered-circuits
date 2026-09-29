@@ -226,6 +226,8 @@ export function recordAttempt(progress: Progress, levelId: string): Progress {
  */
 export function docForLevel(level: Level, library: StoredModule[]): Doc {
   const { inputs, outputs } = requiredPortsOf(level);
+  // 端口位宽：关卡声明优先（第三章总线），缺省 1 位
+  const widthOf = new Map(level.ports.map((p) => [p.name, p.width]));
   const syms: Sym[] = [
     // 电源轨：左上 VCC、右上 GND（避开中间 200 起排的信号端口）
     { id: 'rail-vcc', kind: 'vcc', x: 40, y: 60, rot: 0, label: 'VCC', locked: true },
@@ -240,6 +242,7 @@ export function docForLevel(level: Level, library: StoredModule[]): Doc {
       rot: 0,
       value: 0,
       label: name,
+      width: widthOf.get(name) ?? 1,
       locked: true,
     });
   });
@@ -252,6 +255,7 @@ export function docForLevel(level: Level, library: StoredModule[]): Doc {
       y: outputTop + i * 140,
       rot: 0,
       label: name,
+      width: widthOf.get(name) ?? 1,
       locked: true,
     };
     syms.push(sym);

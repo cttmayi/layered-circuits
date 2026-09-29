@@ -7,7 +7,14 @@
  *    D 锁存器过不了 D 触发器关卡，是这一阶段的教学落点，靠测试钉死。
  */
 
-import { compileDesign, judgeDesign, requiredPorts, wrapModule } from '@lc/compiler';
+import {
+  compileDesign,
+  expandVectors,
+  judgeDesign,
+  portWidthsOf,
+  requiredPorts,
+  wrapModule,
+} from '@lc/compiler';
 import { DesignBuilder, InMemoryModuleLibrary } from '@lc/schema';
 import { runVectors, transitionsIn } from '@lc/sim-core';
 import { describe, expect, it } from 'vitest';
@@ -124,7 +131,7 @@ describe('阶段 2 关卡内容', () => {
     const design = l.referenceSolution;
     if (!design) throw new Error('缺少参考解');
     const { net } = compileDesign(design, { library: new InMemoryModuleLibrary() });
-    const run = runVectors(net, l.vectors, {
+    const run = runVectors(net, expandVectors(l.vectors, portWidthsOf(l)), {
       mode: 'timing',
       defaultSettlePs: 25_000,
       trace: true,

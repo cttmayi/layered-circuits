@@ -11,6 +11,7 @@
  */
 
 import { budgetFromOptimal, type Level, type LevelVector, parseLevel, type Unit } from '@lc/schema';
+import { STAGE3_LEVELS } from './levels-ari.js';
 import { STAGE2_LEVELS } from './levels-seq.js';
 import {
   andGateRef,
@@ -257,8 +258,8 @@ export const STAGE1_LEVELS: Level[] = [
   }),
 ];
 
-/** 全部关卡（阶段 1 组合逻辑 + 阶段 2 时序单元），顺序即解锁顺序 */
-export const ALL_LEVELS: Level[] = [...STAGE1_LEVELS, ...STAGE2_LEVELS];
+/** 全部关卡（阶段 1 逻辑门 + 阶段 2 时序单元 + 阶段 3 算术单元），顺序即解锁顺序 */
+export const ALL_LEVELS: Level[] = [...STAGE1_LEVELS, ...STAGE2_LEVELS, ...STAGE3_LEVELS];
 
 /** 关卡要求的端口（判定与内容自检共用；实现见 @lc/compiler 的 requiredPorts） */
 export { requiredPorts as requiredPortsOf } from '@lc/compiler';

@@ -31,6 +31,8 @@ export interface HoverTarget {
   kind: 'sym' | 'pin' | 'wire';
   id: string;
   pin?: string;
+  /** 引脚位（多 bit 端口按位区分） */
+  bit?: number;
 }
 
 export interface Scene {
@@ -43,11 +45,11 @@ export interface Scene {
   selectedWires: string[];
   hover: HoverTarget | null;
   /** 正在连线时的起点引脚 */
-  pendingPin: { inst: string; pin: string } | null;
+  pendingPin: { inst: string; pin: string; bit?: number } | null;
   pendingPoint: { x: number; y: number } | null;
   grid: boolean;
   /** 画布探针（工具铺买下后可用）：点任意连线在此处钉一个电平读数 */
-  probes: Array<{ id: string; x: number; y: number; inst: string; pin: string }>;
+  probes: Array<{ id: string; x: number; y: number; inst: string; pin: string; bit?: number }>;
 }
 
 export const PALETTE = {
@@ -141,7 +143,11 @@ function footprintOf(
     input: { w: 44, h: 26 },
     output: { w: 44, h: 26 },
   };
-  const size = sizes[key] ?? { w: 30, h: 30 };
+  let size = sizes[key] ?? { w: 30, h: 30 };
+  if (key === 'input' || key === 'output') {
+    const width = sym.width ?? 1;
+    if (width > 1) size = { w: 44, h: Math.max(26, (width - 1) * 14 + 26) };
+  }
   const swap =
     sym.rot % 2 === 1 &&
     (key === 'res' || key === 'dio' || key === 'cap' || key === 'input' || key === 'output');
@@ -157,7 +163,8 @@ export function hitTest(scene: Scene, wx: number, wy: number, tolerance = 9): Ho
     for (const off of pinOffsets(sym, doc.library)) {
       const px = sym.x + off.x;
       const py = sym.y + off.y;
-      if (Math.hypot(px - wx, py - wy) <= pinTol) return { kind: 'pin', id: sym.id, pin: off.name };
+      if (Math.hypot(px - wx, py - wy) <= pinTol)
+        return { kind: 'pin', id: sym.id, pin: off.name, bit: off.bit ?? 0 };
     }
   }
   for (const sym of doc.syms) {
@@ -168,8 +175,8 @@ export function hitTest(scene: Scene, wx: number, wy: number, tolerance = 9): Ho
   const wireTol = 6 / scene.camera.scale + 2;
   const obstacles = routeObstacles(doc);
   for (const wire of doc.wires) {
-    const a = pinWorld(doc, wire.a.inst, wire.a.pin);
-    const b = pinWorld(doc, wire.b.inst, wire.b.pin);
+    const a = pinWorld(doc, wire.a.inst, wire.a.pin, wire.a.bit ?? 0);
+    const b = pinWorld(doc, wire.b.inst, wire.b.pin, wire.b.bit ?? 0);
     if (!a || !b) continue;
     for (const [p, q] of routeSegments(a, b, wire.id.length, obstacles, wire.a.inst, wire.b.inst)) {
       if (distanceToSegment(wx, wy, p, q) <= wireTol) return { kind: 'wire', id: wire.id };
@@ -178,10 +185,10 @@ export function hitTest(scene: Scene, wx: number, wy: number, tolerance = 9): Ho
   return null;
 }
 
-function pinWorld(doc: Doc, inst: string, pin: string): { x: number; y: number } | null {
+function pinWorld(doc: Doc, inst: string, pin: string, bit = 0): { x: number; y: number } | null {
   const sym = doc.syms.find((s) => s.id === inst);
   if (!sym) return null;
-  const off = pinOffsets(sym, doc.library).find((p) => p.name === pin);
+  const off = pinOffsets(sym, doc.library).find((p) => p.name === pin && (p.bit ?? 0) === bit);
   if (!off) return null;
   return { x: sym.x + off.x, y: sym.y + off.y };
 }
@@ -417,8 +424,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
     ctx.stroke();
   };
   for (const wire of doc.wires) {
-    const a = pinWorld(doc, wire.a.inst, wire.a.pin);
-    const b = pinWorld(doc, wire.b.inst, wire.b.pin);
+    const a = pinWorld(doc, wire.a.inst, wire.a.pin, wire.a.bit ?? 0);
+    const b = pinWorld(doc, wire.b.inst, wire.b.pin, wire.b.bit ?? 0);
     if (!a || !b) continue;
     for (const [p, q] of routeSegments(a, b, wire.id.length, obstacles, wire.a.inst, wire.b.inst))
       segments.push({ wire, a: p, b: q });
@@ -457,15 +464,15 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
   const jointCount = new Map<string, number>();
   for (const wire of doc.wires) {
     for (const end of [wire.a, wire.b]) {
-      const key = `${end.inst}:${end.pin}`;
+      const key = `${end.inst}:${end.pin}[${end.bit ?? 0}]`;
       jointCount.set(key, (jointCount.get(key) ?? 0) + 1);
     }
   }
   for (const wire of doc.wires) {
     for (const end of [wire.a, wire.b]) {
-      const key = `${end.inst}:${end.pin}`;
+      const key = `${end.inst}:${end.pin}[${end.bit ?? 0}]`;
       if ((jointCount.get(key) ?? 0) < 2) continue;
-      const p = pinWorld(doc, end.inst, end.pin);
+      const p = pinWorld(doc, end.inst, end.pin, end.bit ?? 0);
       if (!p) continue;
       const sp = worldToScreen(camera, width, height, p.x, p.y);
       const r = Math.max(2.6, 4.5 * camera.scale);
@@ -480,7 +487,12 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
 
   // 连线中的橡皮筋
   if (scene.pendingPin && scene.pendingPoint) {
-    const from = pinWorld(doc, scene.pendingPin.inst, scene.pendingPin.pin);
+    const from = pinWorld(
+      doc,
+      scene.pendingPin.inst,
+      scene.pendingPin.pin,
+      scene.pendingPin.bit ?? 0,
+    );
     if (from) {
       const sp = worldToScreen(camera, width, height, from.x, from.y);
       const sq = worldToScreen(camera, width, height, scene.pendingPoint.x, scene.pendingPoint.y);
@@ -724,28 +736,40 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
       }
       break;
     }
-    case 'input': {
-      ctx.fillStyle = PALETTE.portInFill;
-      ctx.strokeStyle = PALETTE.portInStroke;
-      ctx.fillRect(-22, -13, 32, 26);
-      ctx.strokeRect(-22, -13, 32, 26);
-      ctx.strokeStyle = PALETTE.body;
-      ctx.beginPath();
-      ctx.moveTo(10, 0);
-      ctx.lineTo(26, 0);
-      ctx.stroke();
-      break;
-    }
+    case 'input':
     case 'output': {
-      ctx.fillStyle = PALETTE.portOutFill;
-      ctx.strokeStyle = PALETTE.portOutStroke;
-      ctx.fillRect(-10, -13, 32, 26);
-      ctx.strokeRect(-10, -13, 32, 26);
-      ctx.strokeStyle = PALETTE.body;
-      ctx.beginPath();
-      ctx.moveTo(-26, 0);
-      ctx.lineTo(-10, 0);
-      ctx.stroke();
+      const isIn = key === 'input';
+      const width = sym.width ?? 1;
+      const h = Math.max(26, (width - 1) * 14 + 26);
+      ctx.fillStyle = isIn ? PALETTE.portInFill : PALETTE.portOutFill;
+      ctx.strokeStyle = isIn ? PALETTE.portInStroke : PALETTE.portOutStroke;
+      ctx.fillRect(isIn ? -22 : -10, -h / 2, 32, h);
+      ctx.strokeRect(isIn ? -22 : -10, -h / 2, 32, h);
+      if (width <= 1) {
+        ctx.strokeStyle = PALETTE.body;
+        ctx.beginPath();
+        ctx.moveTo(isIn ? 10 : -26, 0);
+        ctx.lineTo(isIn ? 26 : -10, 0);
+        ctx.stroke();
+      } else {
+        // 总线端口：每个 lane 一个引脚点 + 位序号
+        ctx.strokeStyle = PALETTE.body;
+        ctx.fillStyle = PALETTE.body;
+        for (let bit = 0; bit < width; bit++) {
+          const ly = (bit - (width - 1) / 2) * 14;
+          ctx.beginPath();
+          ctx.moveTo(isIn ? 10 : -26, ly);
+          ctx.lineTo(isIn ? 26 : -10, ly);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(isIn ? 26 : -26, ly, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = PALETTE.textDim;
+          ctx.font = '8px ui-monospace, monospace';
+          ctx.fillText(String(bit), isIn ? 28 : -28, ly + 3);
+          ctx.fillStyle = PALETTE.body;
+        }
+      }
       break;
     }
     case 'module': {
@@ -769,15 +793,37 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
   const labelY = sym.rot % 2 === 1 ? f.h / 2 + 14 * camera.scale : f.h / 2 + 13 * camera.scale;
 
   if (key === 'input' || key === 'output') {
-    const signal = scene.pinSignals.get(pinKey({ inst: sym.id, pin: 'p', bit: 0 }));
-    const style = signalStyle(signal ?? SIG_Z);
-    ctx.fillStyle = style.color;
-    ctx.font = `bold ${Math.max(10, 13 * camera.scale)}px ui-monospace, monospace`;
-    // 输入端口是「用户开关」：永远强驱动，只显示 0/1；输出/电路节点才标强/弱
-    ctx.fillText(signalText(signal, key !== 'input'), 0, 4 * camera.scale);
-    ctx.font = `${Math.max(9, 11 * camera.scale)}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.fillStyle = PALETTE.textDim;
-    ctx.fillText(sym.label, 0, labelY + 10);
+    const width = sym.width ?? 1;
+    if (width > 1) {
+      // 总线端口：把各位 lane 的信号拼成数值显示（小端）
+      let value = 0;
+      let valid = true;
+      for (let bit = 0; bit < width; bit++) {
+        const sig = scene.pinSignals.get(pinKey({ inst: sym.id, pin: 'p', bit }));
+        if (sig === undefined) {
+          valid = false;
+          break;
+        }
+        if ((sig & 1) === 1) value |= 1 << bit;
+      }
+      ctx.fillStyle = PALETTE.text;
+      ctx.font = `bold ${Math.max(10, 13 * camera.scale)}px ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(valid ? String(value) : '?', 0, 4 * camera.scale);
+      ctx.font = `${Math.max(9, 11 * camera.scale)}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.fillStyle = PALETTE.textDim;
+      ctx.fillText(`${sym.label}[${width - 1}:0]`, 0, labelY + 10);
+    } else {
+      const signal = scene.pinSignals.get(pinKey({ inst: sym.id, pin: 'p', bit: 0 }));
+      const style = signalStyle(signal ?? SIG_Z);
+      ctx.fillStyle = style.color;
+      ctx.font = `bold ${Math.max(10, 13 * camera.scale)}px ui-monospace, monospace`;
+      // 输入端口是「用户开关」：永远强驱动，只显示 0/1；输出/电路节点才标强/弱
+      ctx.fillText(signalText(signal, key !== 'input'), 0, 4 * camera.scale);
+      ctx.font = `${Math.max(9, 11 * camera.scale)}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.fillStyle = PALETTE.textDim;
+      ctx.fillText(sym.label, 0, labelY + 10);
+    }
   } else if (key === 'module') {
     const stored = doc.library.find((m) => m.hash === sym.module);
     ctx.fillStyle = PALETTE.text;

@@ -1,6 +1,7 @@
 import type { JudgeResult } from '@lc/compiler';
 import type { Level } from '@lc/schema';
 import type { LevelRecord } from '../level/progress';
+import { type BusValue, columnsFromKeys, groupBusRow, portLabel } from './busDisplay';
 
 export interface JudgePanelProps {
   level: Level;
@@ -25,6 +26,9 @@ export function JudgePanel({
   onClear,
 }: JudgePanelProps): React.JSX.Element {
   const outputNames = [...new Set(level.vectors.flatMap((v) => Object.keys(v.expect ?? {})))];
+  const widthOf = new Map(level.ports.map((p) => [p.name, p.width]));
+  const outCols = outputNames.map((name) => ({ name, width: widthOf.get(name) ?? 1 }));
+  const inCols = columnsFromKeys(result?.rows[0]?.inputs);
 
   return (
     <section className="panel judge">
@@ -166,17 +170,17 @@ export function JudgePanel({
               <thead>
                 <tr>
                   <th />
-                  {Object.keys(result.rows[0]?.inputs ?? {}).map((n) => (
-                    <th key={n}>{n}</th>
+                  {inCols.map((c) => (
+                    <th key={c.name}>{portLabel(c.name, c.width)}</th>
                   ))}
-                  {outputNames.map((n) => (
-                    <th key={n} className="sep">
-                      要 {n}
+                  {outCols.map((c) => (
+                    <th key={c.name} className="sep">
+                      要 {portLabel(c.name, c.width)}
                     </th>
                   ))}
-                  {outputNames.map((n) => (
-                    <th key={`${n}-actual`} className="sep">
-                      你 {n}
+                  {outCols.map((c) => (
+                    <th key={`${c.name}-actual`} className="sep">
+                      你 {portLabel(c.name, c.width)}
                     </th>
                   ))}
                   {result.timing.maxGlitches !== null && (
@@ -187,38 +191,40 @@ export function JudgePanel({
                 </tr>
               </thead>
               <tbody>
-                {result.rows.map((row) => (
-                  <tr key={row.index}>
-                    <td className={row.ok ? 'hi' : 'bad'}>{row.ok ? '✓' : '✗'}</td>
-                    {Object.keys(row.inputs).map((n) => (
-                      <td key={n} className={CELL[String(row.inputs[n])] ?? ''}>
-                        {String(row.inputs[n])}
-                      </td>
-                    ))}
-                    {outputNames.map((n) => (
-                      <td key={n} className={`sep ${CELL[String(row.expected[n])] ?? ''}`}>
-                        {String(row.expected[n])}
-                      </td>
-                    ))}
-                    {outputNames.map((n) => (
-                      <td
-                        key={`${n}-actual`}
-                        className={`sep ${CELL[String(row.actual[n])] ?? ''}`}
-                      >
-                        {String(row.actual[n])}
-                      </td>
-                    ))}
-                    {result.timing.maxGlitches !== null && (
-                      <td
-                        key="glitch"
-                        className={`sep ${row.glitches > 1 && row.index > 0 ? 'bad' : 'dim'}`}
-                        title="本窗口内输出跳变次数"
-                      >
-                        {row.index === 0 ? '上电' : row.glitches}
-                      </td>
-                    )}
-                  </tr>
-                ))}
+                {result.rows.map((row) => {
+                  const ins = groupBusRow(row.inputs as Record<string, BusValue>, inCols);
+                  const want = groupBusRow(row.expected as Record<string, BusValue>, outCols);
+                  const got = groupBusRow(row.actual as Record<string, BusValue>, outCols);
+                  return (
+                    <tr key={row.index}>
+                      <td className={row.ok ? 'hi' : 'bad'}>{row.ok ? '✓' : '✗'}</td>
+                      {inCols.map((c) => (
+                        <td key={c.name} className={CELL[ins[c.name]] ?? ''}>
+                          {ins[c.name]}
+                        </td>
+                      ))}
+                      {outCols.map((c) => (
+                        <td key={c.name} className={`sep ${CELL[want[c.name]] ?? ''}`}>
+                          {want[c.name]}
+                        </td>
+                      ))}
+                      {outCols.map((c) => (
+                        <td key={`${c.name}-actual`} className={`sep ${CELL[got[c.name]] ?? ''}`}>
+                          {got[c.name]}
+                        </td>
+                      ))}
+                      {result.timing.maxGlitches !== null && (
+                        <td
+                          key="glitch"
+                          className={`sep ${row.glitches > 1 && row.index > 0 ? 'bad' : 'dim'}`}
+                          title="本窗口内输出跳变次数"
+                        >
+                          {row.index === 0 ? '上电' : row.glitches}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

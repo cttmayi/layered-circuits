@@ -54,6 +54,8 @@ export interface Sym {
   rot: Rot;
   /** kind === 'input' 的当前驱动 */
   value?: InputDrive;
+  /** 端口位宽（input/output；缺省 1 位，第三章总线可 >1） */
+  width?: number;
   label: string;
   /** 关卡内建模块（不可删除/编辑的库元件）标记 */
   locked?: boolean;
@@ -124,9 +126,21 @@ const PIN_OFFSETS: Record<string, Array<{ name: string; x: number; y: number }>>
 
 const MODULE_PORT_SPACING = 24;
 const MODULE_HALF_WIDTH = 46;
+/** 多 bit 端口每个 lane 的纵向间距（8 位 ≈ 7×14 = 98px 高） */
+const LANE_PITCH = 14;
 
 export function symKindKey(sym: Sym): string {
   return sym.kind === 'unit' ? (sym.unit as string) : sym.kind;
+}
+
+/** 端口/模块端口的位宽（input/output 看 sym.width；模块看模板端口，最宽的那个） */
+export function symWidth(sym: Sym, library: StoredModule[] = []): number {
+  if (sym.kind === 'input' || sym.kind === 'output') return sym.width ?? 1;
+  if (sym.kind === 'module') {
+    const stored = library.find((m) => m.hash === sym.module);
+    return stored ? Math.max(1, ...stored.ports.map((p) => p.width)) : 1;
+  }
+  return 1;
 }
 
 /** 该符号的引脚名列表（模块按模板端口展开，M0 只支持 1 位端口） */
@@ -151,16 +165,34 @@ function rotate(x: number, y: number, rot: Rot): { x: number; y: number } {
   }
 }
 
-/** 引脚偏移（世界坐标，未加符号位置） */
+/** 引脚偏移（世界坐标，未加符号位置）。多 bit 端口按位展开：同名引脚、bit 区分 */
 export function pinOffsets(
   sym: Sym,
   library: StoredModule[] = [],
-): Array<{ name: string; x: number; y: number }> {
+): Array<{ name: string; x: number; y: number; bit?: number }> {
+  if (sym.kind === 'input' || sym.kind === 'output') {
+    const width = sym.width ?? 1;
+    const base = PIN_OFFSETS[symKindKey(sym)] ?? [];
+    const out: Array<{ name: string; x: number; y: number; bit?: number }> = [];
+    for (const p of base) {
+      if (width <= 1) {
+        const r = rotate(p.x, p.y, sym.rot);
+        out.push({ name: p.name, x: r.x, y: r.y, bit: 0 });
+      } else {
+        for (let bit = 0; bit < width; bit++) {
+          const laneY = (bit - (width - 1) / 2) * LANE_PITCH;
+          const r = rotate(p.x, laneY, sym.rot);
+          out.push({ name: p.name, x: r.x, y: r.y, bit });
+        }
+      }
+    }
+    return out;
+  }
   if (sym.kind !== 'module') {
     const base = PIN_OFFSETS[symKindKey(sym)] ?? [];
     return base.map((p) => {
       const r = rotate(p.x, p.y, sym.rot);
-      return { name: p.name, x: r.x, y: r.y };
+      return { name: p.name, x: r.x, y: r.y, bit: 0 };
     });
   }
   const stored = library.find((m) => m.hash === sym.module);
@@ -169,16 +201,36 @@ export function pinOffsets(
   const outs = stored.ports.filter((p) => p.dir === 'out');
   const rows = Math.max(ins.length, outs.length, 1);
   const height = (rows - 1) * MODULE_PORT_SPACING;
-  const inPins = ins.map((port, i) => ({
-    name: port.name,
-    x: -MODULE_HALF_WIDTH,
-    y: i * MODULE_PORT_SPACING - height / 2,
-  }));
-  const outPins = outs.map((port, i) => ({
-    name: port.name,
-    x: MODULE_HALF_WIDTH,
-    y: i * MODULE_PORT_SPACING - height / 2,
-  }));
+  const lane = (port: {
+    name: string;
+    width: number;
+  }): Array<{ name: string; x: number; y: number; bit: number }> => {
+    const count = Math.max(1, port.width);
+    const out: Array<{ name: string; x: number; y: number; bit: number }> = [];
+    for (let bit = 0; bit < count; bit++) {
+      out.push({
+        name: port.name,
+        x: 0,
+        y: (bit - (count - 1) / 2) * LANE_PITCH,
+        bit,
+      });
+    }
+    return out;
+  };
+  const inPins = ins.flatMap((port, i) =>
+    lane(port).map((p) => ({
+      ...p,
+      x: -MODULE_HALF_WIDTH,
+      y: p.y + i * MODULE_PORT_SPACING - height / 2,
+    })),
+  );
+  const outPins = outs.flatMap((port, i) =>
+    lane(port).map((p) => ({
+      ...p,
+      x: MODULE_HALF_WIDTH,
+      y: p.y + i * MODULE_PORT_SPACING - height / 2,
+    })),
+  );
   return [...inPins, ...outPins];
 }
 
@@ -198,8 +250,9 @@ export function pinPos(
   sym: Sym,
   pin: string,
   library: StoredModule[] = [],
+  bit = 0,
 ): { x: number; y: number } | null {
-  const off = pinOffsets(sym, library).find((p) => p.name === pin);
+  const off = pinOffsets(sym, library).find((p) => p.name === pin && (p.bit ?? 0) === bit);
   if (!off) return null;
   return { x: sym.x + off.x, y: sym.y + off.y };
 }
@@ -295,9 +348,12 @@ export function toDesign(doc: Doc, options: { id?: string; name?: string } = {})
   const portsPins: PinRef[] = [];
   for (const sym of doc.syms) {
     if (sym.kind !== 'input' && sym.kind !== 'output') continue;
-    const pin: PinRef = { inst: sym.id, pin: 'p', bit: 0 };
-    parent.set(pinKey(pin), pinKey(pin));
-    portsPins.push(pin);
+    const width = sym.width ?? 1;
+    for (let bit = 0; bit < width; bit++) {
+      const pin: PinRef = { inst: sym.id, pin: 'p', bit };
+      parent.set(pinKey(pin), pinKey(pin));
+      portsPins.push(pin);
+    }
   }
   for (const wire of doc.wires) {
     // 不能无条件 parent.set(a, a)：那会把「同一引脚的后续导线」已建立的合并关系清掉
@@ -309,8 +365,8 @@ export function toDesign(doc: Doc, options: { id?: string; name?: string } = {})
   const groups = new Map<string, PinRef[]>();
   const order: string[] = [];
   for (const sym of doc.syms) {
-    for (const name of pinNames(sym, doc.library)) {
-      const pin: PinRef = { inst: sym.id, pin: name, bit: 0 };
+    for (const off of pinOffsets(sym, doc.library)) {
+      const pin: PinRef = { inst: sym.id, pin: off.name, bit: off.bit ?? 0 };
       const key = pinKey(pin);
       if (!parent.has(key)) continue;
       const root = find(key);
@@ -362,14 +418,23 @@ export function toDesign(doc: Doc, options: { id?: string; name?: string } = {})
   const ports: Port[] = [];
   for (const sym of doc.syms) {
     if (sym.kind !== 'input' && sym.kind !== 'output') continue;
-    const netId = netOf.get(pinKey({ inst: sym.id, pin: 'p', bit: 0 }));
-    if (!netId) continue;
+    const width = sym.width ?? 1;
+    const nets: string[] = [];
+    for (let bit = 0; bit < width; bit++) {
+      const netId = netOf.get(pinKey({ inst: sym.id, pin: 'p', bit }));
+      if (!netId) {
+        nets.length = 0;
+        break;
+      }
+      nets.push(netId);
+    }
+    if (nets.length !== width) continue;
     ports.push({
       id: sym.id,
       name: sym.label,
       dir: sym.kind === 'input' ? 'in' : 'out',
-      width: 1,
-      nets: [netId],
+      width,
+      nets,
     });
   }
 
@@ -387,7 +452,14 @@ export function toDesign(doc: Doc, options: { id?: string; name?: string } = {})
 export function inputValues(doc: Doc): Record<string, 0 | 1 | 2 | 3> {
   const out: Record<string, 0 | 1 | 2 | 3> = {};
   for (const sym of doc.syms) {
-    if (sym.kind === 'input') out[sym.label] = sym.value ?? 0;
+    if (sym.kind !== 'input') continue;
+    const width = sym.width ?? 1;
+    if (width <= 1) {
+      out[sym.label] = sym.value ?? 0;
+    } else {
+      // 多 bit 输入端口：整个端口共用一个驱动值，展开成逐位 lane 键（与编译器命名一致）
+      for (let bit = 0; bit < width; bit++) out[`${sym.label}[${bit}]`] = sym.value ?? 0;
+    }
   }
   return out;
 }

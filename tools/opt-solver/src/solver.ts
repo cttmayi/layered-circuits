@@ -61,7 +61,12 @@ export function sourcesOf(level: Level): SourceSignal[] {
 
 export function targetMaskOf(level: Level): Mask | null {
   const inputs = requiredPorts(level).inputs;
+  const outputs = requiredPorts(level).outputs;
+  // 掩码空间只适合「1 输入信号 → 1 输出」的底层门关卡：
+  // 多输出（如半加器的 s 与 c）或多 bit 总线（第三章加法器）都不做组合搜索
   if (inputs.length < 1 || inputs.length > 2) return null;
+  if (outputs.length !== 1) return null;
+  if (level.ports.some((p) => p.width > 1)) return null;
   const byInputs = new Map<string, Set<string>>();
   let mask = 0;
   let rows = 0;

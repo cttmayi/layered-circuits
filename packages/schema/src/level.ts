@@ -19,14 +19,29 @@ export const LogicValueSchema = z.union([
   z.literal('Z'),
 ]);
 
+/**
+ * 向量值：单 bit 端口用 0/1/X/Z；多 bit 端口（第三章总线）直接写数值（0~255），
+ * 判定前按端口位宽展开成逐位 lane 键（如 a: 5 → a[0]=1, a[1]=0, a[2]=1, a[3]=0）。
+ */
+export const VectorValueSchema = z.union([LogicValueSchema, z.number().int().min(0).max(255)]);
+export type VectorValue = z.infer<typeof VectorValueSchema>;
+
 export const LevelVectorSchema = z.object({
-  inputs: z.record(z.string(), LogicValueSchema).default({}),
+  inputs: z.record(z.string(), VectorValueSchema).default({}),
   /** 期望输出；缺省则该向量只施加激励不判定 */
-  expect: z.record(z.string(), LogicValueSchema).optional(),
+  expect: z.record(z.string(), VectorValueSchema).optional(),
   /** 时序模式采样前等待（ps） */
   settlePs: z.number().int().min(0).optional(),
   note: z.string().optional(),
 });
+
+/** 关卡端口规格：声明端口名、方向与位宽（第三章总线；1 位关卡可省略，缺省按 1 位） */
+export const PortSpecSchema = z.object({
+  name: z.string().min(1),
+  dir: z.enum(['in', 'out']),
+  width: z.number().int().min(1).max(8).default(1),
+});
+export type PortSpec = z.infer<typeof PortSpecSchema>;
 
 export const LevelKindSchema = z.enum(['main', 'cost', 'timing', 'retro']);
 export type LevelKind = z.infer<typeof LevelKindSchema>;
@@ -45,6 +60,8 @@ export const LevelSchema = z.object({
   teaching: z.string().default(''),
   /** 卡关时的提示（玩家主动点开） */
   hint: z.string().default(''),
+  /** 关卡端口规格（含位宽，第三章总线；缺省按向量推导、全部 1 位） */
+  ports: z.array(PortSpecSchema).default([]),
   mode: z.enum(['logic', 'timing']).default('logic'),
   /** 硬核工程模式的额外约束：关键路径不得超过该延迟（ps）；缺省表示硬核模式也不查时序 */
   timingBudgetPs: z.number().int().positive().optional(),

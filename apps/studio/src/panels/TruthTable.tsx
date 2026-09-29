@@ -1,4 +1,5 @@
 import type { SimSnapshot } from '../sim/protocol';
+import { type BusValue, columnsFromKeys, groupBusRow, portLabel } from './busDisplay';
 
 export interface TruthTableProps {
   snapshot: SimSnapshot | null;
@@ -21,8 +22,8 @@ export function TruthTable({ snapshot }: TruthTableProps): React.JSX.Element {
       </section>
     );
   }
-  const inputNames = Object.keys(rows[0]?.inputs ?? {});
-  const outputNames = Object.keys(rows[0]?.outputs ?? {});
+  const inCols = columnsFromKeys(rows[0]?.inputs);
+  const outCols = columnsFromKeys(rows[0]?.outputs);
 
   return (
     <section className="panel">
@@ -30,36 +31,40 @@ export function TruthTable({ snapshot }: TruthTableProps): React.JSX.Element {
       <table className="truth">
         <thead>
           <tr>
-            {inputNames.map((n) => (
-              <th key={n}>{n}</th>
+            {inCols.map((c) => (
+              <th key={c.name}>{portLabel(c.name, c.width)}</th>
             ))}
-            {outputNames.map((n) => (
-              <th key={n} className="sep">
-                {n}
+            {outCols.map((c) => (
+              <th key={c.name} className="sep">
+                {portLabel(c.name, c.width)}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr
-              key={
-                inputNames.map((n) => String(row.inputs[n])).join('') +
-                outputNames.map((n) => String(row.outputs[n])).join('')
-              }
-            >
-              {inputNames.map((n) => (
-                <td key={n} className={CELL[String(row.inputs[n])] ?? ''}>
-                  {String(row.inputs[n])}
-                </td>
-              ))}
-              {outputNames.map((n) => (
-                <td key={n} className={`sep ${CELL[String(row.outputs[n])] ?? ''}`}>
-                  {String(row.outputs[n])}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const ins = groupBusRow(row.inputs as Record<string, BusValue>, inCols);
+            const outs = groupBusRow(row.outputs as Record<string, BusValue>, outCols);
+            return (
+              <tr
+                key={
+                  inCols.map((c) => ins[c.name]).join('') +
+                  outCols.map((c) => outs[c.name]).join('')
+                }
+              >
+                {inCols.map((c) => (
+                  <td key={c.name} className={CELL[ins[c.name]] ?? ''}>
+                    {ins[c.name]}
+                  </td>
+                ))}
+                {outCols.map((c) => (
+                  <td key={c.name} className={`sep ${CELL[outs[c.name]] ?? ''}`}>
+                    {outs[c.name]}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </section>

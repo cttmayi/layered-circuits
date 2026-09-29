@@ -17,21 +17,29 @@ export interface WorldMapProps {
   onBack: () => void;
 }
 
-/** 13 个节点的蛇形坐标（viewBox 960×560） */
+/** 18 个节点的蛇形坐标（viewBox 960×760，三章各占一行半） */
 const NODE_POS: Array<{ x: number; y: number }> = [
+  // 第一章（8 关）
   { x: 120, y: 120 },
   { x: 320, y: 120 },
   { x: 520, y: 120 },
   { x: 720, y: 120 },
   { x: 900, y: 120 },
-  { x: 900, y: 300 },
-  { x: 720, y: 300 },
-  { x: 520, y: 300 },
-  { x: 320, y: 300 },
-  { x: 120, y: 300 },
-  { x: 120, y: 470 },
-  { x: 320, y: 470 },
-  { x: 520, y: 470 },
+  { x: 900, y: 260 },
+  { x: 720, y: 260 },
+  { x: 520, y: 260 },
+  // 第二章（5 关）
+  { x: 320, y: 260 },
+  { x: 120, y: 260 },
+  { x: 120, y: 420 },
+  { x: 320, y: 420 },
+  { x: 520, y: 420 },
+  // 第三章（5 关）
+  { x: 720, y: 420 },
+  { x: 900, y: 420 },
+  { x: 900, y: 580 },
+  { x: 720, y: 580 },
+  { x: 520, y: 580 },
 ];
 
 function stateOf(progress: Progress, level: Level): 'locked' | 'new' | 'working' | 'cleared' {
@@ -76,12 +84,15 @@ export function WorldMap({
         </span>
       </header>
       <div className="map-stage">
-        <svg className="map-svg" viewBox="0 0 960 560" role="img" aria-label="关卡连线">
+        <svg className="map-svg" viewBox="0 0 960 760" role="img" aria-label="关卡连线">
           <text x={80} y={60} className="stage-title">
             第一章 · 基础门电路
           </text>
-          <text x={80} y={240} className="stage-title">
+          <text x={80} y={200} className="stage-title">
             第二章 · 时序电路
+          </text>
+          <text x={80} y={360} className="stage-title">
+            第三章 · 算术与存储
           </text>
           {ALL_LEVELS.slice(1).map((level, i) => {
             const from = NODE_POS[i];
@@ -108,7 +119,7 @@ export function WorldMap({
               className={`map-node-btn ${state}${currentLevelId === level.id ? ' current' : ''}`}
               style={{
                 left: `${((pos?.x ?? 0) / 960) * 100}%`,
-                top: `${((pos?.y ?? 0) / 560) * 100}%`,
+                top: `${((pos?.y ?? 0) / 760) * 100}%`,
               }}
               disabled={!unlocked}
               onClick={() => onPick(level.id)}

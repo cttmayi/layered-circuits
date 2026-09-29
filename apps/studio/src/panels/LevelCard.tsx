@@ -41,6 +41,9 @@ export function LevelCard({
   const over = costHalf > budget;
   const inputNames = [...new Set(level.vectors.flatMap((v) => Object.keys(v.inputs)))];
   const outputNames = [...new Set(level.vectors.flatMap((v) => Object.keys(v.expect ?? {})))];
+  const widthOf = new Map(level.ports.map((p) => [p.name, p.width]));
+  const showPort = (n: string): string =>
+    (widthOf.get(n) ?? 1) > 1 ? `${n}[${(widthOf.get(n) ?? 1) - 1}:0]` : n;
 
   return (
     <section className="panel level-card">
@@ -72,11 +75,11 @@ export function LevelCard({
         <thead>
           <tr>
             {inputNames.map((n) => (
-              <th key={n}>{n}</th>
+              <th key={n}>{showPort(n)}</th>
             ))}
             {outputNames.map((n) => (
               <th key={n} className="sep">
-                {n}
+                {showPort(n)}
               </th>
             ))}
           </tr>
