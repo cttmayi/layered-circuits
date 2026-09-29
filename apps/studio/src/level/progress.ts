@@ -205,12 +205,18 @@ export function recordAttempt(progress: Progress, levelId: string): Progress {
 }
 
 /**
- * 关卡初始画布：关卡规定端口名（a/b/y），所以端口元件由系统预置并锁定，
- * 玩家只需要在中间连出电路 —— 这样「端口约定」永远不会成为卡关原因。
+ * 关卡初始画布：
+ *  - 关卡规定端口名（a/b/y）：端口元件由系统预置并锁定；
+ *  - **VCC / GND 电源轨同样预置并锁定** —— 没有电源和地，任何电路都不工作。
+ * 玩家只需要在中间连出电路，端口约定与供电永远不是卡关原因。
  */
 export function docForLevel(level: Level, library: StoredModule[]): Doc {
   const { inputs, outputs } = requiredPortsOf(level);
-  const syms: Sym[] = [];
+  const syms: Sym[] = [
+    // 电源轨：左上 VCC、右上 GND（避开中间 200 起排的信号端口）
+    { id: 'rail-vcc', kind: 'vcc', x: 40, y: 60, rot: 0, label: 'VCC', locked: true },
+    { id: 'rail-gnd', kind: 'gnd', x: 700, y: 60, rot: 0, label: 'GND', locked: true },
+  ];
   inputs.forEach((name, i) => {
     syms.push({
       id: `in-${name}`,

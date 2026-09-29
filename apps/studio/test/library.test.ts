@@ -21,6 +21,7 @@ import {
   versionsOfName,
 } from '../src/level/library';
 import {
+  docForLevel,
   emptyProgress,
   exportSave,
   importSave,
@@ -249,5 +250,19 @@ describe('支线单（加急 / 手工 / 省料）', () => {
     progress = recordSideJob(progress, 's1-not', 'rush', 4); // 重复达成不重复发钱
     expect(progress.walletHalf).toBe(before + 4);
     expect(sideJobCount(progress)).toBe(1);
+  });
+});
+
+describe('关卡电源轨（VCC / GND 预置并锁定）', () => {
+  it('每个关卡的初始画布都自带锁定的 VCC 与 GND，端口不可删', () => {
+    const level = ALL_LEVELS[0] as Level;
+    const doc = docForLevel(level, []);
+    const rails = doc.syms.filter((sym) => sym.kind === 'vcc' || sym.kind === 'gnd');
+    expect(rails.map((r) => `${r.kind}:${r.locked ? 'locked' : 'free'}`)).toEqual([
+      'vcc:locked',
+      'gnd:locked',
+    ]);
+    // 端口与电源轨全部锁定：删除会被拦截（symIsLocked 判定）
+    expect(doc.syms.every((sym) => sym.locked)).toBe(true);
   });
 });
