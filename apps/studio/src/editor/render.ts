@@ -249,6 +249,36 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
 
   // 导线：先按「线段去重」画一遍底色（公共段只画一次，不再叠成重影），
   // 再单独高亮 hover / 选中的线。
+  // 整网高亮：把共享引脚（inst:pin）的线归到同一个网，hover/选中时整网点亮、其余压暗
+  const wires = doc.wires;
+  const parent = new Map<string, string>();
+  for (const wire of wires) parent.set(wire.id, wire.id);
+  const find = (id: string): string => {
+    let cur = id;
+    while (parent.get(cur) !== cur) cur = parent.get(cur) ?? cur;
+    parent.set(id, cur);
+    return cur;
+  };
+  const endpointOwner = new Map<string, string>();
+  for (const wire of wires) {
+    for (const end of [wire.a, wire.b]) {
+      const key = `${end.inst}:${end.pin}`;
+      const owner = endpointOwner.get(key);
+      if (owner === undefined) endpointOwner.set(key, wire.id);
+      else parent.set(find(wire.id), find(owner));
+    }
+  }
+  const netOf = new Map<string, string>();
+  for (const wire of wires) netOf.set(wire.id, find(wire.id));
+  const activeWireIds = new Set<string>([...scene.selectedWires]);
+  if (scene.hover?.kind === 'wire') activeWireIds.add(scene.hover.id);
+  const activeNets = new Set<string>();
+  for (const id of activeWireIds) {
+    const net = netOf.get(id);
+    if (net) activeNets.add(net);
+  }
+  const netDimmed = activeNets.size > 0;
+
   const segments: Array<{ wire: Wire; a: { x: number; y: number }; b: { x: number; y: number } }> =
     [];
   const seen = new Set<string>();
@@ -272,17 +302,22 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
     const key = segKey(seg.a, seg.b);
     if (seen.has(key)) continue; // 同一条公共段，只画一次
     seen.add(key);
+    const net = netOf.get(seg.wire.id) ?? '';
+    const inActiveNet = activeNets.has(net);
     const style = signalStyle(scene.pinSignals.get(pinKey(seg.wire.a)) ?? SIG_Z);
-    ctx.strokeStyle = style.color;
-    ctx.lineWidth = style.width * Math.min(1.6, camera.scale);
+    ctx.globalAlpha = netDimmed && !inActiveNet ? 0.3 : 1;
+    ctx.strokeStyle = inActiveNet ? PALETTE.selection : style.color;
+    ctx.lineWidth = (inActiveNet ? style.width + 1 : style.width) * Math.min(1.6, camera.scale);
     ctx.setLineDash(style.dash.map((d) => d * camera.scale));
     line(seg.a, seg.b);
   }
+  ctx.globalAlpha = 1;
   for (const seg of segments) {
     const selected = scene.selectedWires.includes(seg.wire.id);
     const hovered = scene.hover?.kind === 'wire' && scene.hover.id === seg.wire.id;
     if (!selected && !hovered) continue;
-    ctx.strokeStyle = selected ? PALETTE.selection : PALETTE.hover;
+    const net = netOf.get(seg.wire.id) ?? '';
+    ctx.strokeStyle = selected || activeNets.has(net) ? PALETTE.selection : PALETTE.hover;
     ctx.lineWidth =
       (signalStyle(scene.pinSignals.get(pinKey(seg.wire.a)) ?? SIG_Z).width + 1.5) *
       Math.min(1.6, camera.scale);
