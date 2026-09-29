@@ -1319,3 +1319,235 @@ body,
     opacity: 1;
   }
 }
+
+/* ---------- 主菜单 / 关卡地图（全屏开场） ---------- */
+.screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(900px 480px at 50% -10%, #16222e 0%, var(--bg) 60%),
+    var(--bg);
+}
+
+.screen-menu .menu-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+  width: min(460px, calc(100vw - 48px));
+  padding: 44px 36px 30px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(19, 26, 34, 0.72);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+
+.menu-brand h1 {
+  margin: 0 0 8px;
+  font-size: 40px;
+  letter-spacing: 6px;
+  text-align: center;
+  color: var(--accent);
+  text-shadow: 0 0 24px rgba(255, 180, 84, 0.25);
+}
+
+.menu-tagline {
+  margin: 0;
+  text-align: center;
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.menu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.menu-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 13px 16px;
+  font-size: 17px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.menu-btn:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.menu-btn.primary {
+  border-color: var(--accent);
+  color: #201407;
+  background: var(--accent);
+}
+
+.menu-btn-note {
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.menu-btn.primary .menu-btn-note {
+  color: rgba(32, 20, 7, 0.72);
+}
+
+.menu-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+/* ---------- 关卡地图 ---------- */
+.screen-map {
+  justify-content: flex-start;
+  padding: 18px 24px;
+}
+
+.map-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: min(1000px, 100%);
+  margin-bottom: 8px;
+}
+
+.map-head h1 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.map-back {
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.map-back:hover {
+  border-color: var(--accent);
+}
+
+.map-stats {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.map-stage {
+  position: relative;
+  width: min(1000px, 100%);
+  flex: 1;
+  min-height: 0;
+}
+
+.map-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.stage-title {
+  fill: var(--dim);
+  font-size: 15px;
+  letter-spacing: 2px;
+}
+
+.map-edge {
+  fill: none;
+  stroke: #24303d;
+  stroke-width: 2.5;
+  stroke-dasharray: 2 5;
+}
+
+.map-edge.on {
+  stroke: #3a6a52;
+  stroke-dasharray: none;
+}
+
+/* 节点 = 叠在连线上的真按钮 */
+.map-node-btn {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 96px;
+  height: 96px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--text);
+  background: #18212b;
+  border: 2px solid #2c3a49;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.12s, border-color 0.12s;
+}
+
+.map-node-btn:hover:not(:disabled) {
+  transform: translate(-50%, -50%) scale(1.08);
+  border-color: var(--accent);
+}
+
+.map-node-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.map-node-btn.new {
+  background: #1f2e1d;
+  border-color: var(--ok);
+}
+
+.map-node-btn.working {
+  background: #332b18;
+  border-color: var(--warn);
+}
+
+.map-node-btn.cleared {
+  background: #16283a;
+  border-color: #5aa7e8;
+}
+
+.map-node-btn.current {
+  border-width: 3px;
+  box-shadow: 0 0 14px rgba(255, 180, 84, 0.5);
+}
+
+.node-num {
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.node-title {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.node-stars {
+  font-size: 11px;
+  color: var(--accent);
+}

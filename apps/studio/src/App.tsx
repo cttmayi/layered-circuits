@@ -1,5 +1,5 @@
 import type { JudgeResult } from '@lc/compiler';
-import { ALL_LEVELS } from '@lc/content';
+import { ALL_LEVELS, findLevel } from '@lc/content';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { emptyDoc, notGateDemo } from './editor/demos';
 import {
@@ -34,7 +34,7 @@ import {
   exportSave,
   importSave,
   isCleared,
-  isLevelUnlocked,
+  isNewJob,
   leaderboard,
   type Progress,
   rankOf,
@@ -44,6 +44,7 @@ import {
   recordSideJob,
   saveProgress,
   setRecon,
+  setStarted,
   starsOf,
 } from './level/progress';
 import { docFor, type GameMode, initialSession, levelOf, storageKeyFor } from './level/session';
@@ -54,6 +55,7 @@ import { JudgePanel } from './panels/JudgePanel';
 import { LevelCard } from './panels/LevelCard';
 import { LevelMap } from './panels/LevelMap';
 import { LibraryPanel } from './panels/LibraryPanel';
+import { MainMenu } from './panels/MainMenu';
 import { Modal } from './panels/Modal';
 import { Palette } from './panels/Palette';
 import { ReconPanel } from './panels/ReconPanel';
@@ -61,6 +63,7 @@ import { SettlementPanel } from './panels/SettlementPanel';
 import { TruthTable } from './panels/TruthTable';
 import { WaveformPanel } from './panels/WaveformPanel';
 import { WorkshopPanel } from './panels/WorkshopPanel';
+import { WorldMap } from './panels/WorldMap';
 import type { SimSnapshot, StudioResponse } from './sim/protocol';
 import { createRunner } from './sim/runner';
 
@@ -94,6 +97,8 @@ export function App(): React.JSX.Element {
   const [progress, setProgress] = useState<Progress>(() => session.progress);
   const [gameMode, setGameMode] = useState<GameMode>(() => session.mode);
   const [levelId, setLevelId] = useState<string>(() => session.levelId);
+  /** 画面：主菜单 / 关卡地图 / 工作台 —— 模式只在主菜单里选，进关后不能改 */
+  const [screen, setScreen] = useState<'menu' | 'map' | 'bench'>('menu');
   const [judgeResult, setJudgeResult] = useState<JudgeResult | null>(null);
   const [judging, setJudging] = useState(false);
   const [undoStack, setUndoStack] = useState<Doc[]>([]);
@@ -107,7 +112,7 @@ export function App(): React.JSX.Element {
   const [pendingPoint, setPendingPoint] = useState<{ x: number; y: number } | null>(null);
   const [mode, setMode] = useState<'logic' | 'timing'>('logic');
   /** 时序挑战关（kind = 'timing'）强制硬核：科普模式会把延迟抹平，考不出时序问题 */
-  const forcedHardcore = levelOf(session.mode, levelId)?.kind === 'timing';
+  const forcedHardcore = levelOf(gameMode, levelId)?.kind === 'timing';
   useEffect(() => {
     if (forcedHardcore) setMode('timing');
   }, [forcedHardcore]);
@@ -136,9 +141,8 @@ export function App(): React.JSX.Element {
   const [settlement, setSettlement] = useState<JudgeResult | null>(null);
   /** 本次交付的星数（结算页展示） */
   const [settlementStars, setSettlementStars] = useState(0);
-  /** 接单对话框：每个关卡每会话弹一次 */
+  /** 接单对话框：只对「新单」状态的关弹（开工/通关后刷新不再弹） */
   const [commissionOpen, setCommissionOpen] = useState(false);
-  const commissionSeen = useRef(new Set<string>());
   /** 中央提示对话框（图纸解开等小节点） */
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
   /** 黑盒侦察对话框（开工后若图纸未测则直接进入） */
@@ -149,8 +153,9 @@ export function App(): React.JSX.Element {
   const [chipDrop, setChipDrop] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 900, height: 600 });
 
-  // ---- 画布尺寸自适应（含 HiDPI） ----
+  // ---- 画布尺寸自适应（含 HiDPI）：主菜单→工作台时容器才出现，所以要跟 screen 重新量 ----
   useEffect(() => {
+    void screen; // 进工作台（screen 变化）时重测容器尺寸
     const el = containerRef.current;
     if (!el) return;
     const measure = (): void => {
@@ -166,7 +171,7 @@ export function App(): React.JSX.Element {
     }
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
-  }, []);
+  }, [screen]);
 
   // ---- 自动仿真（Worker 优先，防抖 40ms） ----
   useEffect(() => {
@@ -664,27 +669,51 @@ export function App(): React.JSX.Element {
     setSelectedWires([]);
   };
 
-  // ---- 关卡：切换关卡 / 自由模式 ----
+  // ---- 关卡 / 模式入口（模式只在主菜单选，进关后不可改） ----
   const currentLevel = levelOf(gameMode, levelId);
 
-  // 进关弹「新委托」：每个关卡每会话只弹一次，开工后不再打扰
-  useEffect(() => {
-    if (!currentLevel || gameMode !== 'level') return;
-    if (commissionSeen.current.has(currentLevel.id)) return;
-    commissionSeen.current.add(currentLevel.id);
-    setCommissionOpen(true);
-  }, [currentLevel, gameMode]);
-
-  const switchTo = (nextMode: GameMode, nextLevelId: string): void => {
-    setGameMode(nextMode);
-    setLevelId(nextLevelId);
+  /** 清掉跨关卡残留的临时状态 */
+  const clearTransient = (): void => {
     setJudgeResult(null);
-    setDoc(docFor(nextMode, nextLevelId, progress.library));
     setSelection([]);
     setSelectedWires([]);
     setPlacing(null);
     setPendingPin(null);
+    setPendingPoint(null);
+    setSideJobKey(null);
   };
+
+  /** 进入关卡工作台；新单弹「新委托」，已开工/已通关的直接继续 */
+  const enterLevel = (nextLevelId: string): void => {
+    setGameMode('level');
+    setLevelId(nextLevelId);
+    setDoc(docFor('level', nextLevelId, progress.library));
+    clearTransient();
+    setScreen('bench');
+    if (isNewJob(progress, nextLevelId)) setCommissionOpen(true);
+  };
+
+  /** 进入自由沙盒 */
+  const enterFree = (): void => {
+    setGameMode('free');
+    setLevelId(levelId);
+    setDoc(docFor('free', levelId, progress.library));
+    clearTransient();
+    setScreen('bench');
+  };
+
+  /** 重载当前关：丢弃草图回到本关初始画布（组件库保留），不改变所在关 */
+  const reloadLevel = (): void => {
+    if (gameMode !== 'level') return;
+    setDoc(docFor('level', levelId, progress.library));
+    clearTransient();
+    setToast('已重载本关初始画布');
+  };
+
+  /** 回主菜单 */
+  const goToMenu = (): void => setScreen('menu');
+  /** 回关卡地图 */
+  const goToMap = (): void => setScreen('map');
 
   // ---- 关卡校验：判定跑在 Worker/主线程，用的就是画布上这份电路 ----
   /** 判定用的关卡：接了支线单就套上支线条件（规则与主线同源，只是更严） */
@@ -838,52 +867,72 @@ export function App(): React.JSX.Element {
   const selectedSyms = doc.syms.filter((s) => selection.includes(s.id));
   const levelRecord = currentLevel ? progress.cleared[currentLevel.id] : undefined;
 
+  // ---- 主菜单（开场）：模式只在这是选 ----
+  if (screen === 'menu') {
+    const resumeLevel = findLevel(session.levelId);
+    const canResume =
+      session.mode === 'level' &&
+      Boolean(resumeLevel) &&
+      (Boolean(progress.started?.[session.levelId]) || isCleared(progress, session.levelId));
+    return (
+      <MainMenu
+        progress={progress}
+        canResume={canResume}
+        resumeLabel={
+          resumeLevel
+            ? `第 ${ALL_LEVELS.findIndex((l) => l.id === session.levelId) + 1} 关 · ${resumeLevel.title}`
+            : ''
+        }
+        onContinue={() => enterLevel(session.levelId)}
+        onLevelMode={goToMap}
+        onFreeMode={enterFree}
+      />
+    );
+  }
+
+  // ---- 关卡地图（选关）----
+  if (screen === 'map') {
+    return (
+      <WorldMap
+        progress={progress}
+        currentLevelId={levelId}
+        onPick={enterLevel}
+        onBack={goToMenu}
+      />
+    );
+  }
+
+  // ---- 工作台 ----
   return (
     <div className="app">
       <header className="toolbar">
         <div className="brand">
           逐层电路 <span>· 电路工作台</span>
         </div>
-        <div className="group">
+        {gameMode === 'level' ? (
           <button
             type="button"
-            className={gameMode === 'level' ? 'active' : ''}
-            onClick={() => switchTo('level', levelId)}
-            title="按阶段 1 的关卡顺序挑战，受素材与预算约束"
+            className="back-btn"
+            onClick={goToMap}
+            title="回到关卡地图（草图已自动保存）"
           >
-            关卡模式
+            ← 返回地图
           </button>
+        ) : (
           <button
             type="button"
-            className={gameMode === 'free' ? 'active' : ''}
-            onClick={() => switchTo('free', levelId)}
-            title="自由沙盒：不限素材与预算"
+            className="back-btn"
+            onClick={goToMenu}
+            title="回到主菜单（草图已自动保存）"
           >
-            自由模式
+            ← 主菜单
           </button>
-        </div>
+        )}
         <button type="button" onClick={copyCircuit} title="复制当前电路 JSON（贴给我检查布线）">
           复制电路
         </button>
         {gameMode === 'level' && (
           <div className="group">
-            <select
-              className="level-select"
-              value={levelId}
-              onChange={(e) => switchTo('level', e.target.value)}
-              title="关卡顺序：前一关通关后解锁下一关"
-            >
-              {ALL_LEVELS.map((item) => {
-                const unlocked = isLevelUnlocked(progress, item.id);
-                const cleared = isCleared(progress, item.id);
-                return (
-                  <option key={item.id} value={item.id} disabled={!unlocked}>
-                    {cleared ? '★ ' : unlocked ? '' : '🔒 '}
-                    {item.title}
-                  </option>
-                );
-              })}
-            </select>
             <button
               type="button"
               className="primary"
@@ -940,8 +989,8 @@ export function App(): React.JSX.Element {
           {gameMode === 'level' ? (
             <button
               type="button"
-              onClick={() => switchTo('level', levelId)}
-              title="丢弃当前草图，回到本关初始状态（组件库保留）"
+              onClick={reloadLevel}
+              title="丢弃当前草图，回到本关初始画布（组件库保留）"
             >
               重载本关
             </button>
@@ -995,20 +1044,18 @@ export function App(): React.JSX.Element {
           level={currentLevel}
           header={
             currentLevel && (
-              <>
-                <LevelCard
-                  level={currentLevel}
-                  costHalf={snapshot?.cost.half ?? 0}
-                  reconDone={Boolean(progress.recon[currentLevel.id])}
-                  sideJob={sideJobKey}
-                  doneSideJobs={Object.keys(progress.sideJobs)
-                    .filter((id) => id.startsWith(`${currentLevel.id}:`))
-                    .map((id) => id.slice(currentLevel.id.length + 1))}
-                  onPickSideJob={setSideJobKey}
-                  onShowHint={() => setToast(currentLevel.hint)}
-                  onOpenRecon={() => setReconOpen(true)}
-                />
-              </>
+              <LevelCard
+                level={currentLevel}
+                costHalf={snapshot?.cost.half ?? 0}
+                reconDone={Boolean(progress.recon[currentLevel.id])}
+                sideJob={sideJobKey}
+                doneSideJobs={Object.keys(progress.sideJobs)
+                  .filter((id) => id.startsWith(`${currentLevel.id}:`))
+                  .map((id) => id.slice(currentLevel.id.length + 1))}
+                onPickSideJob={setSideJobKey}
+                onShowHint={() => setToast(currentLevel.hint)}
+                onOpenRecon={() => setReconOpen(true)}
+              />
             )
           }
         />
@@ -1044,7 +1091,8 @@ export function App(): React.JSX.Element {
               onStart={(job) => {
                 setSideJobKey(job);
                 setCommissionOpen(false);
-                // 开工 = 直接开搭；图纸没测出来时，左侧图纸卡有显眼的「黑盒侦察」按钮，想测再测
+                // 开工即持久化：以后刷新直接回到工作台，不再重选
+                setProgress((prev) => setStarted(prev, currentLevel.id));
               }}
             />
           )}
@@ -1137,7 +1185,7 @@ export function App(): React.JSX.Element {
               }
               onNextLevel={() => {
                 const next = ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1];
-                if (next) switchTo('level', next.id);
+                if (next) enterLevel(next.id);
               }}
               onDismiss={() => setSettlement(null)}
             />
@@ -1194,7 +1242,7 @@ export function App(): React.JSX.Element {
                 currentLevelId={currentLevel.id}
                 onPick={(id) => {
                   setPanelOpen(null);
-                  switchTo('level', id);
+                  enterLevel(id);
                 }}
               />
             </Modal>
@@ -1225,7 +1273,7 @@ export function App(): React.JSX.Element {
                 onImport={doImport}
                 onJumpToLevel={(id) => {
                   setPanelOpen(null);
-                  switchTo('level', id);
+                  enterLevel(id);
                 }}
               />
             </Modal>

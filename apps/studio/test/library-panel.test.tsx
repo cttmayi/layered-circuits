@@ -8,6 +8,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { PROGRESS_KEY } from '../src/level/progress';
+import { goToLevel, startJob } from './helpers';
 
 describe('组件库与成绩面板', () => {
   beforeEach(() => {
@@ -16,6 +17,7 @@ describe('组件库与成绩面板', () => {
 
   it('点「组件库」弹出面板：我的模块 / 本地重挑战榜 / 存档按钮', () => {
     render(<App />);
+    startJob('非门');
     fireEvent.click(screen.getByText('组件库'));
     expect(screen.getByRole('dialog', { name: '组件库与成绩' })).toBeTruthy();
     // 元件库（左侧）与组件库面板（右侧）各有一个标题，所以用 getAllByText
@@ -54,6 +56,7 @@ describe('组件库与成绩面板', () => {
       }),
     );
     render(<App />);
+    goToLevel('非门'); // 已通关的关：不弹委托，直接进工作台
     fireEvent.click(screen.getByText('组件库'));
     expect(screen.getAllByText('我的模块（1）').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/1 个版本 · 最新 v1\.0 · 成本 4/)).toBeTruthy();
@@ -68,7 +71,8 @@ describe('委托单与结算（P0 游戏化外壳）', () => {
 
   it('第 1 关显示成一张委托单：委托方、人话需求、合同条款', () => {
     render(<App />);
-    // 进关即弹「新委托」对话框（中央），内容与左侧委托单一致
+    // 主菜单 → 关卡模式 → 点第 1 关 → 弹「新委托」对话框（中央），内容与左侧委托单一致
+    goToLevel('非门');
     expect(screen.getByText('新委托')).toBeTruthy();
     expect(screen.getAllByText('修表铺 · 老周').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/收音机的指示灯接反了/).length).toBeGreaterThanOrEqual(1);
@@ -106,6 +110,7 @@ describe('任务墙与星级（P1）', () => {
 
   it('点「任务墙」弹出章节地图：未解锁的章节节点是禁用的', () => {
     render(<App />);
+    startJob('非门');
     fireEvent.click(screen.getByText('任务墙'));
     expect(screen.getByRole('dialog', { name: '任务墙' })).toBeTruthy();
     expect(screen.getByText('第一章 · 街道维修铺（逻辑门）')).toBeTruthy();
@@ -134,6 +139,7 @@ describe('任务墙与星级（P1）', () => {
       }),
     );
     render(<App />);
+    goToLevel('非门');
     fireEvent.click(screen.getByText('任务墙'));
     expect(screen.getByText('★★★')).toBeTruthy();
     // 1 单 + 1 元 → 还是学徒，提示升到维修铺师傅还差什么
@@ -157,6 +163,7 @@ describe('接单对话框里直接选支线（操作在中间完成）', () => {
 
   it('在「新委托」对话框里接加急单，开工后支线状态生效', () => {
     render(<App />);
+    goToLevel('非门'); // 新单 → 弹「新委托」
     const job = inModal(/加急单/);
     expect(job).toBeTruthy();
     if (job) fireEvent.click(job);
@@ -169,6 +176,7 @@ describe('接单对话框里直接选支线（操作在中间完成）', () => {
 
   it('不接支线开工：只做主线', () => {
     render(<App />);
+    goToLevel('非门'); // 新单 → 弹「新委托」
     const start = inModal(/^开工$/);
     if (start) fireEvent.click(start);
     expect(screen.queryByText('新委托')).toBeNull();
@@ -181,6 +189,7 @@ describe('元件拖拽放置', () => {
 
   it('从元件库把三极管拖到画布，松手即放置（成本更新）', async () => {
     render(<App />);
+    startJob('非门');
     const canvasEl = document.querySelector('.canvas-wrap canvas') as HTMLButtonElement;
     const dataTransfer = {
       effectAllowed: '',

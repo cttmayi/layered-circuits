@@ -14,6 +14,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { PROGRESS_KEY } from '../src/level/progress';
+import { startJob } from './helpers';
 
 // jsdom 里容器尺寸量不到，工作台会退回 200×200；相机初始为 (340,220)、缩放 1
 const CAMERA = { x: 340, y: 220 };
@@ -56,6 +57,7 @@ const LEVEL_TOTAL = ALL_LEVELS.length;
 describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁下一关', () => {
   it('用鼠标搭出第 1 关的标准解并通过校验，通关闭环产生可复用的【非门】模块', async () => {
     render(<App />);
+    startJob('非门');
     expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
 
     // ---- 1. 摆放元件（画布上只有关卡预置的 a / y 端口）----
@@ -144,8 +146,6 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
       () => expect(screen.getByText(new RegExp(`已通关 1/${LEVEL_TOTAL}`))).toBeTruthy(),
       { timeout: 5000 },
     );
-    const select = document.querySelector('.level-select') as HTMLSelectElement;
-    expect(select.options[1]?.disabled).toBe(false); // 与门已解锁
     // 封装出的【非门】出现在元件库「我的模块」里，成本 4，可以直接拖到下一关复用
     const paletteModules = [...document.querySelectorAll('.palette .palette-item')].filter((b) =>
       b.textContent?.includes('非门'),
@@ -153,5 +153,13 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
     expect(paletteModules.length).toBe(1);
     expect(paletteModules[0]?.textContent).toContain('成本 4');
     expect(paletteModules[0]?.textContent).toMatch(/1 入 \/ 1 出/);
-  });
+
+    // ---- 6. 关卡地图：非门已通关（cleared），与门点亮为新单（不再是锁定灰态）----
+    fireEvent.click(screen.getByText('← 返回地图'));
+    await waitFor(() => expect(screen.getByText('与门')).toBeTruthy(), { timeout: 5000 });
+    const notNode = screen.getByText('非门').closest('button');
+    const andNode = screen.getByText('与门').closest('button');
+    expect(notNode?.getAttribute('class')).toContain('cleared');
+    expect(andNode?.getAttribute('class')).toContain('new');
+  }, 20_000);
 });

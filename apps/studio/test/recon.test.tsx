@@ -6,14 +6,15 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { PROGRESS_KEY } from '../src/level/progress';
+import { startJob } from './helpers';
 
 function recordCells(): HTMLButtonElement[] {
   return [...document.querySelectorAll('.recon-table .record-cell')] as HTMLButtonElement[];
 }
 
-/** 进关弹「新委托」→ 点开工 → 图纸卡上的「黑盒侦察（测图纸）」按钮打开居中对话框 */
+/** 主菜单 → 第 1 关 → 开工 → 图纸卡上的「黑盒侦察（测图纸）」按钮打开居中对话框 */
 function openRecon(): void {
-  fireEvent.click(screen.getByText('开工'));
+  startJob('非门');
   fireEvent.click(screen.getByText('黑盒侦察（测图纸）'));
   expect(screen.getByRole('dialog', { name: '黑盒侦察' })).toBeTruthy();
 }

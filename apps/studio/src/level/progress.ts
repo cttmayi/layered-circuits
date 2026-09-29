@@ -78,6 +78,8 @@ export interface Progress {
   equipment: string[];
   /** 已经花掉的钱（半单位）；可用余额 = walletHalf − spentHalf */
   spentHalf: number;
+  /** 已开工的关卡（点过「开工」）；用于刷新后恢复到工作台而不是重选 */
+  started: Record<string, boolean>;
 }
 
 /** 钱包 = 每关最好一次的利润 + 各支线单奖金（都由存档推导，不重复发钱） */
@@ -116,6 +118,16 @@ export function setRecon(progress: Progress, levelId: string, state: ReconState)
   return { ...progress, recon: { ...progress.recon, [levelId]: state } };
 }
 
+/** 标记某关已开工（开工即持久化，刷新后直接回到工作台） */
+export function setStarted(progress: Progress, levelId: string): Progress {
+  return { ...progress, started: { ...progress.started, [levelId]: true } };
+}
+
+/** 这关是否需要弹「新委托」：没开工过、也没通关过才弹（重玩已通关的关不再接单） */
+export function isNewJob(progress: Progress, levelId: string): boolean {
+  return !progress.started?.[levelId] && !isCleared(progress, levelId);
+}
+
 export function emptyProgress(): Progress {
   return {
     cleared: {},
@@ -126,6 +138,7 @@ export function emptyProgress(): Progress {
     sideJobs: {},
     equipment: [],
     spentHalf: 0,
+    started: {},
   };
 }
 
@@ -143,6 +156,7 @@ export function loadProgress(): Progress {
       sideJobs: (parsed.sideJobs as Record<string, number>) ?? {},
       equipment: Array.isArray(parsed.equipment) ? (parsed.equipment as string[]) : [],
       spentHalf: typeof parsed.spentHalf === 'number' ? parsed.spentHalf : 0,
+      started: (parsed.started as Record<string, boolean>) ?? {},
     };
   } catch {
     return emptyProgress();
@@ -377,6 +391,7 @@ export function importSave(text: string): { progress: Progress; error?: string }
     sideJobs: (raw.sideJobs as Record<string, number>) ?? {},
     equipment: Array.isArray(raw.equipment) ? (raw.equipment as string[]) : [],
     spentHalf: typeof raw.spentHalf === 'number' ? raw.spentHalf : 0,
+    started: (raw.started as Record<string, boolean>) ?? {},
   };
   return { progress };
 }

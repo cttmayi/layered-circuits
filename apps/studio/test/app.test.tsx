@@ -167,9 +167,9 @@ describe('仿真通道（Worker 与主线程共用 handleRequest）', () => {
 describe('工作台界面', () => {
   it('渲染工具栏、成本面板与真值表（载入非门示例后自动仿真）', async () => {
     render(<App />);
+    // 主菜单 → 自由搭建 → 工作台
+    fireEvent.click(screen.getByText('自由搭建'));
     expect(screen.getByText(/电路工作台/)).toBeTruthy();
-    // 默认进入关卡模式，先切到自由沙盒再载入示例
-    fireEvent.click(screen.getByText('自由模式'));
     fireEvent.click(screen.getByText('载入非门示例'));
     expect(screen.getByText('封装为模块')).toBeTruthy();
 

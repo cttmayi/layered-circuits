@@ -8,7 +8,7 @@
  */
 
 import { ALL_LEVELS, findLevel } from '@lc/content';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { type Doc, toDesign } from '../src/editor/model';
@@ -22,6 +22,7 @@ import {
 } from '../src/level/index';
 import { docFor } from '../src/level/session';
 import { handleRequest } from '../src/sim/handle';
+import { goToLevel, startJob } from './helpers';
 
 beforeEach(() => {
   localStorage.clear();
@@ -206,8 +207,9 @@ describe('关卡判定：第 1 关标准解（单管反相器，成本 4）', ()
 });
 
 describe('关卡界面', () => {
-  it('默认进入第 1 关：显示目标真值表、锁住未开放元件、关卡选择只有第一关可选', async () => {
+  it('第 1 关：显示目标真值表、锁住未开放元件；地图上只有第一关可点', async () => {
     render(<App />);
+    startJob('非门');
 
     // 关卡卡片：委托单 + 图纸（黑盒侦察没做完前，输出列是看不清的）
     expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
@@ -226,21 +228,23 @@ describe('关卡界面', () => {
     expect(capButton.disabled).toBe(true);
     expect(capButton.getAttribute('title')).toContain('时钟专用');
 
-    // 关卡下拉：第一关可选，其余锁住
-    const select = document.querySelector('.level-select') as HTMLSelectElement;
-    expect(select.options.length).toBe(ALL_LEVELS.length);
-    expect(select.options[0]?.disabled).toBe(false);
-    expect(select.options[1]?.disabled).toBe(true);
-
     // 用料进度：材料费 0 / 款项 5 元（第 1 关对标成本 4）
     const budgetText = document.querySelector('.budget-text')?.textContent ?? '';
     expect(budgetText).toContain('款项');
     expect(budgetText).toContain('5');
     expect(screen.getByText(new RegExp(`已通关 0/${LEVEL_TOTAL}`))).toBeTruthy();
+
+    // 关卡地图：非门是进行中（已开工可继续），与门是锁定的灰态（不能点）
+    fireEvent.click(screen.getByText('← 返回地图'));
+    const notNode = screen.getByText('非门').closest('button');
+    const andNode = screen.getByText('与门').closest('button');
+    expect(notNode?.getAttribute('class')).toContain('working');
+    expect(andNode?.getAttribute('class')).toContain('locked');
   });
 
   it('点「交付验收」会走判定通道并报告被打回（空电路）', async () => {
     render(<App />);
+    startJob('非门');
     const judgeButtons = screen.getAllByText('交付验收');
     judgeButtons[0]?.click();
     await waitFor(() => expect(screen.getByText(/客户打回了|还没验收/)).toBeTruthy(), {
@@ -249,8 +253,10 @@ describe('关卡界面', () => {
     // 空电路缺输出端口接法 → 至少给出功能或端口层面的错误
     expect(document.querySelectorAll('.diags .error').length).toBeGreaterThan(0);
 
-    // 切到自由模式后不再有校验按钮（关卡约束也随之解除）
-    screen.getByText('自由模式').click();
+    // 模式只能在主菜单切换：回地图 → 主菜单 → 自由搭建
+    fireEvent.click(screen.getByText('← 返回地图'));
+    fireEvent.click(screen.getByText('← 返回主菜单'));
+    fireEvent.click(screen.getByText('自由搭建'));
     await waitFor(() => expect(screen.queryByText('交付验收')).toBeNull());
     // 「电容」在元件库按钮和成本表里都会出现，取按钮那个（避免跑并发时的时序差异）
     const capButton = screen
@@ -260,7 +266,7 @@ describe('关卡界面', () => {
     expect(capButton?.disabled).toBe(false);
   });
 
-  it('通关后解锁下一关：进度写入 localStorage，关卡下拉可选第二关', async () => {
+  it('通关后解锁下一关：进度写入 localStorage，地图上第二关点亮', async () => {
     // 预置「第 1 关已通关」的存档，模拟玩家已经过关
     localStorage.setItem(
       'lc-studio-progress-v1',
@@ -271,14 +277,19 @@ describe('关卡界面', () => {
       }),
     );
     render(<App />);
-
-    // 默认应该直接进入「已解锁但还没通关」的第 2 关（与门）
+    // 主菜单应显示「继续上次」直达第 2 关之前的会话？没有开工记录时走地图选关
+    goToLevel('与门');
+    // 新单 → 弹委托 → 开工
+    fireEvent.click(screen.getByText('开工'));
     await waitFor(() => expect(screen.getByText(/委托单 · 与门/)).toBeTruthy(), {
       timeout: 5000,
     });
-    const select = document.querySelector('.level-select') as HTMLSelectElement;
-    expect(select.value).toBe('s1-and');
-    expect(select.options[1]?.disabled).toBe(false);
     expect(screen.getByText(new RegExp(`已通关 1/${LEVEL_TOTAL}`))).toBeTruthy();
+    // 地图：非门已通关，与门是进行中（已解锁可接）
+    fireEvent.click(screen.getByText('← 返回地图'));
+    const notNode = screen.getByText('非门').closest('button');
+    const andNode = screen.getByText('与门').closest('button');
+    expect(notNode?.getAttribute('class')).toContain('cleared');
+    expect(andNode?.getAttribute('class')).toContain('working');
   });
 });
