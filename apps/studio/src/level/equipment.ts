@@ -22,7 +22,7 @@ export const EQUIPMENT: Equipment[] = [
     id: 'probe',
     title: '测试探针',
     priceHalf: 24,
-    note: '黑盒侦察点「测」时，读数自动记进需求表。',
+    note: '黑盒侦察点「测」自动记录；买下后画布上点任意连线，钉一个电平+强度读数。',
   },
   { id: 'scope', title: '示波器游标', priceHalf: 60, note: '波形面板点两个时间点，直接读出 Δt。' },
 ];

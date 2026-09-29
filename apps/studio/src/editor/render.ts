@@ -46,6 +46,8 @@ export interface Scene {
   pendingPin: { inst: string; pin: string } | null;
   pendingPoint: { x: number; y: number } | null;
   grid: boolean;
+  /** 画布探针（工具铺买下后可用）：点任意连线在此处钉一个电平读数 */
+  probes: Array<{ id: string; x: number; y: number; inst: string; pin: string }>;
 }
 
 export const PALETTE = {
@@ -490,6 +492,29 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
   }
 
   for (const sym of doc.syms) drawSymbol(ctx, scene, sym);
+
+  // 画布探针：圆点 + 电平/强度读数（跟着仿真实时变）
+  for (const probe of scene.probes) {
+    const sp = worldToScreen(camera, width, height, probe.x, probe.y);
+    const signal = scene.pinSignals.get(pinKey({ inst: probe.inst, pin: probe.pin, bit: 0 }));
+    const style = signalStyle(signal ?? SIG_Z);
+    ctx.save();
+    // 探头圆点
+    ctx.fillStyle = signal === undefined ? '#5b6b7d' : style.color;
+    ctx.strokeStyle = PALETTE.bg;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // 读数标签
+    ctx.font = `bold ${Math.max(10, 13 * camera.scale)}px ui-monospace, monospace`;
+    ctx.fillStyle = signal === undefined ? '#5b6b7d' : style.color;
+    const text = signalText(signal);
+    ctx.textAlign = 'center';
+    ctx.fillText(text, sp.x, sp.y - 10);
+    ctx.restore();
+  }
 
   ctx.restore();
 }

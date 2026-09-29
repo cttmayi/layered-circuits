@@ -123,6 +123,10 @@ export function App(): React.JSX.Element {
   const [showWave, setShowWave] = useState(false);
   /** 低频面板弹窗：任务墙 / 工具铺 / 组件库 / 波形（点击启动，不用时不留侧栏） */
   const [panelOpen, setPanelOpen] = useState<null | 'map' | 'shop' | 'library' | 'wave'>(null);
+  /** 画布探针：买下探针后可点连线钉读数 */
+  const [probes, setProbes] = useState<
+    Array<{ id: string; x: number; y: number; inst: string; pin: string }>
+  >([]);
   const [showTiming, setShowTiming] = useState(false);
   const [snapshot, setSnapshot] = useState<SimSnapshot | null>(null);
   const [resultDoc, setResultDoc] = useState<Doc | null>(null);
@@ -238,6 +242,7 @@ export function App(): React.JSX.Element {
     pendingPin,
     pendingPoint,
     grid: true,
+    probes,
   });
 
   // 事件处理里要用最新的场景做命中测试，但不希望它成为 effect 依赖
@@ -267,8 +272,20 @@ export function App(): React.JSX.Element {
       pendingPin,
       pendingPoint,
       grid: true,
+      probes,
     });
-  }, [doc, camera, size, pinSignals, selection, selectedWires, hover, pendingPin, pendingPoint]);
+  }, [
+    doc,
+    camera,
+    size,
+    pinSignals,
+    selection,
+    selectedWires,
+    hover,
+    pendingPin,
+    pendingPoint,
+    probes,
+  ]);
 
   // ---- 文档变更辅助 ----
   const commit = (next: Doc, options: { history?: boolean } = {}): void => {
@@ -341,6 +358,7 @@ export function App(): React.JSX.Element {
         setPendingPoint(null);
         setSelection([]);
         setSelectedWires([]);
+        setProbes([]);
       } else if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
         deleteSelection();
@@ -441,11 +459,23 @@ export function App(): React.JSX.Element {
     if (target?.kind === 'wire') {
       setSelectedWires([target.id]);
       setSelection([]);
+      if (ownsEquipment(progress, 'probe')) {
+        const wire = doc.wires.find((w) => w.id === target.id);
+        if (wire) {
+          const pid = `${target.id}@${Math.round(wx)}:${Math.round(wy)}`;
+          setProbes((prev) =>
+            prev.some((p) => p.id === pid)
+              ? prev.filter((p) => p.id !== pid)
+              : [...prev, { id: pid, x: wx, y: wy, inst: wire.a.inst, pin: wire.a.pin }],
+          );
+        }
+      }
       return;
     }
 
     setSelection([]);
     setSelectedWires([]);
+    setProbes([]);
     setPendingPin(null);
     dragRef.current = {
       mode: 'pan',
