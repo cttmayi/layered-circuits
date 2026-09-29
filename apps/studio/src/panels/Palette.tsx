@@ -23,13 +23,26 @@ export function dragPayload(pickKind: PlaceKind): string {
       : pickKind.kind;
 }
 
-/** 拖影：把符号画到小画布上，跟随鼠标（默认是整张卡片） */
-export function dragImage(kind: string): HTMLCanvasElement {
+/** 拖影：把符号画到小画布上，跟随鼠标（默认是整张卡片）。
+ * Chrome 对「未挂载的 canvas」作拖影经常显示成小圆点，所以画完后转成 <img> 再当拖影。 */
+export function dragImage(kind: string): HTMLImageElement | HTMLCanvasElement {
   const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
+  canvas.width = 96;
+  canvas.height = 96;
   const ctx = canvas.getContext('2d');
-  if (ctx) drawIcon(kind, ctx, 64);
+  if (ctx) drawIcon(kind, ctx, 96);
+  try {
+    const url = canvas.toDataURL('image/png');
+    if (url.startsWith('data:image')) {
+      const img = new Image();
+      img.src = url;
+      img.width = 96;
+      img.height = 96;
+      return img;
+    }
+  } catch {
+    // jsdom 等环境不支持 toDataURL，退回原始 canvas
+  }
   return canvas;
 }
 
@@ -104,7 +117,7 @@ export function Palette({
             onDragStart={(e) => {
               e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'unit', unit: item.unit }));
               e.dataTransfer.effectAllowed = 'copy';
-              e.dataTransfer.setDragImage(dragImage(item.unit), 32, 32);
+              e.dataTransfer.setDragImage(dragImage(item.unit), 48, 48);
             }}
             title={locked ? lockReason(item.unit) : `${item.note}（拖到画布放置，或点击后点画布）`}
             className={isArmed('unit', item.unit) ? 'palette-item active' : 'palette-item'}
@@ -139,7 +152,7 @@ export function Palette({
             onDragStart={(e) => {
               e.dataTransfer.setData(DRAG_MIME, kind);
               e.dataTransfer.effectAllowed = 'copy';
-              e.dataTransfer.setDragImage(dragImage(kind), 32, 32);
+              e.dataTransfer.setDragImage(dragImage(kind), 48, 48);
             }}
             title={locked ? portLockReason : `${note}（拖到画布放置）`}
             className={isArmed(kind) ? 'palette-item active' : 'palette-item'}
@@ -174,7 +187,7 @@ export function Palette({
             onDragStart={(e) => {
               e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'module', hash: mod.hash }));
               e.dataTransfer.effectAllowed = 'copy';
-              e.dataTransfer.setDragImage(dragImage('module'), 32, 32);
+              e.dataTransfer.setDragImage(dragImage('module'), 48, 48);
             }}
             onClick={() => pick('module', undefined, mod.hash)}
             title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}（拖到画布放置）`}
