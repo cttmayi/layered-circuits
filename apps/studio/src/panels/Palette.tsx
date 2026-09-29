@@ -11,6 +11,17 @@ export interface PaletteProps {
   header?: React.ReactNode;
 }
 
+/** 拖拽编码：把「放什么」写进 dataTransfer */
+const DRAG_MIME = 'application/x-lc-place';
+
+export function dragPayload(pickKind: PlaceKind): string {
+  return pickKind.kind === 'unit'
+    ? `unit:${pickKind.unit}`
+    : pickKind.kind === 'module'
+      ? `module:${pickKind.hash}`
+      : pickKind.kind;
+}
+
 const UNITS: Array<{ unit: UnitKind; name: string; cost: string; note: string }> = [
   { unit: 'npn', name: '三极管 NPN', cost: '2', note: '基极高电平导通，双向通路' },
   { unit: 'res', name: '电阻', cost: '1', note: '弱驱动：永远被强驱动压过' },
@@ -78,7 +89,12 @@ export function Palette({
             key={item.unit}
             type="button"
             disabled={locked}
-            title={locked ? lockReason(item.unit) : item.note}
+            draggable={!locked}
+            onDragStart={(e) => {
+              e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'unit', unit: item.unit }));
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
+            title={locked ? lockReason(item.unit) : `${item.note}（拖到画布放置，或点击后点画布）`}
             className={isArmed('unit', item.unit) ? 'palette-item active' : 'palette-item'}
             onClick={() => pick('unit', item.unit)}
           >
@@ -107,7 +123,12 @@ export function Palette({
             key={kind}
             type="button"
             disabled={locked}
-            title={locked ? portLockReason : note}
+            draggable={!locked}
+            onDragStart={(e) => {
+              e.dataTransfer.setData(DRAG_MIME, kind);
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
+            title={locked ? portLockReason : `${note}（拖到画布放置）`}
             className={isArmed(kind) ? 'palette-item active' : 'palette-item'}
             onClick={() => pick(kind)}
           >
@@ -136,8 +157,13 @@ export function Palette({
             type="button"
             className={isArmed('module', mod.hash) ? 'palette-item active' : 'palette-item'}
             disabled={locked}
+            draggable={!locked}
+            onDragStart={(e) => {
+              e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'module', hash: mod.hash }));
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
             onClick={() => pick('module', undefined, mod.hash)}
-            title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}`}
+            title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}（拖到画布放置）`}
           >
             <span className="palette-name">
               {mod.name} v{mod.version} {mod.isSequential && <em>时序</em>}

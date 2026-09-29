@@ -385,21 +385,43 @@ export function App(): React.JSX.Element {
     return { sx, sy, wx: w.x, wy: w.y };
   };
 
+  /** 在画布 (wx, wy) 放置一个元件/模块/端口（点击与拖拽共用） */
+  const placeAt = (kind: PlaceKind, wx: number, wy: number): void => {
+    const next = { ...doc, syms: [...doc.syms] };
+    const created =
+      kind.kind === 'unit'
+        ? createSym(doc, 'unit', kind.unit, snap(wx), snap(wy))
+        : kind.kind === 'module'
+          ? createSym(doc, 'module', undefined, snap(wx), snap(wy), kind.hash)
+          : createSym(doc, kind.kind, undefined, snap(wx), snap(wy));
+    next.syms.push(created);
+    commit(next);
+    setSelection([created.id]);
+  };
+
+  /** 从元件库拖拽到画布放置 */
+  const onDrop = (event: React.DragEvent): void => {
+    event.preventDefault();
+    const raw = event.dataTransfer.getData('application/x-lc-place');
+    if (!raw) return;
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    // 真实浏览器 DropEvent 必带坐标；测试环境缺省时兜底到画布中心
+    const sx = (event.clientX ?? rect.left + rect.width / 2) - rect.left;
+    const sy = (event.clientY ?? rect.top + rect.height / 2) - rect.top;
+    const w = screenToWorld(camera, size.width, size.height, sx, sy);
+    const [tag, extra] = raw.split(':');
+    if (tag === 'unit' && extra) placeAt({ kind: 'unit', unit: extra as UnitKind }, w.x, w.y);
+    else if (tag === 'module' && extra) placeAt({ kind: 'module', hash: extra }, w.x, w.y);
+    else if (tag === 'vcc' || tag === 'gnd' || tag === 'input' || tag === 'output')
+      placeAt({ kind: tag }, w.x, w.y);
+  };
+
   const onMouseDown = (event: React.MouseEvent): void => {
     const { sx, sy, wx, wy } = localPoint(event);
     const target = hitTest(currentScene(), wx, wy);
 
     if (placing) {
-      const next = { ...doc, syms: [...doc.syms] };
-      const created =
-        placing.kind === 'unit'
-          ? createSym(doc, 'unit', placing.unit, snap(wx), snap(wy))
-          : placing.kind === 'module'
-            ? createSym(doc, 'module', undefined, snap(wx), snap(wy), placing.hash)
-            : createSym(doc, placing.kind, undefined, snap(wx), snap(wy));
-      next.syms.push(created);
-      commit(next);
-      setSelection([created.id]);
+      placeAt(placing, wx, wy);
       setPlacing(null);
       return;
     }
@@ -983,6 +1005,11 @@ export function App(): React.JSX.Element {
           <canvas
             ref={canvasRef}
             style={{ width: size.width, height: size.height }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'copy';
+            }}
+            onDrop={onDrop}
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
             onMouseUp={onMouseUp}

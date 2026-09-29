@@ -4,7 +4,7 @@
  * 面板必须在关卡模式里真实出现，版本号、溯源入口、重挑战榜与存档按钮都要能看到。
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { PROGRESS_KEY } from '../src/level/progress';
@@ -173,5 +173,38 @@ describe('接单对话框里直接选支线（操作在中间完成）', () => {
     if (start) fireEvent.click(start);
     expect(screen.queryByText('新委托')).toBeNull();
     expect(screen.queryByText(/已接支线/)).toBeNull();
+  });
+});
+
+describe('元件拖拽放置', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('从元件库把三极管拖到画布，松手即放置（成本更新）', async () => {
+    render(<App />);
+    const canvasEl = document.querySelector('.canvas-wrap canvas') as HTMLButtonElement;
+    const dataTransfer = {
+      effectAllowed: '',
+      dropEffect: 'none',
+      setData: () => undefined,
+      getData: (type: string) => (type === 'application/x-lc-place' ? 'unit:npn' : ''),
+    } as unknown as DataTransfer;
+    const item = screen.getByText('三极管 NPN').closest('button') as HTMLButtonElement;
+    const dragStart = new Event('dragstart', { bubbles: true, cancelable: true });
+    Object.defineProperty(dragStart, 'dataTransfer', { value: dataTransfer });
+    item.dispatchEvent(dragStart);
+    // jsdom 的 Event 不实现 clientX/clientY，用 defineProperty 手动带上
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: dataTransfer });
+    Object.defineProperty(drop, 'clientX', { value: 450 });
+    Object.defineProperty(drop, 'clientY', { value: 300 });
+    canvasEl.dispatchEvent(drop);
+    // 仿真跑完后成本出现：1 个三极管 = 2 元
+    await waitFor(
+      () => {
+        const texts = [...document.querySelectorAll('.budget-text')].map((n) => n.textContent);
+        expect(texts.some((t) => t?.includes('材料费 2'))).toBe(true);
+      },
+      { timeout: 5000 },
+    );
   });
 });
