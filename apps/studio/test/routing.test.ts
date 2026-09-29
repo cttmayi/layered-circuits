@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type RouteObstacle, routeSegments, segHitsRect } from '../src/editor/render';
+import { type RouteObstacle, routeSegments, segHitsRect, signalText } from '../src/editor/render';
 
 /** 走线路线是否与障碍相交（逐段判定） */
 function hitsAny(
@@ -44,5 +44,17 @@ describe('避障布线', () => {
         { x: 120, y: 300 },
       ],
     ]);
+  });
+});
+
+describe('signalText（端口强度标注）', () => {
+  it('输入端口只显示 0/1，不标强度', () => {
+    // S_STRONG<<2|0 = 8（强0），S_STRONG<<2|1 = 9（强1）；弱1 = 5
+    expect(signalText(8, false)).toBe('0');
+    expect(signalText(9, false)).toBe('1');
+  });
+  it('电路节点默认仍标强度', () => {
+    expect(signalText(9)).toBe('1·强');
+    expect(signalText(5)).toBe('1·弱');
   });
 });

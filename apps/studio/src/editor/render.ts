@@ -106,11 +106,12 @@ export function signalStyle(signal: number): { color: string; width: number; das
   return { color: PALETTE.x, width: 2.4, dash: [7, 4] };
 }
 
-export function signalText(signal: number | undefined): string {
+export function signalText(signal: number | undefined, showStrength = true): string {
   if (signal === undefined) return '—';
   if (signal === SIG_Z) return 'Z';
   const value = logicValueOf(signal);
   const tag = value === 0 ? '0' : value === 1 ? '1' : 'X';
+  if (!showStrength) return tag;
   return `${tag}${strengthOf(signal) === S_STRONG ? '·强' : '·弱'}`;
 }
 
@@ -732,7 +733,8 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
     const style = signalStyle(signal ?? SIG_Z);
     ctx.fillStyle = style.color;
     ctx.font = `bold ${Math.max(10, 13 * camera.scale)}px ui-monospace, monospace`;
-    ctx.fillText(signalText(signal), 0, 4 * camera.scale);
+    // 输入端口是「用户开关」：永远强驱动，只显示 0/1；输出/电路节点才标强/弱
+    ctx.fillText(signalText(signal, key !== 'input'), 0, 4 * camera.scale);
     ctx.font = `${Math.max(9, 11 * camera.scale)}px ui-sans-serif, system-ui, sans-serif`;
     ctx.fillStyle = PALETTE.textDim;
     ctx.fillText(sym.label, 0, labelY + 10);
