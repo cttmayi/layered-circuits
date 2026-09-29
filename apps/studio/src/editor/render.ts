@@ -592,6 +592,12 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
       ctx.lineWidth = 3 / camera.scale;
       ctx.stroke();
       ctx.lineWidth = 2 / camera.scale;
+      // 基极引线：从圆左缘接到基极条，不再有断缝
+      ctx.beginPath();
+      ctx.moveTo(-19, 0);
+      ctx.lineTo(-9, 0);
+      ctx.stroke();
+      ctx.lineWidth = 2 / camera.scale;
       // 集电极
       ctx.beginPath();
       ctx.moveTo(-9, -7);
@@ -661,31 +667,29 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
       break;
     }
     case 'vcc': {
+      // 标准电源符：引脚向上一条竖线 → 顶部一条 T 横杠
       ctx.beginPath();
       ctx.moveTo(0, 14);
-      ctx.lineTo(0, 5);
+      ctx.lineTo(0, 2);
       ctx.stroke();
+      ctx.lineWidth = 2.6 / camera.scale;
       ctx.beginPath();
-      ctx.moveTo(-7, 5);
-      ctx.lineTo(7, 5);
-      ctx.stroke();
-      ctx.lineWidth = 2 / camera.scale;
-      ctx.beginPath();
-      ctx.moveTo(0, -6);
-      ctx.lineTo(0, -1);
+      ctx.moveTo(-9, 2);
+      ctx.lineTo(9, 2);
       ctx.stroke();
       break;
     }
     case 'gnd': {
+      // 标准接地符：引脚向下一条竖线，三条横杠从宽到窄
       ctx.beginPath();
       ctx.moveTo(0, -14);
-      ctx.lineTo(0, -3);
+      ctx.lineTo(0, -2);
       ctx.stroke();
       ctx.lineWidth = 2.6 / camera.scale;
-      for (const [idx, w] of [9, 6, 3].entries()) {
+      for (const [idx, w] of [10, 6.5, 3].entries()) {
         ctx.beginPath();
-        ctx.moveTo(-w, -3 + idx * 3.4);
-        ctx.lineTo(w, -3 + idx * 3.4);
+        ctx.moveTo(-w, -2 + idx * 3.2);
+        ctx.lineTo(w, -2 + idx * 3.2);
         ctx.stroke();
       }
       break;
