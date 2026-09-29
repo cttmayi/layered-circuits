@@ -68,6 +68,11 @@ export const PALETTE = {
   x: '#ff5f56',
   z: '#b99530',
   wire: '#5b6b7d',
+  // 输入/输出端口专用色：有辨识度但不抢戏（低饱和暗调，电平颜色在上面才显眼）
+  portInStroke: '#4e7d8a',
+  portInFill: '#14212a',
+  portOutStroke: '#8a7d4e',
+  portOutFill: '#262118',
 };
 
 export function worldToScreen(
@@ -720,8 +725,11 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
       break;
     }
     case 'input': {
+      ctx.fillStyle = PALETTE.portInFill;
+      ctx.strokeStyle = PALETTE.portInStroke;
       ctx.fillRect(-22, -13, 32, 26);
       ctx.strokeRect(-22, -13, 32, 26);
+      ctx.strokeStyle = PALETTE.body;
       ctx.beginPath();
       ctx.moveTo(10, 0);
       ctx.lineTo(26, 0);
@@ -729,8 +737,11 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
       break;
     }
     case 'output': {
+      ctx.fillStyle = PALETTE.portOutFill;
+      ctx.strokeStyle = PALETTE.portOutStroke;
       ctx.fillRect(-10, -13, 32, 26);
       ctx.strokeRect(-10, -13, 32, 26);
+      ctx.strokeStyle = PALETTE.body;
       ctx.beginPath();
       ctx.moveTo(-26, 0);
       ctx.lineTo(-10, 0);
