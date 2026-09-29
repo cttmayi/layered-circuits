@@ -1,4 +1,4 @@
-import { commissionOf, contractOf } from '@lc/content';
+import { contractOf } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { useState } from 'react';
 import { sideJobsOf } from '../level/sideJobs';
@@ -21,7 +21,8 @@ export interface LevelCardProps {
 
 const CELL: Record<string, string> = { 0: 'lo', 1: 'hi', X: 'bad', Z: 'dim' };
 
-/** 左侧「委托单」：委托方 + 人话需求 + 合同条款 + 图纸（真值表）+ 用料进度 */
+/** 左侧「图纸卡」：图纸（真值表）+ 合同摘要 + 用料进度 —— 搭建时的高频参考。
+ * 客户/需求/原理等叙事内容只在「新委托」弹窗里出现，开工后不再占用侧栏。 */
 export function LevelCard({
   level,
   costHalf,
@@ -33,7 +34,6 @@ export function LevelCard({
   onShowHint,
 }: LevelCardProps): React.JSX.Element {
   const [showTeaching, setShowTeaching] = useState(false);
-  const commission = commissionOf(level);
   const contract = contractOf(level);
   const jobs = sideJobsOf(level);
   const budget = level.budgetHalf;
@@ -45,26 +45,9 @@ export function LevelCard({
   return (
     <section className="panel level-card">
       <h3>委托单 · {level.title}</h3>
-      <p className="commission-client">
-        <span className="client-tag">委托方</span>
-        {commission.client}
+      <p className="contract-summary">
+        款项 {contract.pay} · 交期 {contract.deadline} · 禁忌 {contract.taboo}
       </p>
-      <p className="commission-note">「{commission.note}」</p>
-      <dl className="contract">
-        <div>
-          <dt>款项</dt>
-          <dd>{contract.pay}</dd>
-        </div>
-        <div>
-          <dt>交期</dt>
-          <dd>{contract.deadline}</dd>
-        </div>
-        <div>
-          <dt>禁忌</dt>
-          <dd>{contract.taboo}</dd>
-        </div>
-      </dl>
-      <p className="small dim">{level.brief}</p>
 
       <div className="budget">
         <div className="budget-bar">
@@ -122,27 +105,19 @@ export function LevelCard({
       </table>
 
       <div className="side-jobs">
-        <h4>支线单（可选）</h4>
-        {jobs.map((job) => {
-          const active = sideJob === job.key;
-          const done = doneSideJobs.includes(job.key);
-          return (
-            <button
-              key={job.key}
-              type="button"
-              className={active ? 'side-job active' : 'side-job'}
-              onClick={() => onPickSideJob(active ? null : job.key)}
-            >
-              <span className="side-job-head">
-                {job.title}
-                <em>+{job.bonusHalf / 2} 元</em>
-                {done && <b>已完成</b>}
-              </span>
-              <span className="side-job-note">{job.note}</span>
+        {sideJob ? (
+          <p className="dim small side-job-state">
+            已接支线：{jobs.find((j) => j.key === sideJob)?.title}（验收按支线条件判）·{' '}
+            <button type="button" className="link" onClick={() => onPickSideJob(null)}>
+              点此取消
             </button>
-          );
-        })}
-        {sideJob && <p className="dim small">已接支线：验收按支线条件判（点一下可取消）</p>}
+            {doneSideJobs.includes(sideJob) && <b className="side-job-done">已完成</b>}
+          </p>
+        ) : (
+          <p className="dim small side-job-state">
+            支线单：{jobs.map((j) => `${j.title}+${j.bonusHalf / 2}元`).join(' / ')}（接单时可选）
+          </p>
+        )}
       </div>
 
       <div className="group-row">

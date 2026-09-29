@@ -14,9 +14,10 @@ describe('组件库与成绩面板', () => {
     localStorage.clear();
   });
 
-  it('关卡模式下右侧有面板：我的模块 / 本地重挑战榜 / 存档按钮', () => {
+  it('点「组件库」弹出面板：我的模块 / 本地重挑战榜 / 存档按钮', () => {
     render(<App />);
-    expect(screen.getByText('组件库与成绩')).toBeTruthy();
+    fireEvent.click(screen.getByText('组件库'));
+    expect(screen.getByRole('dialog', { name: '组件库与成绩' })).toBeTruthy();
     // 元件库（左侧）与组件库面板（右侧）各有一个标题，所以用 getAllByText
     expect(screen.getAllByText('我的模块（0）').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/本地重挑战榜/)).toBeTruthy();
@@ -53,6 +54,7 @@ describe('组件库与成绩面板', () => {
       }),
     );
     render(<App />);
+    fireEvent.click(screen.getByText('组件库'));
     expect(screen.getAllByText('我的模块（1）').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/1 个版本 · 最新 v1\.0 · 成本 4/)).toBeTruthy();
     // 重挑战榜：非门的已知最省 = 满分线 = 8 半单位（4）
@@ -102,9 +104,10 @@ describe('任务墙与星级（P1）', () => {
     expect(screen.queryByText(/验收报告/)).toBeNull();
   });
 
-  it('任务墙按章节列出关卡，未解锁的章节节点是禁用的', () => {
+  it('点「任务墙」弹出章节地图：未解锁的章节节点是禁用的', () => {
     render(<App />);
-    expect(screen.getByText('任务墙')).toBeTruthy();
+    fireEvent.click(screen.getByText('任务墙'));
+    expect(screen.getByRole('dialog', { name: '任务墙' })).toBeTruthy();
     expect(screen.getByText('第一章 · 街道维修铺（逻辑门）')).toBeTruthy();
     expect(screen.getByText('第二章 · 研究所（时序单元）')).toBeTruthy();
     // 第一关可接单，第二关未解锁（禁用），挑战关标出类型
@@ -131,6 +134,7 @@ describe('任务墙与星级（P1）', () => {
       }),
     );
     render(<App />);
+    fireEvent.click(screen.getByText('任务墙'));
     expect(screen.getByText('★★★')).toBeTruthy();
     // 1 单 + 1 元 → 还是学徒，提示升到维修铺师傅还差什么
     expect(screen.getByText(/学徒/)).toBeTruthy();

@@ -1183,6 +1183,66 @@ body,
   cursor: pointer;
 }
 
+.rail {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.rail button {
+  flex: 1 1 auto;
+  min-width: 58px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #cfe0f0;
+  background: #161e26;
+  border: 1px solid #2c3a49;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.rail button:hover {
+  border-color: #6cb2ff;
+  background: #1a2530;
+}
+
+/* 图纸卡：合同一行摘要 */
+.contract-summary {
+  margin: 4px 0 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #8b9bab;
+}
+
+/* 支线状态行 */
+.side-job-state {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.side-job-state .link {
+  padding: 0;
+  font-size: 11px;
+  color: #6cb2ff;
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.side-job-state .side-job-done {
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #0d141a;
+  background: #7fd6a0;
+  border-radius: 2px;
+}
+
 /* 接单对话框里的支线选择按钮 */
 .job-option {
   display: block;

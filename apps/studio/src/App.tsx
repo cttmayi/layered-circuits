@@ -121,6 +121,8 @@ export function App(): React.JSX.Element {
 
   const [showTruth, setShowTruth] = useState(true);
   const [showWave, setShowWave] = useState(false);
+  /** 低频面板弹窗：任务墙 / 工具铺 / 组件库 / 波形（点击启动，不用时不留侧栏） */
+  const [panelOpen, setPanelOpen] = useState<null | 'map' | 'shop' | 'library' | 'wave'>(null);
   const [showTiming, setShowTiming] = useState(false);
   const [snapshot, setSnapshot] = useState<SimSnapshot | null>(null);
   const [resultDoc, setResultDoc] = useState<Doc | null>(null);
@@ -914,7 +916,7 @@ export function App(): React.JSX.Element {
             checked={showWave}
             onChange={(e) => setShowWave(e.target.checked)}
           />
-          波形
+          波形常显
         </label>
         <span className="runner" title="纯 TS 内核跑在 Web Worker 里；file:// 打开时自动回退主线程">
           {runnerKind === 'worker' ? 'Worker 仿真' : '主线程仿真'}
@@ -1067,31 +1069,20 @@ export function App(): React.JSX.Element {
               onDismiss={() => setSettlement(null)}
             />
           )}
-          <WorkshopPanel
-            progress={progress}
-            onBuy={(id) => {
-              const result = buyEquipment(progress, id);
-              setProgress(result.progress);
-              if (result.error) setToast(result.error);
-              else
-                setToast(
-                  `已买下设备（可用余额 ${(result.progress.walletHalf - result.progress.spentHalf) / 2} 元）`,
-                );
-            }}
-          />
-          <LevelMap
-            progress={progress}
-            currentLevelId={currentLevel?.id ?? ''}
-            onPick={(id) => switchTo('level', id)}
-          />
-          <LibraryPanel
-            library={doc.library}
-            rows={leaderboard(progress)}
-            currentLevelId={currentLevel?.id}
-            onExport={doExport}
-            onImport={doImport}
-            onJumpToLevel={(id) => switchTo('level', id)}
-          />
+          <div className="rail">
+            <button type="button" onClick={() => setPanelOpen('map')} title="章节地图 / 选关">
+              任务墙
+            </button>
+            <button type="button" onClick={() => setPanelOpen('shop')} title="花钱买设备">
+              工具铺
+            </button>
+            <button type="button" onClick={() => setPanelOpen('library')} title="封装复用 / 存档">
+              组件库
+            </button>
+            <button type="button" onClick={() => setPanelOpen('wave')} title="端口波形">
+              波形
+            </button>
+          </div>
           <Inspector
             snapshot={snapshot}
             units={units}
@@ -1111,7 +1102,7 @@ export function App(): React.JSX.Element {
                 : []
             }
           />
-          {showWave && judgeResult && (
+          {(showWave || panelOpen === 'wave') && judgeResult && (
             <WaveformPanel
               result={judgeResult}
               hasScope={ownsEquipment(progress, 'scope')}
@@ -1122,6 +1113,62 @@ export function App(): React.JSX.Element {
             />
           )}
           {showTruth && <TruthTable snapshot={snapshot} />}
+
+          {panelOpen === 'map' && currentLevel && (
+            <Modal title="任务墙" onClose={() => setPanelOpen(null)}>
+              <LevelMap
+                progress={progress}
+                currentLevelId={currentLevel.id}
+                onPick={(id) => {
+                  setPanelOpen(null);
+                  switchTo('level', id);
+                }}
+              />
+            </Modal>
+          )}
+          {panelOpen === 'shop' && (
+            <Modal title="工具铺" onClose={() => setPanelOpen(null)}>
+              <WorkshopPanel
+                progress={progress}
+                onBuy={(id) => {
+                  const result = buyEquipment(progress, id);
+                  setProgress(result.progress);
+                  if (result.error) setToast(result.error);
+                  else
+                    setToast(
+                      `已买下设备（可用余额 ${(result.progress.walletHalf - result.progress.spentHalf) / 2} 元）`,
+                    );
+                }}
+              />
+            </Modal>
+          )}
+          {panelOpen === 'library' && (
+            <Modal title="组件库与成绩" onClose={() => setPanelOpen(null)}>
+              <LibraryPanel
+                library={doc.library}
+                rows={leaderboard(progress)}
+                currentLevelId={currentLevel?.id}
+                onExport={doExport}
+                onImport={doImport}
+                onJumpToLevel={(id) => {
+                  setPanelOpen(null);
+                  switchTo('level', id);
+                }}
+              />
+            </Modal>
+          )}
+          {panelOpen === 'wave' && judgeResult && (
+            <Modal title="波形" onClose={() => setPanelOpen(null)}>
+              <WaveformPanel
+                result={judgeResult}
+                hasScope={ownsEquipment(progress, 'scope')}
+                portNames={[
+                  ...Object.keys(judgeResult.rows[0]?.inputs ?? {}),
+                  ...new Set(judgeResult.rows.flatMap((r) => Object.keys(r.expected))),
+                ]}
+              />
+            </Modal>
+          )}
         </div>
       </div>
     </div>
