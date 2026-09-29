@@ -76,6 +76,9 @@ describe('黑盒侦察', () => {
     render(<App />);
     openRecon();
     fireEvent.click(screen.getByText('直接看答案'));
+    // 必须弹出居中的「图纸解开了」反馈弹窗
+    expect(screen.getByRole('dialog', { name: '图纸解开了' })).toBeTruthy();
+    expect(screen.getByText(/输出列现在能看了/)).toBeTruthy();
     const targetTable = document.querySelector('.level-card .truth') as HTMLTableElement;
     expect(targetTable.textContent).toContain('1');
     expect(screen.getAllByText(/自主测绘 0/).length).toBeGreaterThanOrEqual(1);

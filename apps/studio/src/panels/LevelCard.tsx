@@ -68,7 +68,7 @@ export function LevelCard({
       {!reconDone && (
         <p className="dim small">图纸折角了：输出列看不清 —— 去下面的「黑盒侦察」自己测出来。</p>
       )}
-      <table className="truth">
+      <table className="truth" key={reconDone ? 'open' : 'masked'}>
         <thead>
           <tr>
             {inputNames.map((n) => (

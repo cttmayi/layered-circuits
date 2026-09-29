@@ -1302,3 +1302,17 @@ body,
     box-shadow: 0 0 0 5px rgba(95, 168, 255, 0.08);
   }
 }
+
+/* 图纸解开瞬间：输出列点亮（表格 key 变化触发重挂载） */
+.truth td.sep {
+  animation: cell-in 0.5s ease;
+}
+
+@keyframes cell-in {
+  from {
+    opacity: 0.2;
+  }
+  to {
+    opacity: 1;
+  }
+}
