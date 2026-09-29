@@ -399,6 +399,18 @@ export function App(): React.JSX.Element {
     setSelection([created.id]);
   };
 
+  /** 双击连线 → 直接删除这根线（比「点选 + Delete」顺手） */
+  const onDoubleClick = (event: React.MouseEvent): void => {
+    if (placing) return;
+    const { wx, wy } = localPoint(event);
+    const target = hitTest(currentScene(), wx, wy);
+    if (target?.kind === 'wire') {
+      commit({ ...doc, wires: doc.wires.filter((w) => w.id !== target.id) });
+      setSelectedWires([]);
+      setSelection([]);
+    }
+  };
+
   /** 从元件库拖拽到画布放置 */
   const onDrop = (event: React.DragEvent): void => {
     event.preventDefault();
@@ -1010,6 +1022,7 @@ export function App(): React.JSX.Element {
               e.dataTransfer.dropEffect = 'copy';
             }}
             onDrop={onDrop}
+            onDoubleClick={onDoubleClick}
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
             onMouseUp={onMouseUp}
@@ -1022,7 +1035,7 @@ export function App(): React.JSX.Element {
               ? '点击画布放置元件（Esc 取消）'
               : pendingPin
                 ? '再点一个引脚完成连线（Esc 取消）'
-                : '拖动空白处平移 · 滚轮缩放 · 点两个引脚连线 · 点输入符号切换 0/1（Alt 循环 X/Z）'}
+                : '拖动空白处平移 · 滚轮缩放 · 点两个引脚连线 · 双击连线删除 · 点输入符号切换 0/1（Alt 循环 X/Z）'}
           </div>
           {commissionOpen && currentLevel && (
             <CommissionModal
