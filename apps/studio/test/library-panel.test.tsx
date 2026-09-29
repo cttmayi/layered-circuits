@@ -186,6 +186,7 @@ describe('元件拖拽放置', () => {
       effectAllowed: '',
       dropEffect: 'none',
       setData: () => undefined,
+      setDragImage: () => undefined,
       getData: (type: string) => (type === 'application/x-lc-place' ? 'unit:npn' : ''),
     } as unknown as DataTransfer;
     const item = screen.getByText('三极管 NPN').closest('button') as HTMLButtonElement;
