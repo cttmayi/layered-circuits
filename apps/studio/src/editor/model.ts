@@ -63,7 +63,7 @@ export interface Sym {
    * 教学关实物图标：input 端口画成按钮（按下=1）、output 画成灯泡/铃铛/门
    * （由信号驱动状态：亮/响/开=1）。普通关卡没有 sprite，维持抽象端口。
    */
-  sprite?: 'button' | 'lamp' | 'bell' | 'door';
+  sprite?: 'button' | 'lamp' | 'bell' | 'door' | 'battery';
 }
 
 export interface Wire {

@@ -728,6 +728,30 @@ function drawSprite(
       }
       ctx.lineWidth = 2;
     }
+  } else if (sprite === 'battery') {
+    // 电池：有电（1）= 绿色 + 满格；没电（0）= 灰 + 空。方向感来自正负极标记
+    ctx.strokeStyle = on ? '#5cc482' : offStroke;
+    ctx.fillStyle = on ? 'rgba(92,196,130,0.25)' : offFill;
+    ctx.fillRect(-13, -8, 26, 26);
+    ctx.strokeRect(-13, -8, 26, 26);
+    // 正负极凸起：上 + 下 −
+    ctx.fillStyle = on ? '#5cc482' : offStroke;
+    ctx.fillRect(7, -15, 8, 7); // 正极凸起
+    ctx.fillRect(-15, 12, 6, 8); // 负极条
+    // 电量格
+    const bars = on ? 3 : 0;
+    ctx.fillStyle = on ? '#5cc482' : '#3a434d';
+    for (let i = 0; i < 3; i++) {
+      const fill = i < bars;
+      ctx.fillStyle = fill ? '#5cc482' : '#3a434d';
+      ctx.fillRect(-9 + i * 6, -4, 4, 18);
+    }
+    // + − 标记
+    ctx.fillStyle = on ? '#d9ffe9' : PALETTE.bodyDim;
+    ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('+', 11, -19);
+    ctx.fillText('−', -12, 25);
   } else if (sprite === 'door') {
     // 门：门框 + 门扇。关好（1）= 门扇贴框；开着（0）= 门扇甩开
     ctx.strokeStyle = offStroke;

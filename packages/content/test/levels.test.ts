@@ -96,9 +96,10 @@ describe('阶段 1 关卡内容', () => {
     for (const id of ['s1-npn', 's1-dio', 's1-float'] as const) {
       const level = findLevel(id)!;
       expect(level.requiredUnits.length, `${id} 应有必用元件`).toBeGreaterThan(0);
-      // 一根导线直连输入输出：功能上能对上 y=a/¬a，但没有元件 → 必须打回
+      // 一根导线直连全部输入→输出：功能上可能对上真值表，但没有元件 → 必须打回
+      const ins = Object.keys(level.vectors[0].inputs);
       const b = new DesignBuilder(`direct-${id}`, '直连');
-      b.port('a', 'in', 'x');
+      for (const n of ins) b.port(n, 'in', 'x');
       b.port('y', 'out', 'x');
       const result = judgeDesign(b.build(), level, { library: emptyLibrary });
       expect(result.pass, `${id} 直连导线不该过关`).toBe(false);
@@ -125,6 +126,42 @@ describe('阶段 1 关卡内容', () => {
     const ok = judgeDesign(level.referenceSolution!, level, { library: emptyLibrary });
     expect(ok.pass).toBe(true);
     expect(ok.score).toBe(100);
+  });
+
+  it('教学关·认识二极管是防倒灌：直接并联冲突打回，二极管或门满分', () => {
+    const level = findLevel('s1-dio')!;
+    // 或门真值表：任一电池有电设备就有电
+    expect(level.vectors.map((v) => [v.inputs.a, v.inputs.b, v.expect?.y])).toEqual([
+      [0, 0, 0],
+      [0, 1, 1],
+      [1, 0, 1],
+      [1, 1, 1],
+    ]);
+    // 直接并联（半成品状态）：一节没电一节有电 → 强 0/强 1 冲突 → 打回（这就是「倒灌」）
+    const direct = new DesignBuilder('t2-direct-parallel', '直接并联');
+    direct.gnd('gnd');
+    direct.unit('res', { a: 'y', b: 'gnd' }, 'R1');
+    direct.port('a', 'in', 'y');
+    direct.port('b', 'in', 'y');
+    direct.port('y', 'out', 'y');
+    const r = judgeDesign(direct.build(), level, { library: emptyLibrary });
+    expect(r.pass, '直接并联（倒灌）不该过关').toBe(false);
+    // 二极管防倒灌参考解：满分
+    const ok = judgeDesign(level.referenceSolution!, level, { library: emptyLibrary });
+    expect(ok.pass).toBe(true);
+    expect(ok.score).toBe(100);
+    // allowedUnits 只有二极管+电阻：用三极管做 OR 会被「本关不提供」打回
+    const npnOr = new DesignBuilder('t2-npn-or', '三极管做或门');
+    npnOr.vcc('vcc');
+    npnOr.gnd('gnd');
+    npnOr.unit('res', { a: 'vcc', b: 'y' }, 'R1');
+    npnOr.unit('npn', { c: 'y', b: 'a', e: 'gnd' }, 'Q1');
+    npnOr.unit('npn', { c: 'y', b: 'b', e: 'gnd' }, 'Q2');
+    npnOr.port('a', 'in', 'a');
+    npnOr.port('b', 'in', 'b');
+    npnOr.port('y', 'out', 'y');
+    const rn = judgeDesign(npnOr.build(), level, { library: emptyLibrary });
+    expect(rn.errors.join(), '三极管在本关不可用').toMatch(/本关不提供/);
   });
 
   it('判定能识别错误答案：功能错 / 超预算 / 缺端口 / 做成时序电路', () => {

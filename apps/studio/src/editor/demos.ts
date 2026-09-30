@@ -96,13 +96,20 @@ export function dioIntroSeedDoc(): Doc {
   const doc = emptyDoc();
   doc.name = '认识二极管 · 半成品';
   doc.syms = [
-    sym({ id: 'in-a', kind: 'input', x: 60, y: 230, label: 'a', value: 0 }),
-    sym({ id: 'out-y', kind: 'output', x: 660, y: 230, label: 'y' }),
+    // 实物图标：输入=电池（有电亮/没电灰）、输出=设备指示灯
+    sym({ id: 'in-a', kind: 'input', x: 60, y: 160, label: 'a', value: 0, sprite: 'battery' }),
+    sym({ id: 'in-b', kind: 'input', x: 60, y: 300, label: 'b', value: 0, sprite: 'battery' }),
+    sym({ id: 'out-y', kind: 'output', x: 660, y: 230, label: 'y', sprite: 'lamp' }),
     sym({ id: 'gnd', kind: 'gnd', x: 480, y: 340, label: 'GND' }),
     sym({ id: 'r1', kind: 'unit', unit: 'res', x: 480, y: 230, rot: 1, label: 'R1' }),
   ];
-  // 下拉电阻已接（输出→GND）；二极管本体和方向是玩家的事
-  doc.wires = [wire('out-y', 'p', 'r1', 'a'), wire('r1', 'b', 'gnd', 'p')];
+  // 两节电池直接并联到输出（信号冲突/倒灌），负载下拉电阻已接；玩家加二极管隔开
+  doc.wires = [
+    wire('in-a', 'p', 'out-y', 'p'),
+    wire('in-b', 'p', 'out-y', 'p'),
+    wire('out-y', 'p', 'r1', 'a'),
+    wire('r1', 'b', 'gnd', 'p'),
+  ];
   return doc;
 }
 

@@ -26,7 +26,7 @@ const COMMISSIONS: Record<string, Commission> = {
   },
   's1-dio': {
     client: '五金店 · 王嫂',
-    note: '单向门铃，只认客人进门的方向。',
+    note: '设备用两节电池并联供电，一节没电就把另一节拖垮——加个防倒灌，只许电流往外走。',
   },
   's1-float': {
     client: '传达室 · 老李',

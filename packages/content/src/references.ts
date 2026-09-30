@@ -57,11 +57,16 @@ export function npnIntroSeed(id = 'seed-npn-intro'): Design {
  * 教学关·认识二极管的半成品：下拉电阻已接，二极管本体和它的连线由玩家放——
  * 方向是这关的主角，所以不预置。
  */
+/**
+ * 教学关·认识二极管的半成品（防倒灌）：两节电池**直接并联**到输出（会信号冲突/倒灌），
+ * 负载下拉电阻已接——玩家亲手看到「并联打架」，再加两个二极管隔开（阳极朝电池）。
+ */
 export function dioIntroSeed(id = 'seed-dio-intro'): Design {
   const b = new DesignBuilder(id, '认识二极管 · 半成品');
   b.gnd('gnd');
-  b.unit('res', { a: 'y', b: 'gnd' }, 'R1');
-  b.port('a', 'in', 'a_dangling');
+  b.unit('res', { a: 'y', b: 'gnd' }, 'R1'); // 负载下拉：两节都没电时输出 0
+  b.port('a', 'in', 'y'); // 直接并联：一节没电会拖垮另一节（强 1 / 强 0 冲突）
+  b.port('b', 'in', 'y');
   b.port('y', 'out', 'y');
   return b.build();
 }
@@ -80,13 +85,19 @@ export function floatIntroSeed(id = 'seed-float-intro'): Design {
   return b.build();
 }
 
-/** 教学关·认识二极管：单向导通，a → y（成本 5 = 1 二极管 + 1 下拉电阻） */
+/**
+ * 教学关·认识二极管的参考解（防倒灌）：两节电池各串一个二极管再并到设备——
+ * 二极管只许电流往外流，没电的电池被挡住、拖不垮另一节。y = a 或 b
+ * （成本 8 = 2 二极管 + 1 下拉电阻；allowedUnits 只有 dio/res → 二极管是唯一解法）。
+ */
 export function dioIntroRef(id = 'ref-dio-intro'): Design {
   const b = new DesignBuilder(id, '认识二极管');
   b.gnd('gnd');
-  b.unit('dio', { a: 'a', k: 'y' }, 'D1'); // 阳极接输入：正向才导通
-  b.unit('res', { a: 'y', b: 'gnd' }, 'R1'); // 下拉：输入为 0 时输出稳为 0
+  b.unit('dio', { a: 'a', k: 'y' }, 'D1'); // 电池 a：只许电流外流（防倒灌）
+  b.unit('dio', { a: 'b', k: 'y' }, 'D2'); // 电池 b：只许电流外流（防倒灌）
+  b.unit('res', { a: 'y', b: 'gnd' }, 'R1'); // 负载下拉：两节都没电时输出 0
   b.port('a', 'in', 'a');
+  b.port('b', 'in', 'b');
   b.port('y', 'out', 'y');
   return b.build();
 }
