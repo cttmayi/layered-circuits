@@ -65,6 +65,16 @@ export function LevelCard({
           —— 它才是这关要教的主角
         </p>
       )}
+      {level.guideSteps.length > 0 && (
+        <div className="guide-steps">
+          <div className="guide-title">🧭 动手搭 · 跟着做</div>
+          <ol>
+            {level.guideSteps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       <div className="budget">
         <div className="budget-bar">

@@ -34,6 +34,48 @@ export function npnIntroRef(id = 'ref-npn-intro'): Design {
   return b.build();
 }
 
+/**
+ * 教学关·认识三极管的半成品：VCC→集电极、发射极→输出、下拉电阻都接好了，
+ * 只差「基极 b → 输入 a」这一条线（玩家补）—— 其余引脚悬空是刻意的（画布引导）。
+ */
+export function npnIntroSeed(id = 'seed-npn-intro'): Design {
+  const b = new DesignBuilder(id, '认识三极管 · 半成品');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('npn', { c: 'vcc', b: 'b_dangling', e: 'y' }, 'Q1');
+  b.unit('res', { a: 'y', b: 'gnd' }, 'R1');
+  b.port('a', 'in', 'a_dangling');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/**
+ * 教学关·认识二极管的半成品：下拉电阻已接，二极管本体和它的连线由玩家放——
+ * 方向是这关的主角，所以不预置。
+ */
+export function dioIntroSeed(id = 'seed-dio-intro'): Design {
+  const b = new DesignBuilder(id, '认识二极管 · 半成品');
+  b.gnd('gnd');
+  b.unit('res', { a: 'y', b: 'gnd' }, 'R1');
+  b.port('a', 'in', 'a_dangling');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/**
+ * 教学关·悬空与默认电平的半成品：三极管开关已接（集电极→输出、发射极→GND、
+ * 基极→输入），只差「上拉电阻 VCC → 输出 y」—— 上拉就是这关要教的主角。
+ */
+export function floatIntroSeed(id = 'seed-float-intro'): Design {
+  const b = new DesignBuilder(id, '悬空与默认电平 · 半成品');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('npn', { c: 'y', b: 'a', e: 'gnd' }, 'Q1');
+  b.port('a', 'in', 'a');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
 /** 教学关·认识二极管：单向导通，a → y（成本 5 = 1 二极管 + 1 下拉电阻） */
 export function dioIntroRef(id = 'ref-dio-intro'): Design {
   const b = new DesignBuilder(id, '认识二极管');

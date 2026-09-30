@@ -21,6 +21,20 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     expect(screen.getByText('非门').closest('button')?.disabled).toBe(true);
   });
 
+  it('教学关：进关弹「元件课堂」概念卡，关闭后是半成品工作台 + 引导条', () => {
+    render(<App />); // 不 seed：认识三极管就是第一关
+    fireEvent.click(screen.getByText('关卡模式'));
+    fireEvent.click(screen.getByText('认识三极管'));
+    // 先讲课：概念卡弹窗（生活类比 + 要点）
+    expect(screen.getByRole('dialog', { name: '元件课堂' })).toBeTruthy();
+    expect(screen.getByText(/电的水闸/)).toBeTruthy();
+    // 点「去搭一下试试」→ 工作台：委托单 + 引导条（跟着做）
+    fireEvent.click(screen.getByText(/去搭一下试试/));
+    expect(screen.getByText(/委托单 · 认识三极管/)).toBeTruthy();
+    expect(screen.getByText(/动手搭 · 跟着做/)).toBeTruthy();
+    expect(screen.getByText(/第一步：把三极管的基极/)).toBeTruthy();
+  });
+
   it('首次启动进主菜单：关卡模式 / 自由搭建 / 无「继续上次」', () => {
     renderApp();
     expect(screen.getByText('逐层电路')).toBeTruthy();

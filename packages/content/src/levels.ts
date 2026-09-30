@@ -10,17 +10,27 @@
  * 单管反相器成本 4（输出弱 1），加射极跟随器成本 7（输出强 1，级联更稳）。
  */
 
-import { budgetFromOptimal, type Level, type LevelVector, parseLevel, type Unit } from '@lc/schema';
+import {
+  budgetFromOptimal,
+  type Design,
+  type Level,
+  type LevelVector,
+  parseLevel,
+  type Unit,
+} from '@lc/schema';
 import { STAGE3_LEVELS } from './levels-ari.js';
 import { STAGE2_LEVELS } from './levels-seq.js';
 import {
   andGateRef,
   dioIntroRef,
+  dioIntroSeed,
   floatIntroRef,
+  floatIntroSeed,
   nandGateRef,
   norFastRef,
   notGateRef,
   npnIntroRef,
+  npnIntroSeed,
   orGateRef,
   xnorGateRef,
   xorGateRef,
@@ -70,6 +80,12 @@ function gateLevel(input: {
   allowedUnits?: readonly Unit[];
   /** 教学关必用元件（防止直连导线钻空子） */
   requiredUnits?: readonly Unit[];
+  /** 教学关「元件课堂」概念卡（有 classroom 的关 = 教学关） */
+  classroom?: { title: string; analogy: string; points: string[] };
+  /** 教学关半成品电路（画布预置，玩家补关键连接） */
+  seedDoc?: Design;
+  /** 教学关引导步骤（工作台顶部提示条） */
+  guideSteps?: readonly string[];
   /** 覆写白名单（moduleAccess = 'listed' 时生效） */
   allowedModules?: readonly string[];
   /** 复古复用关禁用的模块名 */
@@ -103,6 +119,9 @@ function gateLevel(input: {
     timingBudgetPs: input.timingBudgetPs,
     allowedUnits: [...(input.allowedUnits ?? STAGE1_UNITS)],
     requiredUnits: [...(input.requiredUnits ?? [])],
+    ...(input.classroom ? { classroom: input.classroom } : {}),
+    ...(input.seedDoc ? { seedDoc: input.seedDoc } : {}),
+    guideSteps: [...(input.guideSteps ?? [])],
     moduleAccess: input.moduleAccess,
     allowedModules: [...(input.allowedModules ?? [])],
     bannedModules: [...(input.bannedModules ?? [])],
@@ -132,6 +151,22 @@ export const STAGE1_LEVELS: Level[] = [
     timingBudgetPs: 2000,
     allowedUnits: ['npn', 'res'],
     requiredUnits: ['npn'],
+    classroom: {
+      title: '三极管：电的水闸',
+      analogy:
+        '基极是闸门把手，集电极→发射极是水管。把手一提（基极得电），水就流过去（电路导通）。',
+      points: [
+        '三只脚各管一摊：基极（b）是开关把手、集电极（c）是进水口、发射极（e）是出水口',
+        '基极一给电，集电极到发射极就通了 —— 像脚垫一踩门铃就响',
+        '没人踩的时候输出会「悬空」乱跳，要挂电阻把输出稳稳拉回 0',
+      ],
+    },
+    seedDoc: npnIntroSeed(),
+    guideSteps: [
+      '第一步：把三极管的基极（b）接到输入 a —— 这就是「闸门把手」',
+      '第二步：确认输出 y 挂着下拉电阻到 GND（没有就补一个）',
+      '第三步：点「交付验收」，踩响抬停就对了',
+    ],
     moduleAccess: 'none',
     reference: npnIntroRef('ref-npn-intro'),
     unlockName: '跟随器',
@@ -151,6 +186,21 @@ export const STAGE1_LEVELS: Level[] = [
     timingBudgetPs: 2000,
     allowedUnits: ['dio', 'res'],
     requiredUnits: ['dio'],
+    classroom: {
+      title: '二极管：单向门',
+      analogy: '电流只许从阳极流向阴极 —— 像单向门只能推开不能往回拉；手机充电线防反接靠的就是它。',
+      points: [
+        '两个方向：阳极（a）进、阴极（k）出，接对了电流才流过',
+        '接反了电路不通（门铃哑）—— 这关考的就是方向',
+        '方向接反时验收会打回，先想清楚再接线',
+      ],
+    },
+    seedDoc: dioIntroSeed(),
+    guideSteps: [
+      '第一步：从元件库拖一个二极管放到画布上',
+      '第二步：阳极接输入 a、阴极接输出 y（方向别搞反！）',
+      '第三步：点「交付验收」，进门方向响就对了',
+    ],
     moduleAccess: 'none',
     reference: dioIntroRef('ref-dio-intro'),
     unlockName: '二极管缓冲',
@@ -170,6 +220,20 @@ export const STAGE1_LEVELS: Level[] = [
     timingBudgetPs: 2000,
     allowedUnits: ['npn', 'res'],
     requiredUnits: ['npn'],
+    classroom: {
+      title: '悬空与默认电平',
+      analogy: '没人推的弹簧门自己关着 —— 没人驱动的线是「悬空」的，会乱跳；电阻把它稳稳钉住。',
+      points: [
+        '上拉电阻：输出接到 VCC → 默认是 1',
+        '下拉电阻：输出接到 GND → 默认是 0',
+        '这一关输出默认 1：输入 a 一给电，三极管把输出拉低 —— 就是「反」了一下',
+      ],
+    },
+    seedDoc: floatIntroSeed(),
+    guideSteps: [
+      '第一步：挂一个上拉电阻，把输出 y 接到 VCC（默认 1）',
+      '第二步：点「交付验收」，a=0 亮、a=1 灭就对了',
+    ],
     moduleAccess: 'none',
     reference: floatIntroRef('ref-float-intro'),
     unlockName: '上拉反相器',

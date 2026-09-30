@@ -116,6 +116,24 @@ export const LevelSchema = z.object({
     })
     .optional(),
   referenceSolution: DesignSchema.optional(),
+  /**
+   * 教学关「元件课堂」：进关先弹的概念卡（生活类比 + 要点）。
+   * 有 classroom 的关 = 教学关，工作台顶部还会显示 guideSteps 引导条。
+   */
+  classroom: z
+    .object({
+      /** 课堂标题，如「三极管：电的水闸」 */
+      title: z.string().min(1),
+      /** 生活类比一句话 */
+      analogy: z.string().min(1),
+      /** 要点列表（三只脚 / 方向 / 上拉下拉等） */
+      points: z.array(z.string()).min(1),
+    })
+    .optional(),
+  /** 教学关半成品电路：画布预置搭到一半，玩家补关键 1~2 处连接 */
+  seedDoc: DesignSchema.optional(),
+  /** 教学关引导步骤：搭到一半时顶部提示条逐条引导 */
+  guideSteps: z.array(z.string()).default([]),
 });
 
 export type Level = z.infer<typeof LevelSchema>;

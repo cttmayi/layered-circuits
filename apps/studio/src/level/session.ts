@@ -8,7 +8,7 @@
 import { ALL_LEVELS, findLevel } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { notGateDemo } from '../editor/demos';
-import type { Doc, StoredModule } from '../editor/model';
+import { type Doc, fromDesign, type StoredModule } from '../editor/model';
 import { docForLevel, isLevelUnlocked, loadProgress, type Progress } from './progress';
 
 export type GameMode = 'level' | 'free';
@@ -53,6 +53,15 @@ export function docFor(mode: GameMode, levelId: string, library: StoredModule[])
     // 有全量组件库，读档恢复时也不背（否则一个非门关卡会带着十几个无关模块）。
     return {
       ...stored,
+      library: level.moduleAccess === 'none' ? [] : library,
+      name: level.title,
+    };
+  }
+  // 教学关半成品：无存档时画布预置搭到一半的电路（玩家补关键连接），
+  // 而不是一张空白画布 —— 这就是「教学感」的核心：讲解后跟着模仿。
+  if (level.seedDoc) {
+    return {
+      ...fromDesign(level.seedDoc, docForLevel(level, [])),
       library: level.moduleAccess === 'none' ? [] : library,
       name: level.title,
     };

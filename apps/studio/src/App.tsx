@@ -66,6 +66,7 @@ import {
   storageKeyFor,
 } from './level/session';
 import { applySideJob, findSideJob } from './level/sideJobs';
+import { ClassroomModal } from './panels/ClassroomModal';
 import { Inspector } from './panels/Inspector';
 import { JudgePanel } from './panels/JudgePanel';
 import { LevelCard } from './panels/LevelCard';
@@ -177,6 +178,8 @@ export function App(): React.JSX.Element {
   const [settlement, setSettlement] = useState<JudgeResult | null>(null);
   /** 本次交付的星数（结算页展示） */
   const [settlementStars, setSettlementStars] = useState(0);
+  /** 教学关「元件课堂」概念卡：进教学关先讲课（有 classroom 的关才弹） */
+  const [classroomOpen, setClassroomOpen] = useState(false);
   /** 中央提示对话框（图纸解开等小节点） */
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
   /** 黑盒侦察对话框（开工后若图纸未测则直接进入） */
@@ -819,6 +822,9 @@ export function App(): React.JSX.Element {
     setScreen('bench');
     // 进关即开工并持久化：刷新直接回工作台；支线等委托选项在左侧图纸卡上随时可选
     setProgress((prev) => (isNewJob(prev, nextLevelId) ? setStarted(prev, nextLevelId) : prev));
+    // 教学关先讲课：进工作台前弹「元件课堂」概念卡
+    const levelObj = findLevel(nextLevelId);
+    setClassroomOpen(Boolean(levelObj?.classroom));
   };
 
   /** 进入自由沙盒 */
@@ -1264,6 +1270,9 @@ export function App(): React.JSX.Element {
                 ? '再点一个引脚完成连线（Esc 取消）'
                 : '拖动空白处平移 · 滚轮缩放 · 点两个引脚连线 · 双击连线删除 · 点输入符号切换 0/1（Alt 循环 X/Z）'}
           </div>
+          {classroomOpen && currentLevel?.classroom && (
+            <ClassroomModal level={currentLevel} onStart={() => setClassroomOpen(false)} />
+          )}
           {answerCandidates && (
             <Modal title="一键出答案" onClose={() => setAnswerCandidates(null)}>
               <p className="answer-choices-hint">这一关两种版本都可以搭到画布上，选一个：</p>
