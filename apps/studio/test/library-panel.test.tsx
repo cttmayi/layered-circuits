@@ -273,26 +273,6 @@ describe('任务墙与星级（P1）', () => {
   });
 });
 
-describe('在委托单上接支线（操作在工作台内完成）', () => {
-  beforeEach(() => localStorage.clear());
-
-  it('在左侧委托单上点接加急单，支线状态生效', () => {
-    renderApp();
-    goToLevel('非门'); // 进关即开工，支线在工作台里随时可选
-    const job = screen.getByText(/加急单/).closest('button');
-    expect(job).toBeTruthy();
-    if (job) fireEvent.click(job);
-    // 支线已生效：委托单上显示已接
-    expect(screen.getByText(/已接支线/)).toBeTruthy();
-  });
-
-  it('不接支线：只做主线', () => {
-    renderApp();
-    goToLevel('非门');
-    expect(screen.queryByText(/已接支线/)).toBeNull();
-  });
-});
-
 describe('元件拖拽放置', () => {
   beforeEach(() => localStorage.clear());
 

@@ -1,32 +1,19 @@
 import { commissionOf, contractOf } from '@lc/content';
 import type { Level } from '@lc/schema';
-import { sideJobsOf } from '../level/sideJobs';
 
 export interface LevelCardProps {
   level: Level;
   /** 当前电路成本（半单位） */
   costHalf: number;
-  /** 当前接的支线单（null = 只做主线） */
-  sideJob: string | null;
-  /** 已完成的支线单 key 列表 */
-  doneSideJobs: string[];
-  onPickSideJob: (key: string | null) => void;
 }
 
 const CELL: Record<string, string> = { 0: 'lo', 1: 'hi', X: 'bad', Z: 'dim' };
 
 /** 左侧「图纸卡」：图纸（真值表）+ 合同摘要 + 用料进度 —— 搭建时的高频参考。
  * 需求真值表完全展示（不做黑盒隐藏）；客户/需求等叙事内容只在「新委托」弹窗里出现。 */
-export function LevelCard({
-  level,
-  costHalf,
-  sideJob,
-  doneSideJobs,
-  onPickSideJob,
-}: LevelCardProps): React.JSX.Element {
+export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Element {
   const contract = contractOf(level);
   const commission = commissionOf(level);
-  const jobs = sideJobsOf(level);
   const budget = level.budgetHalf;
   const ratio = budget > 0 ? Math.min(1, costHalf / budget) : 0;
   const over = costHalf > budget;
@@ -137,32 +124,6 @@ export function LevelCard({
           ))}
         </tbody>
       </table>
-
-      <div className="side-jobs">
-        {sideJob ? (
-          <p className="dim small side-job-state">
-            已接支线：{jobs.find((j) => j.key === sideJob)?.title}（验收按支线条件判）·{' '}
-            <button type="button" className="link" onClick={() => onPickSideJob(null)}>
-              点此取消
-            </button>
-            {doneSideJobs.includes(sideJob) && <b className="side-job-done">已完成</b>}
-          </p>
-        ) : (
-          <div className="side-jobs-options">
-            <span className="dim small">支线单（可选，接了更赚、判得更严）：</span>
-            {jobs.map((job) => (
-              <button
-                key={job.key}
-                type="button"
-                className="link"
-                onClick={() => onPickSideJob(job.key)}
-              >
-                {job.title} +{job.bonusHalf / 2}元
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
 
       {level.timingBudgetPs !== undefined && (
         <p className="dim small">

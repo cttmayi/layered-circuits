@@ -51,7 +51,6 @@ import {
   rankOf,
   recordAttempt,
   recordClear,
-  recordSideJob,
   saveProgress,
   setStarted,
   starsOf,
@@ -64,7 +63,6 @@ import {
   levelOf,
   storageKeyFor,
 } from './level/session';
-import { applySideJob, findSideJob } from './level/sideJobs';
 import { ClassroomModal } from './panels/ClassroomModal';
 import { FamilyPicker } from './panels/FamilyPicker';
 import { Inspector } from './panels/Inspector';
@@ -184,7 +182,6 @@ export function App(): React.JSX.Element {
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
   /** 黑盒侦察对话框（开工后若图纸未测则直接进入） */
   /** 当前接的支线单（同一时刻最多一条，验收按支线条件判） */
-  const [sideJobKey, setSideJobKey] = useState<string | null>(null);
   /** 封装过场：电路被压成一颗芯片落进组件库 */
   const [chipDrop, setChipDrop] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 900, height: 600 });
@@ -814,7 +811,6 @@ export function App(): React.JSX.Element {
     setPlacing(null);
     setPendingPin(null);
     setPendingPoint(null);
-    setSideJobKey(null);
   };
 
   /** 进入关卡工作台：直接开工（不再弹「新委托」选择），验收通过自动打钩发奖励 */
@@ -865,7 +861,6 @@ export function App(): React.JSX.Element {
     localStorage.removeItem(FREE_STORAGE_KEY);
     for (const lvl of ALL_LEVELS) localStorage.removeItem(storageKeyFor('level', lvl.id));
     setProgress(emptyProgress(family));
-    setSideJobKey(null);
     setSettlement(null);
     setSettlementStars(0);
     setChipDrop(null);
@@ -876,9 +871,8 @@ export function App(): React.JSX.Element {
 
   // ---- 关卡校验：判定跑在 Worker/主线程，用的就是画布上这份电路 ----
   /** 判定用的关卡：接了支线单就套上支线条件（规则与主线同源，只是更严） */
-  const activeSideJob = findSideJob(currentLevel, sideJobKey);
-  const judgedLevel =
-    currentLevel && activeSideJob ? applySideJob(currentLevel, activeSideJob) : currentLevel;
+  // 验收判定用的关卡：与当前关一致（无支线单后不再替换判定条件）
+  const judgedLevel = currentLevel;
 
   const runJudge = async (): Promise<void> => {
     if (!judgedLevel) return;
@@ -950,19 +944,15 @@ export function App(): React.JSX.Element {
     commit({ ...doc, library: addModule(doc.library, stored) });
     // 星级：功能（交付成功）/ 成本（满分）/ 时序（硬核或时序达标）
     const stars = starsOf(judge, forcedHardcore || mode === 'timing');
-    setProgress((prev) => {
-      const cleared = recordClear(
+    setProgress((prev) =>
+      recordClear(
         { ...prev, library: addModule(prev.library, stored) },
         currentLevel.id,
         judge.score,
         judge.costHalf,
         stars,
-      );
-      // 支线单达成 → 额外奖金入钱包
-      return activeSideJob
-        ? recordSideJob(cleared, currentLevel.id, activeSideJob.key, activeSideJob.bonusHalf)
-        : cleared;
-    });
+      ),
+    );
     const index = ALL_LEVELS.findIndex((l) => l.id === currentLevel.id);
     const next = ALL_LEVELS[index + 1];
     // 过场：芯片落进组件库 → 结算页（客户验收报告 + 钱 + 评级）
@@ -1343,17 +1333,7 @@ export function App(): React.JSX.Element {
 
         {rightOpen && (
           <div className="side">
-            {currentLevel && (
-              <LevelCard
-                level={currentLevel}
-                costHalf={snapshot?.cost.half ?? 0}
-                sideJob={sideJobKey}
-                doneSideJobs={Object.keys(progress.sideJobs)
-                  .filter((id) => id.startsWith(`${currentLevel.id}:`))
-                  .map((id) => id.slice(currentLevel.id.length + 1))}
-                onPickSideJob={setSideJobKey}
-              />
-            )}
+            {currentLevel && <LevelCard level={currentLevel} costHalf={snapshot?.cost.half ?? 0} />}
             {currentLevel && (
               <JudgePanel
                 level={judgedLevel ?? currentLevel}
@@ -1368,8 +1348,6 @@ export function App(): React.JSX.Element {
               <SettlementPanel
                 level={currentLevel}
                 stars={settlementStars}
-                sideJob={activeSideJob}
-                sideJobDone={Boolean(progress.sideJobs[`${currentLevel.id}:${activeSideJob?.key}`])}
                 levelName={currentLevel.unlock?.name ?? currentLevel.title}
                 result={settlement}
                 previousScore={levelRecord?.score ?? null}

@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { buyEquipment, EQUIPMENT, ownsEquipment, spendableHalf } from '../src/level/equipment';
-import { emptyProgress, recordClear, recordSideJob } from '../src/level/progress';
+import { emptyProgress, recordClear } from '../src/level/progress';
 
 describe('工具铺', () => {
   it('设备目录：只有省操作的探针与游标，没有一键测完', () => {
@@ -11,10 +11,10 @@ describe('工具铺', () => {
   });
 
   it('购买会扣可用余额，不能重复买，钱不够会被拒绝', () => {
-    // 挣到 5.5 元（11 半）：一次通关 + 一次支线
+    // 挣到 5.5 元（11 半）：一次通关 + 手工加钱（模拟再来一单的利润）
     let progress = emptyProgress();
     progress = recordClear(progress, 's1-not', 100, 8, 3); // 利润 7 半（款项 15 − 材料费 8）
-    progress = recordSideJob(progress, 's1-not', 'rush', 4);
+    progress.walletHalf += 4;
     expect(spendableHalf(progress)).toBe(11);
 
     // 探针 12 元买不起 → 拒绝
