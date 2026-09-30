@@ -34,14 +34,14 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
       </p>
       <ul className="contract-list">
         <li>
-          <span className="contract-key">成本</span>
+          <span className="contract-key">预算</span>
           <strong className="contract-val">
             {contract.costCap === null ? '按最省结算' : `≤ ${contract.costCap.toFixed(1)} 元`}
           </strong>
         </li>
         {contract.timingCap !== null && (
           <li>
-            <span className="contract-key">关键路径</span>
+            <span className="contract-key">延迟</span>
             <strong className="contract-val">≤ {contract.timingCap.toFixed(1)} ns</strong>
           </li>
         )}
