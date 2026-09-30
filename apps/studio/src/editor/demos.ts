@@ -117,8 +117,9 @@ export function floatIntroSeedDoc(): Doc {
   const doc = emptyDoc();
   doc.name = '悬空与默认电平 · 半成品';
   doc.syms = [
-    sym({ id: 'in-a', kind: 'input', x: 60, y: 230, label: 'a', value: 0 }),
-    sym({ id: 'out-y', kind: 'output', x: 660, y: 230, label: 'y' }),
+    // 实物图标：输入=推门按钮（按下=1）、输出=弹簧门（关好=1）
+    sym({ id: 'in-a', kind: 'input', x: 60, y: 230, label: 'a', value: 0, sprite: 'button' }),
+    sym({ id: 'out-y', kind: 'output', x: 660, y: 230, label: 'y', sprite: 'door' }),
     sym({ id: 'vcc', kind: 'vcc', x: 420, y: 70, label: 'VCC' }),
     sym({ id: 'gnd', kind: 'gnd', x: 300, y: 340, label: 'GND' }),
     sym({ id: 'q1', kind: 'unit', unit: 'npn', x: 300, y: 230, label: 'Q1' }),
