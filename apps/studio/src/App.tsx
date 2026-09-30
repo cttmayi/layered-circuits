@@ -938,8 +938,10 @@ export function App(): React.JSX.Element {
 
   /** 复制当前电路 JSON：方便贴给我检查布线 / 分享 / 调试 */
   const copyCircuit = (): void => {
+    // 复制的是「电路」，不背全局组件库（模块是进度的一部分，与布线无关）
+    const { library: _library, ...canvas } = doc;
     void navigator.clipboard
-      .writeText(JSON.stringify(doc))
+      .writeText(JSON.stringify(canvas))
       .then(() => setToast('当前电路已复制到剪贴板（粘贴给我即可检查）'))
       .catch(() => setToast('复制失败：请用控制台 copy(localStorage.getItem(KEY))'));
   };

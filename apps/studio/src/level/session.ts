@@ -49,7 +49,13 @@ export function docFor(mode: GameMode, levelId: string, library: StoredModule[])
   const level = findLevel(levelId);
   if (!level) return { ...notGateDemo(), library };
   if (stored?.syms.some((sym) => sym.kind === 'input' || sym.kind === 'output')) {
-    return { ...stored, library, name: level.title };
+    // 入门关（moduleAccess 'none'）用不到任何模块：即使玩家画过这关、即使存档里
+    // 有全量组件库，读档恢复时也不背（否则一个非门关卡会带着十几个无关模块）。
+    return {
+      ...stored,
+      library: level.moduleAccess === 'none' ? [] : library,
+      name: level.title,
+    };
   }
   return docForLevel(level, library);
 }

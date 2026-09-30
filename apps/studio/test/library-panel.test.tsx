@@ -65,6 +65,82 @@ describe('组件库与成绩面板', () => {
     expect(screen.getByText(/追赶 3/)).toBeTruthy();
   });
 
+  it('非门关已有画布存档时，读档恢复也不背全量组件库', () => {
+    // 进度库里有模块 + 非门关已有玩家画布存档（走 docFor 的读档分支，历史上
+    // 该分支会把全量模块库重新注入 doc.library —— 修复后入门关不再背）
+    localStorage.setItem(
+      PROGRESS_KEY,
+      JSON.stringify({
+        cleared: { 's1-not': { score: 100, bestCostHalf: 8, clearedAt: Date.now() } },
+        attempts: {},
+        library: [
+          {
+            hash: 'hash-not-1',
+            name: '非门',
+            version: '1.0',
+            stage: 1,
+            costHalf: 8,
+            isSequential: false,
+            ports: [
+              { id: 'a', name: 'a', dir: 'in', width: 1 },
+              { id: 'y', name: 'y', dir: 'out', width: 1 },
+            ],
+            template: { hash: 'hash-not-1' },
+            levelId: 's1-not',
+            sources: [],
+            createdAt: Date.now(),
+          },
+          {
+            hash: 'hash-alu-1',
+            name: '简易ALU',
+            version: '1.0',
+            stage: 3,
+            costHalf: 728,
+            isSequential: false,
+            ports: [],
+            template: { hash: 'hash-alu-1' },
+            levelId: 's3-alu',
+            sources: [],
+            createdAt: Date.now(),
+          },
+        ],
+      }),
+    );
+    // 非门关已有画布存档：一键出答案后的布局（旧存档里还带着历史 library 字段）
+    localStorage.setItem(
+      'lc-studio-level-s1-not-v1',
+      JSON.stringify({
+        id: 'level-s1-not',
+        name: '非门',
+        syms: [
+          {
+            id: 'in-a',
+            kind: 'input',
+            x: 40,
+            y: 200,
+            value: 0,
+            label: 'a',
+            width: 1,
+            locked: true,
+          },
+          { id: 'out-y', kind: 'output', x: 700, y: 200, label: 'y', width: 1, locked: true },
+          { id: 'vcc1', kind: 'vcc', x: 120, y: 30, label: 'VCC' },
+          { id: 'gnd1', kind: 'gnd', x: 120, y: 354, label: 'GND' },
+          { id: 'res1', kind: 'unit', x: 120, y: 90, label: 'R1', unit: 'res' },
+          { id: 'npn1', kind: 'unit', x: 120, y: 274, label: 'Q1', unit: 'npn' },
+          { id: 'res2', kind: 'unit', x: 120, y: 182, label: 'R2', unit: 'res' },
+        ],
+        wires: [],
+        library: [{ hash: 'hash-not-1', name: '非门', version: '1.0', stage: 1, costHalf: 8 }],
+      }),
+    );
+    render(<App />);
+    goToLevel('非门'); // 已通关：不弹委托，直接进工作台（走读档分支）
+    fireEvent.click(screen.getByText('组件库'));
+    // 入门关不显示任何模块（即使进度库有 2 个模块、旧画布存档里也带着模块）
+    expect(screen.getAllByText('我的模块（0）').length).toBeGreaterThanOrEqual(1);
+  });
+
   it('允许模块的关（与非门）：显示存档里的模块版本与溯源', () => {
     // 预置存档：一个模块版本 + 前三关通关记录（解锁「与非门」，moduleAccess all）
     localStorage.setItem(
