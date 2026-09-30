@@ -1,4 +1,4 @@
-import { contractOf } from '@lc/content';
+import { commissionOf, contractOf } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { useState } from 'react';
 import { sideJobsOf } from '../level/sideJobs';
@@ -35,6 +35,7 @@ export function LevelCard({
 }: LevelCardProps): React.JSX.Element {
   const [showTeaching, setShowTeaching] = useState(false);
   const contract = contractOf(level);
+  const commission = commissionOf(level);
   const jobs = sideJobsOf(level);
   const budget = level.budgetHalf;
   const ratio = budget > 0 ? Math.min(1, costHalf / budget) : 0;
@@ -48,6 +49,10 @@ export function LevelCard({
   return (
     <section className="panel level-card">
       <h3>委托单 · {level.title}</h3>
+      <p className="commission-client">
+        <span className="client-tag">委托方</span>
+        <span>{commission.client}</span> —— 「{commission.note}」
+      </p>
       <p className="contract-summary">
         款项 {contract.pay} · 交期 {contract.deadline} · 禁忌 {contract.taboo}
       </p>
@@ -117,9 +122,19 @@ export function LevelCard({
             {doneSideJobs.includes(sideJob) && <b className="side-job-done">已完成</b>}
           </p>
         ) : (
-          <p className="dim small side-job-state">
-            支线单：{jobs.map((j) => `${j.title}+${j.bonusHalf / 2}元`).join(' / ')}（接单时可选）
-          </p>
+          <div className="side-jobs-options">
+            <span className="dim small">支线单（可选，接了更赚、判得更严）：</span>
+            {jobs.map((job) => (
+              <button
+                key={job.key}
+                type="button"
+                className="link"
+                onClick={() => onPickSideJob(job.key)}
+              >
+                {job.title} +{job.bonusHalf / 2}元
+              </button>
+            ))}
+          </div>
         )}
       </div>
 

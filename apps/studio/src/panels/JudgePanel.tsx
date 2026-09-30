@@ -89,6 +89,17 @@ export function JudgePanel({
                   )}
                 </td>
               </tr>
+              {result.timing.portDelayPs !== null &&
+                Object.keys(result.timing.portDelayPs).length > 0 && (
+                  <tr>
+                    <td>各输出延迟</td>
+                    <td className="num">
+                      {Object.entries(result.timing.portDelayPs)
+                        .map(([name, ps]) => `${name} ${(ps / 1000).toFixed(2)}ns`)
+                        .join(' · ')}
+                    </td>
+                  </tr>
+                )}
               <tr>
                 <td>结构</td>
                 <td className="num">

@@ -101,6 +101,29 @@ export function SettlementPanel({
               <td>钱包余额</td>
               <td className="num">{walletHalf / 2} 元</td>
             </tr>
+            <tr>
+              <td>关键路径</td>
+              <td className="num">
+                {(result.criticalPathPs / 1000).toFixed(2)} ns
+                {result.timingBudgetPs !== null && (
+                  <span className={result.timingOk ? 'dim' : 'bad'}>
+                    {' '}
+                    / ≤{(result.timingBudgetPs / 1000).toFixed(2)}
+                  </span>
+                )}
+              </td>
+            </tr>
+            {result.timing.portDelayPs !== null &&
+              Object.keys(result.timing.portDelayPs).length > 0 && (
+                <tr>
+                  <td>各输出延迟</td>
+                  <td className="num">
+                    {Object.entries(result.timing.portDelayPs)
+                      .map(([name, ps]) => `${name} ${(ps / 1000).toFixed(2)}ns`)
+                      .join(' · ')}
+                  </td>
+                </tr>
+              )}
           </tbody>
         </table>
 

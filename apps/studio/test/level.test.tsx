@@ -278,9 +278,7 @@ describe('关卡界面', () => {
     );
     render(<App />);
     // 主菜单应显示「继续上次」直达第 2 关之前的会话？没有开工记录时走地图选关
-    goToLevel('与门');
-    // 新单 → 弹委托 → 开工
-    fireEvent.click(screen.getByText('开工'));
+    goToLevel('与门'); // 进关即开工（不再弹「新委托」）
     await waitFor(() => expect(screen.getByText(/委托单 · 与门/)).toBeTruthy(), {
       timeout: 5000,
     });

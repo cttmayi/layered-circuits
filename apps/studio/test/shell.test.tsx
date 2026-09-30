@@ -4,9 +4,9 @@
  * 开工状态持久化：刷新后主菜单出现「继续上次」，直接回工作台不重弹委托。
  */
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
-import { startJob } from './helpers';
+import { goToLevel, startJob } from './helpers';
 
 describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
   beforeEach(() => localStorage.clear());
@@ -49,5 +49,41 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     fireEvent.click(screen.getByText('自由搭建'));
     expect(screen.getByText(/电路工作台/)).toBeTruthy();
     expect(screen.queryByText('交付验收')).toBeNull();
+  });
+
+  it('进关即开工：新单不再弹「新委托」，直接进工作台；刷新后不重弹', () => {
+    const first = render(<App />);
+    goToLevel('非门'); // 第一关：新单也直接开工
+    expect(screen.queryByText('新委托')).toBeNull();
+    expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
+    first.unmount();
+    render(<App />); // 模拟刷新：started 已持久化
+    fireEvent.click(screen.getByText(/继续上次/));
+    expect(screen.queryByText('新委托')).toBeNull();
+    expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
+  });
+
+  it('主菜单「新游戏」：确认后清空存档、回到全新主菜单', () => {
+    // 先有进度：通关第 1 关 + 钱包余额
+    const first = render(<App />);
+    goToLevel('非门');
+    first.unmount();
+    const before = JSON.parse(localStorage.getItem('lc-studio-progress-v1') ?? '{}');
+    expect(Object.keys(before.cleared ?? {}).length).toBe(0);
+    expect(before.started?.['s1-not']).toBe(true); // 进关即开工已持久化
+    // 有存档 → 主菜单出现「继续上次」
+    render(<App />);
+    expect(screen.getByText(/继续上次/)).toBeTruthy();
+    // 点「新游戏」并确认
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(screen.getByText('新游戏'));
+    expect(window.confirm).toHaveBeenCalled();
+    expect(screen.queryByText(/继续上次/)).toBeNull();
+    // 存档已清空为全新进度（自动保存 effect 会把空进度写回，内容不含任何记录）
+    const after = JSON.parse(localStorage.getItem('lc-studio-progress-v1') ?? '{}');
+    expect(Object.keys(after.cleared ?? {}).length).toBe(0);
+    expect(after.started?.['s1-not'] ?? false).toBe(false);
+    expect(screen.getByText('关卡模式')).toBeTruthy(); // 回到全新主菜单
+    confirmSpy.mockRestore();
   });
 });

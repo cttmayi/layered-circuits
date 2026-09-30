@@ -39,11 +39,13 @@ import { buyEquipment, ownsEquipment } from './level/equipment';
 import { addModule, dedupeLibrary, storeModule } from './level/library';
 import {
   docForLevel,
+  emptyProgress,
   exportSave,
   importSave,
   isCleared,
   isNewJob,
   leaderboard,
+  PROGRESS_KEY,
   type Progress,
   rankOf,
   reconCount,
@@ -55,9 +57,15 @@ import {
   setStarted,
   starsOf,
 } from './level/progress';
-import { docFor, type GameMode, initialSession, levelOf, storageKeyFor } from './level/session';
+import {
+  docFor,
+  FREE_STORAGE_KEY,
+  type GameMode,
+  initialSession,
+  levelOf,
+  storageKeyFor,
+} from './level/session';
 import { applySideJob, findSideJob } from './level/sideJobs';
-import { CommissionModal } from './panels/CommissionModal';
 import { Inspector } from './panels/Inspector';
 import { JudgePanel } from './panels/JudgePanel';
 import { LevelCard } from './panels/LevelCard';
@@ -169,8 +177,6 @@ export function App(): React.JSX.Element {
   const [settlement, setSettlement] = useState<JudgeResult | null>(null);
   /** 本次交付的星数（结算页展示） */
   const [settlementStars, setSettlementStars] = useState(0);
-  /** 接单对话框：只对「新单」状态的关弹（开工/通关后刷新不再弹） */
-  const [commissionOpen, setCommissionOpen] = useState(false);
   /** 中央提示对话框（图纸解开等小节点） */
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
   /** 黑盒侦察对话框（开工后若图纸未测则直接进入） */
@@ -804,14 +810,15 @@ export function App(): React.JSX.Element {
     setSideJobKey(null);
   };
 
-  /** 进入关卡工作台；新单弹「新委托」，已开工/已通关的直接继续 */
+  /** 进入关卡工作台：直接开工（不再弹「新委托」选择），验收通过自动打钩发奖励 */
   const enterLevel = (nextLevelId: string): void => {
     setGameMode('level');
     setLevelId(nextLevelId);
     setDoc(docFor('level', nextLevelId, progress.library));
     clearTransient();
     setScreen('bench');
-    if (isNewJob(progress, nextLevelId)) setCommissionOpen(true);
+    // 进关即开工并持久化：刷新直接回工作台；支线等委托选项在左侧图纸卡上随时可选
+    setProgress((prev) => (isNewJob(prev, nextLevelId) ? setStarted(prev, nextLevelId) : prev));
   };
 
   /** 进入自由沙盒 */
@@ -835,6 +842,21 @@ export function App(): React.JSX.Element {
   const goToMenu = (): void => setScreen('menu');
   /** 回关卡地图 */
   const goToMap = (): void => setScreen('map');
+
+  /** 新游戏：清掉全部本地存档（进度 / 各关画布 / 自由沙盒），重头开始 */
+  const startNewGame = (): void => {
+    if (!window.confirm('确定重头开始？当前进度、钱包与组件库都会被清空。')) return;
+    localStorage.removeItem(PROGRESS_KEY);
+    localStorage.removeItem(FREE_STORAGE_KEY);
+    for (const lvl of ALL_LEVELS) localStorage.removeItem(storageKeyFor('level', lvl.id));
+    setProgress(emptyProgress());
+    setSideJobKey(null);
+    setSettlement(null);
+    setSettlementStars(0);
+    setChipDrop(null);
+    clearTransient();
+    setScreen('menu');
+  };
 
   // ---- 关卡校验：判定跑在 Worker/主线程，用的就是画布上这份电路 ----
   /** 判定用的关卡：接了支线单就套上支线条件（规则与主线同源，只是更严） */
@@ -1011,6 +1033,7 @@ export function App(): React.JSX.Element {
         onContinue={() => enterLevel(session.levelId)}
         onLevelMode={goToMap}
         onFreeMode={enterFree}
+        onNewGame={startNewGame}
       />
     );
   }
@@ -1241,18 +1264,6 @@ export function App(): React.JSX.Element {
                 ? '再点一个引脚完成连线（Esc 取消）'
                 : '拖动空白处平移 · 滚轮缩放 · 点两个引脚连线 · 双击连线删除 · 点输入符号切换 0/1（Alt 循环 X/Z）'}
           </div>
-          {commissionOpen && currentLevel && (
-            <CommissionModal
-              key={currentLevel.id}
-              level={currentLevel}
-              onStart={(job) => {
-                setSideJobKey(job);
-                setCommissionOpen(false);
-                // 开工即持久化：以后刷新直接回到工作台，不再重选
-                setProgress((prev) => setStarted(prev, currentLevel.id));
-              }}
-            />
-          )}
           {answerCandidates && (
             <Modal title="一键出答案" onClose={() => setAnswerCandidates(null)}>
               <p className="answer-choices-hint">这一关两种版本都可以搭到画布上，选一个：</p>

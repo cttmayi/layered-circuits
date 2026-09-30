@@ -17,6 +17,8 @@ export interface MainMenuProps {
   onContinue: () => void;
   onLevelMode: () => void;
   onFreeMode: () => void;
+  /** 重头开始：清空存档回主菜单 */
+  onNewGame: () => void;
 }
 
 export function MainMenu({
@@ -26,6 +28,7 @@ export function MainMenu({
   onContinue,
   onLevelMode,
   onFreeMode,
+  onNewGame,
 }: MainMenuProps): React.JSX.Element {
   const rank = rankOf(progress);
   const cleared = clearedCount(progress);
@@ -50,6 +53,10 @@ export function MainMenu({
           <button type="button" className="menu-btn" onClick={onFreeMode}>
             自由搭建
             <span className="menu-btn-note">沙盒：不限预算与素材，练手封装</span>
+          </button>
+          <button type="button" className="menu-btn new-game" onClick={onNewGame}>
+            新游戏
+            <span className="menu-btn-note">清空进度与组件库，从头开始</span>
           </button>
         </div>
         <div className="menu-stats">

@@ -183,18 +183,14 @@ describe('组件库与成绩面板', () => {
 describe('委托单与结算（P0 游戏化外壳）', () => {
   beforeEach(() => localStorage.clear());
 
-  it('第 1 关显示成一张委托单：委托方、人话需求、合同条款', () => {
+  it('第 1 关进关即开工：委托方、人话需求、合同条款直接显示在左侧委托卡上', () => {
     render(<App />);
-    // 主菜单 → 关卡模式 → 点第 1 关 → 弹「新委托」对话框（中央），内容与左侧委托单一致
-    goToLevel('非门');
-    expect(screen.getByText('新委托')).toBeTruthy();
+    goToLevel('非门'); // 进关即开工，不再弹「新委托」
+    expect(screen.queryByText('新委托')).toBeNull();
     expect(screen.getAllByText('修表铺 · 老周').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/收音机的指示灯接反了/).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('款项').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('禁忌').length).toBeGreaterThanOrEqual(1);
-    // 点开工关掉对话框，左侧卡片仍在
-    fireEvent.click(screen.getByText('开工'));
-    expect(screen.queryByText('新委托')).toBeNull();
+    expect(screen.getAllByText(/款项/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/禁忌/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('委托单 · 非门')).toBeTruthy();
   });
 
@@ -262,38 +258,22 @@ describe('任务墙与星级（P1）', () => {
   });
 });
 
-describe('接单对话框里直接选支线（操作在中间完成）', () => {
+describe('在委托单上接支线（操作在工作台内完成）', () => {
   beforeEach(() => localStorage.clear());
 
-  /** 点击对话框里包含指定文本的那个按钮（卡片上也有同名文本，要取弹窗里的） */
-  function inModal(text: RegExp): HTMLButtonElement | undefined {
-    for (const node of screen.getAllByText(text)) {
-      if (!node.closest('.modal-box')) continue;
-      const button = node.closest('button');
-      if (button) return button as HTMLButtonElement;
-    }
-    return undefined;
-  }
-
-  it('在「新委托」对话框里接加急单，开工后支线状态生效', () => {
+  it('在左侧委托单上点接加急单，支线状态生效', () => {
     render(<App />);
-    goToLevel('非门'); // 新单 → 弹「新委托」
-    const job = inModal(/加急单/);
+    goToLevel('非门'); // 进关即开工，支线在工作台里随时可选
+    const job = screen.getByText(/加急单/).closest('button');
     expect(job).toBeTruthy();
     if (job) fireEvent.click(job);
-    const start = screen.getByText(/开工（接：加急单）/);
-    fireEvent.click(start);
     // 支线已生效：委托单上显示已接
-    expect(screen.queryByText('新委托')).toBeNull();
     expect(screen.getByText(/已接支线/)).toBeTruthy();
   });
 
-  it('不接支线开工：只做主线', () => {
+  it('不接支线：只做主线', () => {
     render(<App />);
-    goToLevel('非门'); // 新单 → 弹「新委托」
-    const start = inModal(/^开工$/);
-    if (start) fireEvent.click(start);
-    expect(screen.queryByText('新委托')).toBeNull();
+    goToLevel('非门');
     expect(screen.queryByText(/已接支线/)).toBeNull();
   });
 });

@@ -40,6 +40,8 @@ export interface JudgeRow {
 export interface JudgeTiming {
   clockPort: string | null;
   criticalPathPs: number;
+  /** 每个输出端口的实测延迟（ps）；null = 没做时序分析 */
+  portDelayPs: Record<string, number> | null;
   timingBudgetPs: number | null;
   timingOk: boolean;
   /** 实测建立/保持时间（ps）；null = 电路不是边沿触发或无法测量 */
@@ -304,10 +306,13 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     checks.maxGlitches !== undefined;
   let isSequential = false;
   let criticalPathPs = 0;
+  /** 每个输出端口的实测延迟（ps）；不做时序分析时为 null（纯成本判定） */
+  let portDelayPs: Record<string, number> | null = null;
   if (needAnalysis) {
     const analysis = analyzeTiming(net);
     isSequential = analysis.isSequential;
     criticalPathPs = analysis.criticalPathPs;
+    portDelayPs = analysis.portDelayPs;
     if (wantsCombinational && isSequential) {
       errors.push('判定为时序电路（输出依赖历史）：本关要的是纯组合逻辑');
     }
@@ -422,6 +427,7 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     timing: {
       clockPort: checks.clockPort ?? null,
       criticalPathPs,
+      portDelayPs,
       timingBudgetPs: level.timingBudgetPs ?? null,
       timingOk,
       setupPs,
