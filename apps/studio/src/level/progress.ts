@@ -47,9 +47,12 @@ export function starsOf(result: {
   criticalPathPs: number;
 }): number {
   if (!result.pass) return 0;
-  const costStars = ratioStars(result.costHalf, result.budgetHalf);
+  // 成本挑战关不设成本线（budgetHalf = 0）：成本档视为达标，只按传播延迟评星
+  const costStars = result.budgetHalf > 0 ? ratioStars(result.costHalf, result.budgetHalf) : 3;
   const delayStars =
-    result.timingBudgetPs !== null ? ratioStars(result.criticalPathPs, result.timingBudgetPs) : 3;
+    result.timingBudgetPs !== null && result.timingBudgetPs > 0
+      ? ratioStars(result.criticalPathPs, result.timingBudgetPs)
+      : 3;
   return Math.min(costStars, delayStars);
 }
 

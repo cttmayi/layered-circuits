@@ -397,8 +397,8 @@ export const STAGE1_LEVELS: Level[] = [
     reference: notGateRef('ref-not'),
     unlockName: '非门',
     familyRefs: {
-      cmos: { reference: cmosInvRef('ref-s1-not-cmos'), optimalHalf: 4 },
-      ttl: { reference: ttlNotRef('ref-s1-not-ttl'), optimalHalf: 16 },
+      cmos: { reference: cmosInvRef('ref-s1-not-cmos'), optimalHalf: 4, timingBudgetPs: 2800 },
+      ttl: { reference: ttlNotRef('ref-s1-not-ttl'), optimalHalf: 16, timingBudgetPs: 4000 },
     },
     freqHz: 100_000,
   }),
@@ -455,8 +455,8 @@ export const STAGE1_LEVELS: Level[] = [
     reference: nandGateRef('ref-nand'),
     unlockName: '与非门',
     familyRefs: {
-      cmos: { reference: cmosNandRef('ref-s1-nand-cmos'), optimalHalf: 8 },
-      ttl: { reference: ttlNandRef('ref-s1-nand-ttl'), optimalHalf: 20 },
+      cmos: { reference: cmosNandRef('ref-s1-nand-cmos'), optimalHalf: 8, timingBudgetPs: 4200 },
+      ttl: { reference: ttlNandRef('ref-s1-nand-ttl'), optimalHalf: 20, timingBudgetPs: 6000 },
     },
     freqHz: 100_000,
   }),
@@ -478,8 +478,8 @@ export const STAGE1_LEVELS: Level[] = [
     reference: norFastRef('ref-nor'),
     unlockName: '或非门',
     familyRefs: {
-      cmos: { reference: cmosNorRef('ref-s1-nor-cmos'), optimalHalf: 8 },
-      ttl: { reference: ttlNorRef('ref-s1-nor-ttl'), optimalHalf: 20 },
+      cmos: { reference: cmosNorRef('ref-s1-nor-cmos'), optimalHalf: 8, timingBudgetPs: 4200 },
+      ttl: { reference: ttlNorRef('ref-s1-nor-ttl'), optimalHalf: 20, timingBudgetPs: 4000 },
     },
     freqHz: 100_000,
   }),
@@ -504,7 +504,7 @@ export const STAGE1_LEVELS: Level[] = [
     reference: xorGateRef('ref-xor'),
     unlockName: '异或门',
     familyRefs: {
-      cmos: { reference: cmosXorRef('ref-s1-xor-cmos'), optimalHalf: 32 },
+      cmos: { reference: cmosXorRef('ref-s1-xor-cmos'), optimalHalf: 32, timingBudgetPs: 9800 },
     },
     freqHz: 100_000,
   }),
@@ -532,7 +532,11 @@ export const STAGE1_LEVELS: Level[] = [
     reference: xorGateRef('ref-xor-retro'),
     unlockName: '异或门（复古版）',
     familyRefs: {
-      cmos: { reference: cmosXorRef('ref-s1-xor-retro-cmos'), optimalHalf: 32 },
+      cmos: {
+        reference: cmosXorRef('ref-s1-xor-retro-cmos'),
+        optimalHalf: 32,
+        timingBudgetPs: 9800,
+      },
     },
     freqHz: 20_000_000,
   }),
@@ -556,7 +560,7 @@ export const STAGE1_LEVELS: Level[] = [
     reference: xnorGateRef('ref-xnor'),
     unlockName: '同或门',
     familyRefs: {
-      cmos: { reference: cmosXnorRef('ref-s1-xnor-cmos'), optimalHalf: 36 },
+      cmos: { reference: cmosXnorRef('ref-s1-xnor-cmos'), optimalHalf: 36, timingBudgetPs: 11200 },
     },
     freqHz: 100_000,
   }),

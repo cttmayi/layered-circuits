@@ -228,6 +228,17 @@ describe('三星目标与称号（P1）', () => {
     expect(starsOf({ ...base, timingBudgetPs: 1000, criticalPathPs: 1000 })).toBe(1);
     expect(starsOf({ ...base, costHalf: 50, timingBudgetPs: 1000, criticalPathPs: 1100 })).toBe(0); // 延迟超预算 → 0 星
     expect(starsOf({ ...base, costHalf: 75, timingBudgetPs: 1000, criticalPathPs: 500 })).toBe(2); // 成本 2 星、延迟 3 星 → 取较差 2 星
+    // 成本挑战关（budgetHalf = 0）：不设成本线 → 成本档达标，只按传播延迟评星
+    expect(starsOf({ ...base, budgetHalf: 0, costHalf: 999 })).toBe(3);
+    expect(
+      starsOf({
+        ...base,
+        budgetHalf: 0,
+        costHalf: 999,
+        timingBudgetPs: 1000,
+        criticalPathPs: 1100,
+      }),
+    ).toBe(0); // 延迟超线仍 0 星
   });
 
   it('星级与利润取历史最好，钱包是各关最好一次的利润之和', () => {
