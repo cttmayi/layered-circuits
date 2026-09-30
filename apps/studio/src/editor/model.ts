@@ -483,9 +483,12 @@ export function inputValues(doc: Doc): Record<string, 0 | 1 | 2 | 3> {
   return out;
 }
 
-/** 元件的「输入引脚」名单（用于信号流分层；模块按模板端口，模板缺失时当作全输入） */
+/** 元件的「输入引脚」名单（用于信号流分层；模块按模板端口，模板缺失时当作全输入）。
+ *  npn 把集电极 c 也算输入：共射电路里 c 接上拉电阻，深度计算才能把
+ *  电阻排在三极管上游（VCC→R→Q→GND 顺流而下），否则同层按字母序会排反，
+ *  一键答案变成 S 形绕线。 */
 const UNIT_INPUT_PINS: Record<string, string[]> = {
-  npn: ['b'],
+  npn: ['b', 'c'],
   res: ['a'],
   dio: ['a'],
   cap: ['a'],
@@ -545,8 +548,10 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
       let d = prev.get(inst.id) ?? 1;
       for (const netId of inputNetsOf(inst)) {
         if (portFedNets.has(netId)) {
-          if (d < 1) d = 1; // 端口直连：深度至少 1
-          continue;
+          // 端口直连：深度至少 1；但输出端口网往往同时被元件驱动（如 y 网既有
+          // out-y 端口又有上拉电阻），不能 continue 跳过，否则电阻的深度传不到
+          // 三极管，一键答案会把 R/Q 排反（S 形绕线）。
+          if (d < 1) d = 1;
         }
         const net = netById.get(netId);
         if (!net) continue;
@@ -573,6 +578,14 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
   let slot = 0;
   let bottomY = 0;
   const posOf = new Map<string, { x: number; y: number }>();
+  // 元件列起点：取左右端口 x 的中点偏左，让元件区落在端口之间（输入左、输出右），
+  // 而不是挤在最左列导致输出端的长线横跨整幅画布。
+  const portXs = baseDoc.syms
+    .filter((s) => s.kind === 'input' || s.kind === 'output')
+    .map((s) => s.x);
+  const col0x = portXs.length
+    ? Math.round((Math.min(...portXs) + Math.max(...portXs)) / 2) - 60
+    : 320;
   const sorted = [...design.instances].sort((a, b) => {
     const da = depthOf.get(a.id) ?? 0;
     const db = depthOf.get(b.id) ?? 0;
@@ -585,7 +598,7 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
     slot++;
     const y = 90 + row * 92;
     bottomY = Math.max(bottomY, y);
-    posOf.set(inst.id, { x: 120 + block * 130, y });
+    posOf.set(inst.id, { x: col0x + block * 130, y });
   }
   // 电源轨：VCC 顶行、GND 底行，横排；多了就分行（每行 MAX_RAIL 个）
   const MAX_RAIL = 10;
@@ -597,7 +610,7 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
     const row = Math.floor(idx / MAX_RAIL);
     const col = idx % MAX_RAIL;
     posOf.set(inst.id, {
-      x: 120 + col * 130,
+      x: col0x + col * 130,
       y: inst.kind === 'vcc' ? 30 + row * 60 : bottomY + 80 + row * 60,
     });
   }
