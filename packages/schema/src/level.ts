@@ -255,33 +255,37 @@ export interface FamilyLevelSpec {
  *   否则回退 rtl 规格（关卡原样）。
  */
 /**
- * 教学关按契约的「内容视图」：玩家选定契约后，教学关换成该契约的教学内容
- * （标题/文案/端口/真值表/种子图/引导/概念卡/满分线/参考解），id 不变 →
- * 进度、解锁链、存档全部兼容。非教学关或没有对应契约变体时原样返回。
- * 功能关的差异化只影响判定/一键答案（familySpecOf），显示与内容不变。
+ * 按契约的「视图」：玩家选定契约后，教学关换成该契约的教学内容
+ * （标题/文案/端口/真值表/种子图/引导/概念卡/满分线/参考解）；功能关只换
+ * 经济规格（满分线/成本线/延迟线/参考解），内容与标题不变 → id 不变，进度、
+ * 解锁链、存档全部兼容。没有对应契约变体的关（含 rtl/dtl 缺省）原样返回。
  */
 export function levelViewOf(level: Level, family: LogicFamily): Level {
-  const ref = level.classroom ? level.familyRefs?.[family] : undefined;
+  const ref = level.familyRefs?.[family];
   if (!ref) return level;
-  return {
+  const view: Level = {
     ...level,
-    title: ref.title ?? level.title,
-    brief: ref.brief ?? level.brief,
-    teaching: ref.teaching ?? level.teaching,
-    hint: ref.hint ?? level.hint,
-    ...(ref.ports ? { ports: ref.ports } : {}),
-    ...(ref.vectors ? { vectors: ref.vectors } : {}),
-    ...(ref.seedDoc ? { seedDoc: ref.seedDoc } : {}),
-    ...(ref.guideSteps ? { guideSteps: ref.guideSteps } : {}),
-    ...(ref.classroom ? { classroom: ref.classroom } : {}),
-    ...(ref.allowedUnits ? { allowedUnits: ref.allowedUnits } : {}),
-    ...(ref.requiredUnits ? { requiredUnits: ref.requiredUnits } : {}),
-    ...(ref.family ? { family: ref.family } : {}),
     ...(ref.timingBudgetPs !== undefined ? { timingBudgetPs: ref.timingBudgetPs } : {}),
     referenceSolution: ref.reference,
     optimalHalf: ref.optimalHalf,
     budgetHalf: budgetFromOptimal(ref.optimalHalf, 1.0),
   };
+  if (level.classroom !== undefined) {
+    // 教学关变体：内容全套换（「教什么用什么」）
+    if (ref.title) view.title = ref.title;
+    if (ref.brief) view.brief = ref.brief;
+    if (ref.teaching) view.teaching = ref.teaching;
+    if (ref.hint) view.hint = ref.hint;
+    if (ref.ports) view.ports = ref.ports;
+    if (ref.vectors) view.vectors = ref.vectors;
+    if (ref.seedDoc) view.seedDoc = ref.seedDoc;
+    if (ref.guideSteps) view.guideSteps = [...ref.guideSteps];
+    if (ref.classroom) view.classroom = ref.classroom;
+    if (ref.allowedUnits) view.allowedUnits = [...ref.allowedUnits];
+    if (ref.requiredUnits) view.requiredUnits = [...ref.requiredUnits];
+    if (ref.family) view.family = ref.family;
+  }
+  return view;
 }
 
 export function familySpecOf(level: Level, family: LogicFamily): FamilyLevelSpec {

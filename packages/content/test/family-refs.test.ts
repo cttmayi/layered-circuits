@@ -112,9 +112,15 @@ describe('按契约参考解（familyRefs）', () => {
       // 原样返回 rtl 契约
       expect(levelViewOf(level, 'rtl')).toBe(level);
     }
-    // 非教学关（功能关）不受 levelViewOf 影响
+    // 非教学关（功能关）：levelViewOf 只换经济规格，内容/标题不变
     const gate = ALL_LEVELS.find((l) => l.id === 's1-not')!;
-    expect(levelViewOf(gate, 'cmos')).toBe(gate);
+    const gateView = levelViewOf(gate, 'cmos');
+    expect(gateView).not.toBe(gate); // 新对象
+    expect(gateView.title).toBe(gate.title); // 内容不变
+    expect(gateView.optimalHalf).toBe(gate.familyRefs!.cmos!.optimalHalf);
+    expect(gateView.budgetHalf).toBe(gate.familyRefs!.cmos!.optimalHalf * 2); // 成本线 = 标准答案 × 2
+    // rtl 无变体条目 → 原样返回
+    expect(levelViewOf(gate, 'rtl')).toBe(gate);
   });
 
   it('familySpecOf：功能关缺省回退 rtl 规格（没有 familyRefs 的关不受契约影响）', () => {
