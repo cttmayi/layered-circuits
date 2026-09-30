@@ -56,7 +56,7 @@ describe('调试模式 · 一键出答案', () => {
     expect(screen.getByText('一键出答案')).toBeTruthy();
   });
 
-  it('门版答案：半加器用模块积木（异或门+与门），交付验收满分', async () => {
+  it('一键出答案：半加器直接出逻辑门版（元件版无优势不弹窗），验收满分', async () => {
     // 半加器是第三章关卡：预置前一关（s2-dff-fast）通关，解锁第三章
     localStorage.setItem(
       'lc-studio-progress-v1',
@@ -69,8 +69,10 @@ describe('调试模式 · 一键出答案', () => {
     render(<App />);
     startJob('半加器');
     fireEvent.click(screen.getByText('调试模式'));
-    fireEvent.click(screen.getByText('门版答案'));
+    fireEvent.click(screen.getByText('一键出答案'));
+    // 半加器：门版成本 64 < 元件版 84，元件版无优势 → 直接出门版，不弹窗
     expect(screen.getByText(/逻辑门版已搭好/)).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: '一键出答案' })).toBeNull();
     // 门版 = 模块积木：左侧「我的模块」出现教学门（异或门 / 与门 / 全加器等）
     await waitFor(() => expect(screen.getByText(/我的模块（\d+）/)).toBeTruthy());
     // 验收 → 满分
@@ -82,11 +84,12 @@ describe('调试模式 · 一键出答案', () => {
     expect(screen.getByText(/满分|成本正好等于最优|评 A|星 ?3/)).toBeTruthy();
   });
 
-  it('没有门版的关（非门）：点门版答案给提示，不炸', () => {
+  it('无门版的关（非门）：一键出答案直接出元件版，不弹窗', () => {
     render(<App />);
     startJob('非门');
     fireEvent.click(screen.getByText('调试模式'));
-    fireEvent.click(screen.getByText('门版答案'));
-    expect(screen.getByText(/本关没有逻辑门版参考解/)).toBeTruthy();
+    fireEvent.click(screen.getByText('一键出答案'));
+    expect(screen.getByText(/参考解已搭好/)).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: '一键出答案' })).toBeNull();
   });
 });

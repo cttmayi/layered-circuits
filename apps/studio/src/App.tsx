@@ -1,5 +1,11 @@
 import type { JudgeResult } from '@lc/compiler';
-import { ALL_LEVELS, findLevel, TEACHING_MODULES, teachingSolutionOf } from '@lc/content';
+import {
+  ALL_LEVELS,
+  elementEdgeOf,
+  findLevel,
+  TEACHING_MODULES,
+  teachingSolutionOf,
+} from '@lc/content';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emptyDoc, notGateDemo } from './editor/demos';
 import {
@@ -135,6 +141,10 @@ export function App(): React.JSX.Element {
   const [rightOpen, setRightOpen] = usePersistentBool('lc-ui-right-open', true);
   /** 调试模式：解锁「一键出答案」等开发辅助（不参与正式玩法） */
   const [debugMode, setDebugMode] = usePersistentBool('lc-ui-debug', false);
+  /** 一键出答案的版本选择（仅当元件版有成本/延迟优势时才弹；单一版本直接执行） */
+  const [answerCandidates, setAnswerCandidates] = useState<
+    { kind: 'element' | 'gate'; note?: string }[] | null
+  >(null);
   // URL 带 ?debug=1：进入即强制开调试模式并记住（重启/刷新后保持），普通玩法不受影响
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('debug') === '1') setDebugMode(true);
@@ -722,32 +732,53 @@ export function App(): React.JSX.Element {
     setSelectedWires([]);
   };
 
-  /** 调试模式：一键把本关参考解搭到画布上（可改、可直接验收）。element=元件版；gate=逻辑门版（简洁版） */
-  const solveOneKey = (variant: 'element' | 'gate'): void => {
-    if (!currentLevel) {
-      setToast('调试模式的「一键出答案」只在关卡模式有效');
-      return;
-    }
+  /** 调试模式：一键把本关参考解搭到画布上（可改、可直接验收）。
+   *  优先逻辑门版；元件版只在它有成本/延迟优势时作为选项（弹窗二选一）；
+   *  只有一种版本就直接搭，不弹对话框。 */
+  const applyAnswer = (kind: 'element' | 'gate'): void => {
+    if (!currentLevel) return;
     const ref =
-      variant === 'gate' ? teachingSolutionOf(currentLevel.id) : currentLevel.referenceSolution;
+      kind === 'gate' ? teachingSolutionOf(currentLevel.id) : currentLevel.referenceSolution;
     if (!ref) {
-      setToast(
-        variant === 'gate'
-          ? '本关没有逻辑门版参考解（点「一键出答案」可看元件版）'
-          : '本关没有参考解，无法一键出答案',
-      );
+      setToast(kind === 'gate' ? '本关没有逻辑门版参考解' : '本关没有参考解，无法一键出答案');
       return;
     }
     // 门版引用了教学门积木：并入画布库（同时出现在左侧「我的模块」，可直接拖用）
-    const extra = variant === 'gate' ? TEACHING_STORED : [];
+    const extra = kind === 'gate' ? TEACHING_STORED : [];
     const library = [...doc.library, ...extra];
     const next = fromDesign(ref, docForLevel(currentLevel, library));
     loadDoc({ ...next, library });
     setToast(
-      variant === 'gate'
-        ? '逻辑门版已搭好（成本与元件版相同，可直接验收）—— 门积木已加入左侧「我的模块」'
+      kind === 'gate'
+        ? '逻辑门版已搭好（成本不高于元件版，可直接验收）—— 门积木已加入左侧「我的模块」'
         : '参考解已搭好（调试模式）—— 可以直接交付验收',
     );
+  };
+
+  const solveOneKey = (): void => {
+    if (!currentLevel) {
+      setToast('调试模式的「一键出答案」只在关卡模式有效');
+      return;
+    }
+    const ref = currentLevel.referenceSolution;
+    const teach = teachingSolutionOf(currentLevel.id);
+    const candidates: { kind: 'element' | 'gate'; note?: string }[] = [];
+    if (teach) candidates.push({ kind: 'gate' });
+    if (ref) {
+      const edge = elementEdgeOf(currentLevel);
+      if (edge)
+        candidates.unshift({ kind: 'element', note: edge === 'cost' ? '成本更低' : '延迟更短' });
+      else if (!teach) candidates.push({ kind: 'element' });
+    }
+    if (candidates.length === 0) {
+      setToast('本关没有参考解，无法一键出答案');
+      return;
+    }
+    if (candidates.length === 1) {
+      applyAnswer((candidates[0] as { kind: 'element' | 'gate' }).kind);
+      return;
+    }
+    setAnswerCandidates(candidates);
   };
 
   // ---- 关卡 / 模式入口（模式只在主菜单选，进关后不可改） ----
@@ -1022,23 +1053,14 @@ export function App(): React.JSX.Element {
             调试模式
           </button>
           {debugMode && (
-            <>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => solveOneKey('element')}
-                title="把本关参考解电路（晶体管级）直接搭到画布上（调试用），可继续修改或直接验收"
-              >
-                一键出答案
-              </button>
-              <button
-                type="button"
-                onClick={() => solveOneKey('gate')}
-                title="简洁版：用逻辑门积木搭出本关参考解（半加器=异或门+与门；加法器=全加器串联），成本与元件版相同，方便看懂原理"
-              >
-                门版答案
-              </button>
-            </>
+            <button
+              type="button"
+              className="primary"
+              onClick={solveOneKey}
+              title="把本关参考解直接搭到画布上（调试用）。优先逻辑门版；元件版仅在成本/延迟占优时才会弹窗让你选"
+            >
+              一键出答案
+            </button>
           )}
         </div>
         {gameMode === 'level' && (
@@ -1217,6 +1239,29 @@ export function App(): React.JSX.Element {
                 setProgress((prev) => setStarted(prev, currentLevel.id));
               }}
             />
+          )}
+          {answerCandidates && (
+            <Modal title="一键出答案" onClose={() => setAnswerCandidates(null)}>
+              <p className="answer-choices-hint">这一关两种版本都可以搭到画布上，选一个：</p>
+              <div className="answer-choices">
+                {answerCandidates.map((c) => (
+                  <button
+                    key={c.kind}
+                    type="button"
+                    className={c.kind === 'element' ? 'primary' : ''}
+                    onClick={() => {
+                      setAnswerCandidates(null);
+                      applyAnswer(c.kind);
+                    }}
+                  >
+                    <span className="answer-choices-name">
+                      {c.kind === 'gate' ? '逻辑门版（简洁）' : '元件版（晶体管级）'}
+                    </span>
+                    {c.note && <span className="answer-choices-note">· {c.note}</span>}
+                  </button>
+                ))}
+              </div>
+            </Modal>
           )}
           {reconOpen && currentLevel && (
             <Modal title="黑盒侦察" onClose={() => setReconOpen(false)}>

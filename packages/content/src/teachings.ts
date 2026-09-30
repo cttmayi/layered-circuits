@@ -14,11 +14,12 @@
  * 注意：这些 Design 引用了模块 hash，必须带 TEACHING_MODULES 建库才能编译/判定，
  * 因此**不能**放进关卡数据的 referenceSolution（那必须空库可编译）——只给「一键出答案」用。
  */
-import { wrapModule } from '@lc/compiler';
+import { analyzeTiming, compileDesign, computeCosts, wrapModule } from '@lc/compiler';
 import {
   type Design,
   DesignBuilder,
   InMemoryModuleLibrary,
+  type Level,
   type ModuleKind,
   type ModuleTemplate,
 } from '@lc/schema';
@@ -293,4 +294,28 @@ export function teachingSolutionOf(levelId: string): Design | null {
     default:
       return null;
   }
+}
+
+/**
+ * 元件版相对门版有没有「值得给选项」的优势：'cost'（成本更低）或 'delay'（关键路径更短）。
+ * 两者都不严格占优 → null（此时不该给元件版选项，一键出答案直接出门版）。
+ *
+ * 为什么大多数关是 null：模块成本 = 封装时递归加总的底层元件成本，门版与元件版
+ * 同结构时二者完全相同；只有结构不同才可能出现差异（如半加器门版用二极管与门，
+ * 成本反而更低 64<84）。「元件版」唯一可能占优的场景是某关参考解用了更省/更快的
+ * 晶体管结构而门版没跟上——目前内容里没有，将来若加了，这里会自动把选项亮出来。
+ */
+export function elementEdgeOf(level: Level): 'cost' | 'delay' | null {
+  const ref = level.referenceSolution;
+  const teach = teachingSolutionOf(level.id);
+  if (!ref || !teach) return null;
+  const gateLib = new InMemoryModuleLibrary([...TEACHING_MODULES]);
+  const emptyLib = new InMemoryModuleLibrary();
+  const ec = computeCosts(ref, emptyLib).costHalf;
+  const gc = computeCosts(teach, gateLib).costHalf;
+  if (ec < gc) return 'cost';
+  const ed = analyzeTiming(compileDesign(ref, { library: emptyLib }).net).criticalPathPs;
+  const gd = analyzeTiming(compileDesign(teach, { library: gateLib }).net).criticalPathPs;
+  if (ed < gd) return 'delay';
+  return null;
 }

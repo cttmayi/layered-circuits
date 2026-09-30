@@ -4,7 +4,7 @@
  */
 
 import { judgeDesign } from '@lc/compiler';
-import { ALL_LEVELS, TEACHING_MODULES, teachingSolutionOf } from '@lc/content';
+import { ALL_LEVELS, elementEdgeOf, TEACHING_MODULES, teachingSolutionOf } from '@lc/content';
 import { InMemoryModuleLibrary } from '@lc/schema';
 import { describe, expect, it } from 'vitest';
 import { fromDesign, toDesign } from '../src/editor/model';
@@ -139,6 +139,19 @@ describe('元件版布局：紧凑网格（不许回退成单列长条）', () =
         expect(seen.has(key), `${level.id} 元件 ${s.id} 与其它元件重叠`).toBe(false);
         seen.add(key);
       }
+    }
+  });
+});
+
+describe('元件版 vs 门版：一键出答案的版本选择依据', () => {
+  it('当前内容下没有任何关卡元件版在成本/延迟上占优（→ 不弹对话框，直接出门版）', () => {
+    // 门版与元件版同结构时成本/延迟相同；只有某关元件版参考解更省/更快，
+    // elementEdgeOf 才会返回 'cost'/'delay'（届时 App 会自动亮出元件版选项）。
+    // 这个断言是当前内容的快照：如果未来加了「元件版更优」的关，这里要跟着改。
+    for (const level of ALL_LEVELS) {
+      if (!level.referenceSolution || !teachingSolutionOf(level.id)) continue;
+      const edge = elementEdgeOf(level);
+      expect(edge, `${level.id} 元件版不应有优势（现在是 ${edge}）`).toBeNull();
     }
   });
 });

@@ -1687,3 +1687,43 @@ body,
   font-size: 11px;
   color: var(--accent);
 }
+
+/* 一键出答案：版本选择对话框 */
+.answer-choices-hint {
+  color: var(--text-dim, #9db1c4);
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.answer-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.answer-choices button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+}
+.answer-choices button:hover {
+  border-color: var(--accent);
+}
+.answer-choices button.primary {
+  background: #2a3a22;
+  border-color: #4c6b33;
+  color: #d6f5c0;
+}
+.answer-choices-name {
+  font-weight: 600;
+}
+.answer-choices-note {
+  color: #ffb454;
+  font-size: 12px;
+}
