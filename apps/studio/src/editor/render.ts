@@ -711,6 +711,21 @@ function drawSprite(
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
+    // 底座下的「参考地」装饰：输出是信号监视器，灯的另一端默认接公共地
+    // （地是所有信号的参考，不用玩家接）——画成小号接地符，纯视觉不参与电路
+    ctx.strokeStyle = on ? 'rgba(255,212,121,0.55)' : '#3f4b57';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(0, 12);
+    ctx.lineTo(0, 15);
+    ctx.stroke();
+    for (const [idx, w] of [5, 3.2, 1.6].entries()) {
+      ctx.beginPath();
+      ctx.moveTo(-w, 15 + idx * 2.4);
+      ctx.lineTo(w, 15 + idx * 2.4);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 2;
     if (on) {
       ctx.strokeStyle = onColor;
       ctx.lineWidth = 1.6;
