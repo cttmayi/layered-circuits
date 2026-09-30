@@ -60,9 +60,9 @@ describe('组件库与成绩面板', () => {
     fireEvent.click(screen.getByText('组件库'));
     expect(screen.getAllByText('我的模块（1）').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/1 个版本 · 最新 v1\.0 · 成本 4/)).toBeTruthy();
-    // 重挑战榜：非门的已知最省 = 满分线 = 8 半单位（4）
+    // 重挑战榜：非门已知最省 6 半单位（3），玩家 8（4）→ 显示「追赶 3」
     expect(screen.getByText('非门', { selector: '.link' })).toBeTruthy();
-    expect(screen.getByText(/已到最省/)).toBeTruthy();
+    expect(screen.getByText(/追赶 3/)).toBeTruthy();
   });
 });
 

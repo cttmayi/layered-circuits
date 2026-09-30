@@ -124,6 +124,24 @@ export function versionsOfName(library: readonly StoredModule[], name: string): 
     .sort((a, b) => compareVersions(b.version, a.version));
 }
 
+/**
+ * 存档瘦身：同名模块只保留版本号最高的一个（其余旧版移除）。
+ *
+ * 注意这会让「版本历史」展示变少，但当前玩法里旧版没有独立用途：
+ * 复古复用关靠 bannedModules 按模块**名字**禁用，不依赖旧版本回退；
+ * 库面板里的版本列表只是展示，没有「用回旧版」的入口。所以清理是安全的。
+ */
+export function dedupeLibrary(library: readonly StoredModule[]): StoredModule[] {
+  const newestVersionBy = new Map<string, string>();
+  for (const m of library) {
+    const current = newestVersionBy.get(m.name);
+    if (current === undefined || compareVersions(m.version, current) > 0) {
+      newestVersionBy.set(m.name, m.version);
+    }
+  }
+  return library.filter((m) => newestVersionBy.get(m.name) === m.version);
+}
+
 /** 溯源树里出现的所有模块数量（含自身） */
 export function traceSize(node: TraceNode): number {
   return 1 + node.children.reduce((sum, child) => sum + traceSize(child), 0);

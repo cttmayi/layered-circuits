@@ -121,6 +121,9 @@ export const STAGE1_LEVELS: Level[] = [
     inputs: 1,
     fn: (a) => (a ? 0 : 1),
     optimalHalf: 8,
+    // 更优解：省掉基极限流电阻（基极直连输入，1 NPN + 1 上拉电阻 = 6）功能仍正确，
+    // 求解器/玩家发现过 —— 满分线仍按标准做法（带限流电阻）8 定，这里记下已知最优。
+    bestKnownHalf: 6,
     timingBudgetPs: 2500,
     moduleAccess: 'none',
     reference: notGateRef('ref-not'),
@@ -247,7 +250,8 @@ export const STAGE1_LEVELS: Level[] = [
     inputs: 2,
     fn: (a: 0 | 1, b: 0 | 1) => (a === b ? 1 : 0),
     optimalHalf: 64,
-    bestKnownHalf: 56,
+    // 求解器结论：异或门 + 无基极限流电阻的反相器 = 54（比带限流电阻的反相器省 2）
+    bestKnownHalf: 54,
     timingBudgetPs: 9000,
     allowedUnits: ['npn', 'res'],
     moduleAccess: 'listed',

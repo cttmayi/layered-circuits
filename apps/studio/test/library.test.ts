@@ -14,6 +14,7 @@ import type { StoredModule } from '../src/editor/model';
 import {
   addModule,
   compareVersions,
+  dedupeLibrary,
   nextVersion,
   storeModule,
   traceOf,
@@ -112,6 +113,21 @@ describe('组件库版本管理', () => {
     expect(node).not.toBeNull();
     expect(traceSize(node as NonNullable<typeof node>)).toBeLessThan(10);
   });
+
+  it('存档瘦身 dedupeLibrary：同名模块只留版本号最高的一个，其它名字不受影响', () => {
+    const not10 = makeModule('非门', 'h-n1', { version: '1.0', costHalf: 6 });
+    const not11 = makeModule('非门', 'h-n2', { version: '1.1', costHalf: 8 });
+    const dff10 = makeModule('D触发器', 'h-d1', { version: '1.0', costHalf: 136 });
+    const dff11 = makeModule('D触发器', 'h-d2', { version: '1.1', costHalf: 136 });
+    const and1 = makeModule('与门', 'h-a1', { version: '1.0' });
+    const input = [not10, dff10, and1, not11, dff11];
+    const out = dedupeLibrary(input);
+    // 每名只剩最新版（保留原顺序）
+    expect(out).toEqual([and1, not11, dff11]);
+    // 空库 / 无重复库原样返回
+    expect(dedupeLibrary([])).toEqual([]);
+    expect(dedupeLibrary([and1])).toEqual([and1]);
+  });
 });
 
 describe('本地重挑战榜（M3-E）', () => {
@@ -119,7 +135,7 @@ describe('本地重挑战榜（M3-E）', () => {
     let progress = emptyProgress();
     expect(leaderboard(progress).every((row) => !row.cleared)).toBe(true);
 
-    // 第 1 关：标准解 8 半单位，通关
+    // 第 1 关：标准解 8 半单位，通关（但已知最省是 6 —— 省掉基极限流电阻的更优解）
     progress = recordClear(progress, 's1-not', 100, 8);
     progress = recordAttempt(progress, 's1-not');
     progress = recordAttempt(progress, 's1-not');
@@ -131,7 +147,13 @@ describe('本地重挑战榜（M3-E）', () => {
     expect(not?.cleared).toBe(true);
     expect(not?.bestCostHalf).toBe(8);
     expect(not?.attempts).toBe(2);
-    expect(not?.atBestKnown).toBe(true);
+    expect(not?.bestKnownHalf).toBe(6);
+    expect(not?.atBestKnown).toBe(false); // 8 > 6：还没追到省电阻版
+
+    // 玩家用省电阻版做到 6 → 标「已到最省」
+    progress = recordClear(progress, 's1-not', 100, 6);
+    const not2 = leaderboard(progress).find((r) => r.levelId === 's1-not');
+    expect(not2?.atBestKnown).toBe(true);
 
     const xor = rows.find((r) => r.levelId === 's1-xor');
     expect(xor?.optimalHalf).toBe(56);

@@ -36,7 +36,7 @@ import {
   signalText,
 } from './editor/render';
 import { buyEquipment, ownsEquipment } from './level/equipment';
-import { addModule, storeModule } from './level/library';
+import { addModule, dedupeLibrary, storeModule } from './level/library';
 import {
   docForLevel,
   exportSave,
@@ -102,7 +102,12 @@ export function App(): React.JSX.Element {
   // 会话（模式 / 当前关卡 / 存档）一次性装载
   const session = useMemo(() => initialSession(), []);
   const [doc, setDoc] = useState<Doc>(() => session.doc);
-  const [progress, setProgress] = useState<Progress>(() => session.progress);
+  // 模块库瘦身：同名模块只留最新版本（旧版是展示用的版本历史，没有玩法用途，
+  // 删掉后存档变小；持久化 effect 会把它写回 localStorage，存档自动瘦身）
+  const [progress, setProgress] = useState<Progress>(() => ({
+    ...session.progress,
+    library: dedupeLibrary(session.progress.library),
+  }));
   const [gameMode, setGameMode] = useState<GameMode>(() => session.mode);
   const [levelId, setLevelId] = useState<string>(() => session.levelId);
   /** 画面：主菜单 / 关卡地图 / 工作台 —— 模式只在主菜单里选，进关后不能改 */
@@ -952,11 +957,13 @@ export function App(): React.JSX.Element {
 
   /** 导入存档：覆盖当前进度（坏档直接提示，不动现有数据） */
   const doImport = (text: string): void => {
-    const { progress: imported, error } = importSave(text);
+    const { progress: raw, error } = importSave(text);
     if (error) {
       setToast(`导入失败：${error}`);
       return;
     }
+    // 导入的存档同样瘦身：同名模块只留最新版本
+    const imported = { ...raw, library: dedupeLibrary(raw.library) };
     saveProgress(imported);
     setProgress(imported);
     const level = levelOf(gameMode, levelId) ?? ALL_LEVELS[0];

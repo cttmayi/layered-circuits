@@ -5,9 +5,9 @@
  *  - 端口名里的 net 由求解器在组装时分配，片段内部自建中间节点（用 prefix 保证唯一）；
  *  - 成本不在这里硬编码，而是组装后由 `computeCosts` 真算（避免两套账）。
  *
- * 为什么片段里都有基极限流电阻：`@lc/compiler` 有一条编译期检查
- * `missing-base-resistor`（三极管基极必须经过电阻），没有电阻的电路直接判错 ——
- * 所以求解器搜出来的最优解也一定是「能被人手搭出来」的电路。
+ * 注意：编译器**没有**强制「基极必须经过电阻」（早期注释曾以为有），所以玩家能搭出
+ * 省略基极限流电阻的电路（基极直连输入），求解器也要枚举这类片段（notNoBaseResistor），
+ * 否则会漏掉玩家可搭的更省解（非门 8→6、同或门 56→54 就是它贡献的）。
  */
 
 import type { DesignBuilder, Unit } from '@lc/schema';
@@ -59,6 +59,23 @@ export const notFollower: Fragment = {
   build(b, ctx) {
     notCommonEmitter.build(b, { ...ctx, out: internal(ctx, 'x') });
     b.unit('npn', { c: 'vcc', b: internal(ctx, 'x'), e: ctx.out }, `${ctx.prefix}QF`);
+  },
+};
+
+/**
+ * 省略基极限流电阻的反相器：输入端口直接驱动基极（成本 6）。
+ * 编译器并没有强制「基极必须经过电阻」，所以玩家可以搭出这种结构——
+ * 求解器要把它也枚举进去，否则会漏掉玩家可搭的更省解。
+ */
+export const notNoBaseResistor: Fragment = {
+  id: 'not-no-base-res',
+  units: ['npn', 'res'],
+  name: '反相器（省略基极限流电阻）',
+  arity: 1,
+  build(b, ctx) {
+    const [a] = ctx.inputs as [string];
+    b.unit('npn', { c: ctx.out, b: a, e: 'gnd' }, `${ctx.prefix}Q1`);
+    b.unit('res', { a: 'vcc', b: ctx.out }, `${ctx.prefix}R2`);
   },
 };
 
@@ -158,6 +175,7 @@ export const andRtlSeries: Fragment = {
 
 export const BASE_FRAGMENTS: readonly Fragment[] = [
   notCommonEmitter,
+  notNoBaseResistor,
   notFollower,
   andDiode,
   orDiode,
