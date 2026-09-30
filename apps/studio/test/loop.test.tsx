@@ -4,7 +4,7 @@
  *
  * 这个用例完全用鼠标事件走一遍玩家的操作路径：
  *   进入第 1 关 → 从元件库拖 5 个元件 → 点引脚连 6 条线 → 点「交付验收」→ 看到通过
- *   → 点「交付并封装为【非门】」→ 组件库多出【非门】、成绩写入存档、下一关解锁。
+ *   → 验收通过自动封装 → 组件库多出【非门】、成绩写入存档、下一关解锁。
  *
  * 换句话说：它不是在测某个函数，而是在测「这个游戏能不能按设计玩下去」。
  */
@@ -117,8 +117,7 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
     const attempts = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? '{}').attempts ?? {};
     expect(attempts['s1-not']).toBe(1);
 
-    // ---- 4. 交付并封装 ----
-    fireEvent.click(screen.getByText('交付并封装为【非门】') as HTMLButtonElement);
+    // ---- 4. 验收通过 → 自动封装（没有「交付并封装」按钮，点了验收就直接封装结算） ----
     await waitFor(
       () => {
         const raw = localStorage.getItem(PROGRESS_KEY);

@@ -9,7 +9,7 @@
 
 import { ALL_LEVELS } from '@lc/content';
 import { type Level, type LogicFamily, levelViewOf } from '@lc/schema';
-import { isCleared, isLevelUnlocked, type Progress, rankOf, reconCount } from '../level/progress';
+import { isCleared, isLevelUnlocked, type Progress, rankOf } from '../level/progress';
 
 export interface WorldMapProps {
   progress: Progress;
@@ -101,7 +101,7 @@ export function WorldMap({
         </button>
         <h1>关卡地图</h1>
         <span className="map-stats">
-          已通关 {cleared}/{ALL_LEVELS.length} · 称号 {rank.title} · 自主测绘 {reconCount(progress)}
+          已通关 {cleared}/{ALL_LEVELS.length} · 称号 {rank.title}
         </span>
       </header>
       <div className="map-stage">

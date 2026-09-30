@@ -1,39 +1,29 @@
 import { commissionOf, contractOf } from '@lc/content';
 import type { Level } from '@lc/schema';
-import { useState } from 'react';
 import { sideJobsOf } from '../level/sideJobs';
 
 export interface LevelCardProps {
   level: Level;
   /** 当前电路成本（半单位） */
   costHalf: number;
-  /** 黑盒侦察是否已完成（未完成时图纸的输出列是看不清的） */
-  reconDone: boolean;
   /** 当前接的支线单（null = 只做主线） */
   sideJob: string | null;
-  /** 打开黑盒侦察对话框（图纸还没测出来时的入口） */
-  onOpenRecon: () => void;
   /** 已完成的支线单 key 列表 */
   doneSideJobs: string[];
   onPickSideJob: (key: string | null) => void;
-  onShowHint: () => void;
 }
 
 const CELL: Record<string, string> = { 0: 'lo', 1: 'hi', X: 'bad', Z: 'dim' };
 
 /** 左侧「图纸卡」：图纸（真值表）+ 合同摘要 + 用料进度 —— 搭建时的高频参考。
- * 客户/需求/原理等叙事内容只在「新委托」弹窗里出现，开工后不再占用侧栏。 */
+ * 需求真值表完全展示（不做黑盒隐藏）；客户/需求等叙事内容只在「新委托」弹窗里出现。 */
 export function LevelCard({
   level,
   costHalf,
-  reconDone,
   sideJob,
   doneSideJobs,
-  onOpenRecon,
   onPickSideJob,
-  onShowHint,
 }: LevelCardProps): React.JSX.Element {
-  const [showTeaching, setShowTeaching] = useState(false);
   const contract = contractOf(level);
   const commission = commissionOf(level);
   const jobs = sideJobsOf(level);
@@ -115,10 +105,7 @@ export function LevelCard({
         </div>
       </div>
 
-      {!reconDone && (
-        <p className="dim small">图纸折角了：输出列看不清 —— 去下面的「黑盒侦察」自己测出来。</p>
-      )}
-      <table className="truth" key={reconDone ? 'open' : 'masked'}>
+      <table className="truth">
         <thead>
           <tr>
             {inputNames.map((n) => (
@@ -142,11 +129,8 @@ export function LevelCard({
                 </td>
               ))}
               {outputNames.map((n) => (
-                <td
-                  key={n}
-                  className={reconDone ? `sep ${CELL[String(v.expect?.[n])] ?? ''}` : 'sep dim'}
-                >
-                  {reconDone ? String(v.expect?.[n]) : '?'}
+                <td key={n} className={`sep ${CELL[String(v.expect?.[n])] ?? ''}`}>
+                  {String(v.expect?.[n])}
                 </td>
               ))}
             </tr>
@@ -180,20 +164,6 @@ export function LevelCard({
         )}
       </div>
 
-      <div className="group-row">
-        {!reconDone && (
-          <button type="button" className="primary recon-entry" onClick={onOpenRecon}>
-            黑盒侦察（测图纸）
-          </button>
-        )}
-        <button type="button" onClick={() => setShowTeaching((v) => !v)}>
-          {showTeaching ? '收起原理' : '原理讲解'}
-        </button>
-        <button type="button" onClick={onShowHint}>
-          提示
-        </button>
-      </div>
-      {showTeaching && <p className="small teaching">{level.teaching}</p>}
       {level.timingBudgetPs !== undefined && (
         <p className="dim small">
           硬核模式还要求关键路径 ≤ {(level.timingBudgetPs / 1000).toFixed(2)} ns

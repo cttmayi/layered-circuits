@@ -49,12 +49,10 @@ import {
   PROGRESS_KEY,
   type Progress,
   rankOf,
-  reconCount,
   recordAttempt,
   recordClear,
   recordSideJob,
   saveProgress,
-  setRecon,
   setStarted,
   starsOf,
 } from './level/progress';
@@ -77,7 +75,6 @@ import { LibraryPanel } from './panels/LibraryPanel';
 import { MainMenu } from './panels/MainMenu';
 import { Modal } from './panels/Modal';
 import { Palette } from './panels/Palette';
-import { ReconPanel } from './panels/ReconPanel';
 import { SettlementPanel } from './panels/SettlementPanel';
 import { TruthTable } from './panels/TruthTable';
 import { WaveformPanel } from './panels/WaveformPanel';
@@ -186,7 +183,6 @@ export function App(): React.JSX.Element {
   /** 中央提示对话框（图纸解开等小节点） */
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
   /** 黑盒侦察对话框（开工后若图纸未测则直接进入） */
-  const [reconOpen, setReconOpen] = useState(false);
   /** 当前接的支线单（同一时刻最多一条，验收按支线条件判） */
   const [sideJobKey, setSideJobKey] = useState<string | null>(null);
   /** 封装过场：电路被压成一颗芯片落进组件库 */
@@ -904,11 +900,8 @@ export function App(): React.JSX.Element {
       setJudgeResult(response.judge);
       const judge = response.judge;
       if (judge.pass) {
-        setToast(
-          judge.score >= 100
-            ? `通过！成本 ${judge.costHalf / 2} 已是最优，满分 100`
-            : `通过！成本 ${judge.costHalf / 2}（预算 ${judge.budgetHalf / 2}），得分 ${judge.score}`,
-        );
+        // 验收通过 → 自动封装进组件库并弹出结算（不用再点「交付并封装」）
+        await wrapAndSettle(judge);
       } else {
         setToast(judge.errors[0] ?? '还没通过，看看下方对比表');
       }
@@ -917,9 +910,12 @@ export function App(): React.JSX.Element {
     }
   };
 
-  /** 通关：把当前电路封装成关卡产出的模块，永久加入个人组件库，并记录成绩 */
-  const clearLevel = async (): Promise<void> => {
-    if (!currentLevel || !judgeResult?.pass) return;
+  /** 封装 + 结算：验收通过后自动执行 —— 把当前电路封装成关卡产出的模块，
+   *  永久加入个人组件库、记录成绩，并弹出「验收报告」对话框（含「接着做下一单」）。 */
+  const wrapAndSettle = async (judge: JudgeResult): Promise<void> => {
+    if (!currentLevel) return;
+    // 同一关已结算过（结算对话框还开着）就不再重复封装
+    if (settlement && judgeResult === judge && levelRecord) return;
     const name = currentLevel.unlock?.name ?? currentLevel.title;
     const design = toDesign(doc, { id: `wrap-${currentLevel.id}`, name });
     const response = await runner.send({
@@ -953,13 +949,13 @@ export function App(): React.JSX.Element {
     );
     commit({ ...doc, library: addModule(doc.library, stored) });
     // 星级：功能（交付成功）/ 成本（满分）/ 时序（硬核或时序达标）
-    const stars = starsOf(judgeResult, forcedHardcore || mode === 'timing');
+    const stars = starsOf(judge, forcedHardcore || mode === 'timing');
     setProgress((prev) => {
       const cleared = recordClear(
         { ...prev, library: addModule(prev.library, stored) },
         currentLevel.id,
-        judgeResult.score,
-        judgeResult.costHalf,
+        judge.score,
+        judge.costHalf,
         stars,
       );
       // 支线单达成 → 额外奖金入钱包
@@ -972,7 +968,7 @@ export function App(): React.JSX.Element {
     // 过场：芯片落进组件库 → 结算页（客户验收报告 + 钱 + 评级）
     setChipDrop(name);
     window.setTimeout(() => setChipDrop(null), 1400);
-    setSettlement(judgeResult);
+    setSettlement(judge);
     setSettlementStars(stars);
     setToast(
       `已交付【${name}】：材料费 ${info.costHalf / 2} 元${next ? `，已解锁下一单「${next.title}」` : '，主线全部完成'}`,
@@ -1140,7 +1136,7 @@ export function App(): React.JSX.Element {
             <span className="cleared-count">
               已通关 {ALL_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
               {ALL_LEVELS.length} · 可用余额 {(progress.walletHalf - progress.spentHalf) / 2} 元 ·{' '}
-              {rankOf(progress).title} · 自主测绘 {reconCount(progress)}
+              {rankOf(progress).title}
             </span>
           </div>
         )}
@@ -1309,32 +1305,7 @@ export function App(): React.JSX.Element {
               </div>
             </Modal>
           )}
-          {reconOpen && currentLevel && (
-            <Modal title="黑盒侦察" onClose={() => setReconOpen(false)}>
-              <ReconPanel
-                key={currentLevel.id}
-                level={currentLevel}
-                state={progress.recon[currentLevel.id]}
-                hasProbe={ownsEquipment(progress, 'probe')}
-                onMeasured={() => {
-                  setProgress((prev) => setRecon(prev, currentLevel.id, 'measured'));
-                  setReconOpen(false);
-                  setNotice({
-                    title: '图纸解开了',
-                    body: `这张单的答案是你自己一格格测出来的 —— 黑盒侦察完成，可以开工搭电路了。`,
-                  });
-                }}
-                onSkip={() => {
-                  setProgress((prev) => setRecon(prev, currentLevel.id, 'skipped'));
-                  setReconOpen(false);
-                  setNotice({
-                    title: '图纸解开了',
-                    body: '你选择了直接看答案 —— 左侧图纸卡的输出列现在能看了（? 变成了 0/1）。不过这一单不算「自主测绘」。',
-                  });
-                }}
-              />
-            </Modal>
-          )}
+
           {notice && (
             <Modal title={notice.title} onClose={() => setNotice(null)}>
               <p>{notice.body}</p>
@@ -1376,14 +1347,11 @@ export function App(): React.JSX.Element {
               <LevelCard
                 level={currentLevel}
                 costHalf={snapshot?.cost.half ?? 0}
-                reconDone={Boolean(progress.recon[currentLevel.id])}
                 sideJob={sideJobKey}
                 doneSideJobs={Object.keys(progress.sideJobs)
                   .filter((id) => id.startsWith(`${currentLevel.id}:`))
                   .map((id) => id.slice(currentLevel.id.length + 1))}
                 onPickSideJob={setSideJobKey}
-                onShowHint={() => setToast(currentLevel.hint)}
-                onOpenRecon={() => setReconOpen(true)}
               />
             )}
             {currentLevel && (
@@ -1394,14 +1362,12 @@ export function App(): React.JSX.Element {
                 record={levelRecord}
                 attempts={progress.attempts[currentLevel.id] ?? 0}
                 onJudge={() => void runJudge()}
-                onClear={() => void clearLevel()}
               />
             )}
             {currentLevel && settlement && (
               <SettlementPanel
                 level={currentLevel}
                 stars={settlementStars}
-                reconMeasured={progress.recon[currentLevel.id] === 'measured'}
                 sideJob={activeSideJob}
                 sideJobDone={Boolean(progress.sideJobs[`${currentLevel.id}:${activeSideJob?.key}`])}
                 levelName={currentLevel.unlock?.name ?? currentLevel.title}

@@ -212,7 +212,7 @@ describe('关卡界面', () => {
     renderApp();
     startJob('非门');
 
-    // 关卡卡片：委托单 + 图纸（黑盒侦察没做完前，输出列是看不清的）
+    // 关卡卡片：委托单 + 图纸（真值表需求完全展示，不做黑盒隐藏）
     expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
     const targetTable = document.querySelector('.level-card .truth') as HTMLTableElement;
     expect(targetTable).toBeTruthy();
@@ -220,8 +220,8 @@ describe('关卡界面', () => {
       [...tr.querySelectorAll('td')].map((td) => td.textContent),
     );
     expect(cells).toEqual([
-      ['0', '?'],
-      ['1', '?'],
+      ['0', '1'], // 输入 0 → 输出 1（反相）
+      ['1', '0'],
     ]);
 
     // 阶段 1 不开放电容：按钮被禁用并给出原因

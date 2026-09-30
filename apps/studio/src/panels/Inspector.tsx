@@ -64,12 +64,6 @@ export function Inspector({
 
       {snapshot && (
         <>
-          <h3>内容寻址</h3>
-          <p className="mono small break">#{snapshot.hash}</p>
-          <p className="dim small">
-            只跟电路结构有关：挪动元件、改标签不会产生新哈希，同名同结构 = 同一个模块。
-          </p>
-
           <h3>端口电平</h3>
           <table className="kv">
             <tbody>

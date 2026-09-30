@@ -39,13 +39,17 @@ describe('调试模式 · 一键出答案', () => {
     // 自动仿真跑完（真值表出现）后，仿真诊断里不得有「基极悬空」误报
     await waitFor(() => expect(screen.getByText(/真值表（\d+ 行）/)).toBeTruthy());
     expect(screen.queryByText(/基极悬空|未连接任何驱动/)).toBeNull();
-    // 验收（工具栏那枚）
+    // 验收（验收台那枚）→ 通过后自动封装并弹出结算
     const judgeButtons = screen.getAllByText('交付验收');
     judgeButtons[judgeButtons.length - 1]?.click();
-    await waitFor(() => expect(screen.getByText(/验收通过|合格|已通过/)).toBeTruthy(), {
+    await waitFor(() => expect(screen.getByText(/客户验收通过/)).toBeTruthy(), {
       timeout: 5000,
     });
-    expect(screen.getByText(/满分|成本正好等于最优|评 A|星 ?3/)).toBeTruthy();
+    // 自动封装 → 结算对话框出现（不用再点「交付并封装」）
+    await waitFor(() => expect(screen.getByText(/验收报告 · 非门/)).toBeTruthy(), {
+      timeout: 5000,
+    });
+    expect(screen.getByText(/已达对标成本/)).toBeTruthy(); // 满分：成本正好等于最优
     // 一键出答案的参考解不该有任何「悬空」警告（画布导线是完整的）
     expect(screen.queryByText(/基极悬空|未连接任何驱动/)).toBeNull();
   });
@@ -83,13 +87,16 @@ describe('调试模式 · 一键出答案', () => {
     expect(screen.queryByRole('dialog', { name: '一键出答案' })).toBeNull();
     // 门版 = 模块积木：左侧「我的模块」出现教学门（异或门 / 与门 / 全加器等）
     await waitFor(() => expect(screen.getByText(/我的模块（\d+）/)).toBeTruthy());
-    // 验收 → 满分
+    // 验收 → 通过后自动封装并弹出结算（满分）
     const judgeButtons = screen.getAllByText('交付验收');
     judgeButtons[judgeButtons.length - 1]?.click();
-    await waitFor(() => expect(screen.getByText(/验收通过|合格|已通过/)).toBeTruthy(), {
+    await waitFor(() => expect(screen.getByText(/客户验收通过/)).toBeTruthy(), {
       timeout: 5000,
     });
-    expect(screen.getByText(/满分|成本正好等于最优|评 A|星 ?3/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/验收报告 · 半加器/)).toBeTruthy(), {
+      timeout: 5000,
+    });
+    expect(screen.getByText(/已达对标成本/)).toBeTruthy();
   });
 
   it('无门版的关（非门）：一键出答案直接出元件版，不弹窗', () => {

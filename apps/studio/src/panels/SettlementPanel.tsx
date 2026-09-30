@@ -17,8 +17,6 @@ export interface SettlementPanelProps {
   level: Level;
   /** 本次交付拿到的星数（0~3） */
   stars: number;
-  /** 图纸是不是玩家自己测出来的 */
-  reconMeasured: boolean;
   /** 本次交付接的支线单（没接就是 null） */
   sideJob: SideJob | null;
   sideJobDone: boolean;
@@ -36,7 +34,6 @@ export interface SettlementPanelProps {
 export function SettlementPanel({
   level,
   stars,
-  reconMeasured,
   sideJob,
   sideJobDone,
   levelName,
@@ -145,12 +142,6 @@ export function SettlementPanel({
             {sideJobDone ? `达成，奖金 +${sideJob.bonusHalf / 2} 元` : '未达成（条件见委托单）'}
           </p>
         )}
-
-        <p className="panel-note">
-          {reconMeasured
-            ? '图纸是你自己一格格测出来的 —— 这单做得干净。'
-            : '图纸用了客户给的答案，下回试试自己测。'}
-        </p>
 
         {brokeRecord && (
           <p className="record">破纪录！比上次多得 {result.score - (previousScore ?? 0)} 分</p>

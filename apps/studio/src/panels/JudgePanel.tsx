@@ -10,12 +10,11 @@ export interface JudgePanelProps {
   record: LevelRecord | undefined;
   attempts: number;
   onJudge: () => void;
-  onClear: () => void;
 }
 
 const CELL: Record<string, string> = { 0: 'lo', 1: 'hi', X: 'bad', Z: 'dim' };
 
-/** 右侧「验收台」：逐行对比、错误原因、交付与封装按钮（客户不会看你的真值表，但你自己得看） */
+/** 右侧「验收台」：逐行对比、错误原因。验收通过即自动封装并弹出结算（不用再点交付按钮） */
 export function JudgePanel({
   level,
   result,
@@ -23,7 +22,6 @@ export function JudgePanel({
   record,
   attempts,
   onJudge,
-  onClear,
 }: JudgePanelProps): React.JSX.Element {
   const outputNames = [...new Set(level.vectors.flatMap((v) => Object.keys(v.expect ?? {})))];
   const widthOf = new Map(level.ports.map((p) => [p.name, p.width]));
@@ -37,12 +35,12 @@ export function JudgePanel({
         <button type="button" className="primary" onClick={onJudge} disabled={busy}>
           {busy ? '验收中…' : '交付验收'}
         </button>
-        {result?.pass && (
-          <button type="button" onClick={onClear}>
-            交付并封装为【{level.unlock?.name ?? level.title}】
-          </button>
-        )}
       </div>
+      {result?.pass && (
+        <p className="dim small">
+          验收通过，正在自动封装为【{level.unlock?.name ?? level.title}】并结算…
+        </p>
+      )}
       {record && record.clearedAt > 0 && (
         <p className="dim small">
           历史最好：{record.score} 分 · 最低材料费 {record.bestCostHalf / 2} · 已尝试 {attempts} 次
