@@ -1105,6 +1105,16 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
   } else if (key !== 'vcc' && key !== 'gnd') {
     ctx.fillStyle = PALETTE.textDim;
     ctx.fillText(sym.label, 0, labelY);
+  } else {
+    // 电源/地：标签放符号右侧（避开竖直引脚线），更易识别
+    ctx.fillStyle = PALETTE.textDim;
+    ctx.textAlign = 'left';
+    ctx.fillText(
+      sym.label || (key === 'vcc' ? 'VCC' : 'GND'),
+      f.w / 2 + 4 * camera.scale,
+      5 * camera.scale,
+    );
+    ctx.textAlign = 'center';
   }
   ctx.restore();
 }
