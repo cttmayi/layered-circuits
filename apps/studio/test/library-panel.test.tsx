@@ -269,7 +269,7 @@ describe('任务墙与星级（P1）', () => {
     expect(screen.getByText('★★★')).toBeTruthy();
     // 1 单 + 1 元 → 还是学徒，提示升到维修铺师傅还差什么
     expect(screen.getByText(/学徒/)).toBeTruthy();
-    expect(screen.getByText(/已交付 4\/22 · 星 3\/66/)).toBeTruthy();
+    expect(screen.getByText(/已交付 4\/23 · 星 3\/69/)).toBeTruthy();
   });
 });
 

@@ -176,7 +176,13 @@ export function analyzeTiming(net: FlatNet, options: TimingAnalysisOptions = {})
           const outB = applyTo(simB, v2);
           if (outB === null) continue;
 
-          if (outA !== outB) {
+          // 只有「两条历史路径都给出确定的 0/1 且不同」才算记忆：
+          // 输出为 X/Z 是瞬态（例如 CMOS 串联堆叠在输入翻转瞬间的直通冲突
+          // 会自持成 X，时序模式可见、逻辑模式干净）——那是仿真伪影，
+          // 不是「记住了历史」；真时序电路（锁存器/触发器）输出永远是确定的 0/1。
+          // readAllOutputs() 的 JSON 里 X/Z 以 "X"/"Z" 出现，0/1 是裸数字
+          const binary = (o: string): boolean => !o.includes('X') && !o.includes('Z');
+          if (outA !== outB && binary(outA) && binary(outB)) {
             isSequential = true;
             break outer;
           }

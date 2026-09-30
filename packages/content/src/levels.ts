@@ -24,6 +24,8 @@ import {
   andGateRef,
   cmosInvRef,
   cmosInvSeed,
+  cmosNandRef,
+  cmosNandSeed,
   dioIntroRef,
   dioIntroSeed,
   floatIntroRef,
@@ -156,6 +158,7 @@ export const STAGE1_LEVELS: Level[] = [
     timingBudgetPs: 2000,
     allowedUnits: ['npn', 'res'],
     requiredUnits: ['npn'],
+    family: 'rtl', // 契约：本关教学规范
     classroom: {
       title: '三极管：反相开关',
       analogy: '三极管像个「反着来的开关」：基极一通电就导通、把输出拉低 —— 像门一开就把灯拉灭。',
@@ -191,6 +194,7 @@ export const STAGE1_LEVELS: Level[] = [
     timingBudgetPs: 2000,
     allowedUnits: ['dio', 'res'],
     requiredUnits: ['dio'],
+    family: 'dtl', // 契约：本关教学规范
     classroom: {
       title: '二极管：单向门',
       analogy:
@@ -226,6 +230,7 @@ export const STAGE1_LEVELS: Level[] = [
     timingBudgetPs: 2000,
     allowedUnits: ['npn', 'res'],
     requiredUnits: ['npn'],
+    family: 'rtl', // 契约：本关教学规范
     classroom: {
       title: '悬空与默认电平',
       analogy: '没人推的弹簧门自己关着 —— 没人驱动的线是「悬空」的，会乱跳；电阻把它稳稳钉住。',
@@ -434,6 +439,44 @@ export const STAGE1_LEVELS: Level[] = [
     moduleAccess: 'none',
     reference: cmosInvRef('ref-cmos-inv'),
     unlockName: 'CMOS 反相器',
+    freqHz: 100_000,
+  }),
+
+  gateLevel({
+    id: 's1-cmos-nand',
+    title: 'CMOS 与非门',
+    brief:
+      '上 pMOS 并联、下 nMOS 串联的互补结构：任一输入为 0 → 输出被强拉到 1；两个输入都为 1 → 下管串联导通，输出强拉到 0。4 个管子拼出与非门，比 2 三极管 + 3 电阻省一半。',
+    teaching:
+      'CMOS 门怎么搭：把「拉高网络」和「拉低网络」做成互补——与非门要「全 1 才拉低」，所以下管（拉低）串联、上管（拉高）并联。记住口诀：**串联导通 = 与，并联导通 = 或**；与非 = 拉低网络串联。',
+    hint: '两个 pMOS 并联接 VCC→y（任一输入 0 都拉高）；两个 nMOS 串联接 y→GND（两输入都为 1 才拉低）。把 a 接到 P1 和 N1 的栅极，b 接到 P2 和 N2 的栅极。',
+    inputs: 2,
+    fn: (a: 0 | 1, b: 0 | 1) => (a === 1 && b === 1 ? 0 : 1),
+    optimalHalf: 8, // 2 pMOS + 2 nMOS = 4 × 2 半分（显示 4）
+    timingBudgetPs: 3000,
+    allowedUnits: ['nmos', 'pmos'],
+    requiredUnits: ['nmos', 'pmos'],
+    family: 'cmos',
+    classroom: {
+      title: 'CMOS 与非门：互补结构',
+      analogy:
+        '两道闸门串联（下管）才能把水放掉，两条旁路并联（上管）只要开一条就把水位顶上去——串联导通 = 与，并联导通 = 或。',
+      points: [
+        '拉低网络（nMOS）串联：两个输入都为 1 才导通 → 输出才被拉低 = 与非',
+        '拉高网络（pMOS）并联：任一输入为 0 就拉高 → 高电平是强 1',
+        '4 个管子无电阻：CMOS 与非门成本 8 半分，比 RTL 的 20 省一半还多',
+      ],
+    },
+    seedDoc: cmosNandSeed(),
+    guideSteps: [
+      '第一步：看——四个管子摆好了但全悬空，输出 y 谁也驱动不了',
+      '第二步：把输入 a 接到 P1 和 N1 的栅极；输入 b 接到 P2 和 N2 的栅极',
+      '第三步：核对结构——上管 pMOS 并联（都接 VCC→y），下管 nMOS 串联（y→N1→N2→GND）',
+      '第四步：点「交付验收」：全 1 才灭，其余全亮',
+    ],
+    moduleAccess: 'none',
+    reference: cmosNandRef('ref-cmos-nand'),
+    unlockName: 'CMOS 与非门',
     freqHz: 100_000,
   }),
 ];

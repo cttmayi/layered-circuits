@@ -293,3 +293,37 @@ export function cmosInvSeed(id = 'seed-cmos-inv'): Design {
   b.port('y', 'out', 'y');
   return b.build();
 }
+
+/** CMOS 与非门：上 pMOS 并联、下 nMOS 串联（成本 8 半分 = 显示 4），无电阻、推挽 */
+export function cmosNandRef(id = 'ref-cmos-nand'): Design {
+  const b = new DesignBuilder(id, 'CMOS 与非门');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('pmos', { d: 'y', g: 'a', s: 'vcc' }, 'P1'); // 上管并联：任一输入为 0 → y 拉高
+  b.unit('pmos', { d: 'y', g: 'b', s: 'vcc' }, 'P2');
+  b.unit('nmos', { d: 'm', g: 'a', s: 'gnd' }, 'N1'); // 下管串联：两个输入都为 1 → y 拉低
+  b.unit('nmos', { d: 'y', g: 'b', s: 'm' }, 'N2');
+  b.port('a', 'in', 'a');
+  b.port('b', 'in', 'b');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/**
+ * 教学关·CMOS 与非门的半成品：pMOS 上管并联（源→VCC、漏→y）与 nMOS 下管
+ * 串联（N1 漏→y、N2 漏→y、N2 源→GND）都放好了，只差三条线：a 接 P1.g 与 N1.g、
+ * b 接 P2.g 与 N2.g——玩家亲手补上「下管串联、上管并联」的互补结构。
+ */
+export function cmosNandSeed(id = 'seed-cmos-nand'): Design {
+  const b = new DesignBuilder(id, 'CMOS 与非门 · 半成品');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('pmos', { d: 'y', g: 'g_dangling', s: 'vcc' }, 'P1');
+  b.unit('pmos', { d: 'y', g: 'g_dangling', s: 'vcc' }, 'P2');
+  b.unit('nmos', { d: 'y', g: 'g_dangling', s: 'm' }, 'N1');
+  b.unit('nmos', { d: 'm', g: 'g_dangling', s: 'gnd' }, 'N2');
+  b.port('a', 'in', 'a_dangling');
+  b.port('b', 'in', 'b_dangling');
+  b.port('y', 'out', 'y');
+  return b.build();
+}

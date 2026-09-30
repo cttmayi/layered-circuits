@@ -27,7 +27,8 @@ describe('阶段 1 关卡内容', () => {
     expect(nextLevelId('s1-not')).toBe('s1-and');
     // 阶段 1 的最后一关之后进入阶段 2（时序单元），整条线是一个连续的教学顺序
     expect(nextLevelId('s1-xnor')).toBe('s1-cmos-inv');
-    expect(nextLevelId('s1-cmos-inv')).toBe('s2-sr-latch');
+    expect(nextLevelId('s1-cmos-inv')).toBe('s1-cmos-nand');
+    expect(nextLevelId('s1-cmos-nand')).toBe('s2-sr-latch');
     // 主线最后一关之后是挑战关（成本挑战 / 高频挑战），挑战关之后才是终点
     expect(nextLevelId('s2-dff')).toBe('s2-dff-cost');
     // 阶段 2 之后进入阶段 3（算术单元），压轴是简易 ALU
