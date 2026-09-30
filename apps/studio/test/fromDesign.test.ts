@@ -74,7 +74,7 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
     createdAt: 0,
   }));
 
-  it('5 个算术关都有门版；直接判定通关且满分，成本不高于元件版', () => {
+  it('12 关都有门版；直接判定通关且满分，成本不高于元件版', () => {
     const library = new InMemoryModuleLibrary([...TEACHING_MODULES]);
     let checked = 0;
     for (const level of ALL_LEVELS) {
@@ -86,7 +86,8 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.score, `${level.id} 门版应满分`).toBe(100);
       expect(r.costHalf, `${level.id} 门版成本应 ≤ 元件版`).toBeLessThanOrEqual(level.optimalHalf);
     }
-    expect(checked).toBe(5);
+    // 12 关有门版：第 1 章 2（异或/同或）+ 第 2 章 5（SR/D锁存/DFF×3）+ 第 3 章 5（算术）
+    expect(checked).toBe(12);
   });
 
   it('门版 还原 → 再导出 → 判定通关且满分（App 的完整链路）', () => {
@@ -108,6 +109,6 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.pass, `${level.id} 门版还原后应通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${level.id} 门版还原后应满分`).toBe(100);
     }
-    expect(checked).toBe(5);
+    expect(checked).toBe(12);
   });
 });

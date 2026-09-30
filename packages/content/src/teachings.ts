@@ -22,7 +22,7 @@ import {
   type ModuleKind,
   type ModuleTemplate,
 } from '@lc/schema';
-import { andGateRef, nandGateRef, xorGateRef } from './references.js';
+import { andGateRef, nandGateRef, notGateRef, xorGateRef } from './references.js';
 import { fullAdderRef } from './references-ari.js';
 
 /** 门级参考解都是纯底层元件，空库即可封装（hash 由内容决定，稳定可复现） */
@@ -33,11 +33,55 @@ function wrapGate(name: string, body: Design, kind: ModuleKind): ModuleTemplate 
   return template;
 }
 
+/**
+ * 门控 D 锁存器（带 qn 输出）：内部与参考解完全相同，只是额外导出 qn。
+ * 参考解不导 qn（关卡 s2-d-latch 只要 q），但主从 D 触发器（s2-dff）的输出端口有 qn，
+ * 所以教学库需要一个能把 qn 带出来的 D 锁存器模块。
+ */
+function dLatchQnRef(id = 'ref-dlatch-qn'): Design {
+  const b = new DesignBuilder(id, 'D锁存器');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  // 反相器：d → nd
+  b.unit('res', { a: 'd', b: 'nb1' }, 'R1');
+  b.unit('npn', { c: 'nd', b: 'nb1', e: 'gnd' }, 'Q1');
+  b.unit('res', { a: 'vcc', b: 'nd' }, 'R2');
+  // 门控：ns = NAND(d, en)，nr = NAND(nd, en)
+  b.unit('res', { a: 'd', b: 's1' }, 'R3');
+  b.unit('res', { a: 'en', b: 's2' }, 'R4');
+  b.unit('npn', { c: 'ns', b: 's1', e: 'sm1' }, 'Q2');
+  b.unit('npn', { c: 'sm1', b: 's2', e: 'gnd' }, 'Q3');
+  b.unit('res', { a: 'vcc', b: 'ns' }, 'R5');
+  b.unit('res', { a: 'nd', b: 's3' }, 'R6');
+  b.unit('res', { a: 'en', b: 's4' }, 'R7');
+  b.unit('npn', { c: 'nr', b: 's3', e: 'sm2' }, 'Q4');
+  b.unit('npn', { c: 'sm2', b: 's4', e: 'gnd' }, 'Q5');
+  b.unit('res', { a: 'vcc', b: 'nr' }, 'R8');
+  // 锁存：q = NAND(ns, qn)，qn = NAND(nr, q)
+  b.unit('res', { a: 'ns', b: 'b1' }, 'R9');
+  b.unit('res', { a: 'qn', b: 'b2' }, 'R10');
+  b.unit('npn', { c: 'q', b: 'b1', e: 'm1' }, 'Q6');
+  b.unit('npn', { c: 'm1', b: 'b2', e: 'gnd' }, 'Q7');
+  b.unit('res', { a: 'vcc', b: 'q' }, 'R11');
+  b.unit('res', { a: 'nr', b: 'b3' }, 'R12');
+  b.unit('res', { a: 'q', b: 'b4' }, 'R13');
+  b.unit('npn', { c: 'qn', b: 'b3', e: 'm2' }, 'Q8');
+  b.unit('npn', { c: 'm2', b: 'b4', e: 'gnd' }, 'Q9');
+  b.unit('res', { a: 'vcc', b: 'qn' }, 'R14');
+  b.port('d', 'in', 'd');
+  b.port('en', 'in', 'en');
+  b.port('q', 'out', 'q');
+  b.port('qn', 'out', 'qn');
+  return b.build();
+}
+
 /** 教学用门级模块（内容哈希确定） */
 export const TEACHING_MODULES: readonly ModuleTemplate[] = [
+  wrapGate('非门', notGateRef(), 'logic'),
   wrapGate('与非门', nandGateRef(), 'logic'),
   wrapGate('异或门', xorGateRef(), 'logic'),
   wrapGate('与门', andGateRef(), 'logic'),
+  wrapGate('D锁存器', dLatchQnRef(), 'seq'),
   wrapGate('全加器', fullAdderRef(), 'arith'),
 ];
 
@@ -152,9 +196,90 @@ function aluByModules(id: string, name: string): Design {
   return b.build();
 }
 
+/** 异或门（门版）：经典 4 与非门（本关本就许用【非门】【与非门】） */
+function xorByModules(id: string, name: string): Design {
+  const b = new DesignBuilder(id, name);
+  const nand = hashOf('与非门');
+  const n1 = 'n1';
+  const n2 = 'n2';
+  const n3 = 'n3';
+  b.module(nand, { a: 'a', b: 'b', y: n1 }, 'G1'); // n1 = ¬(ab)
+  b.module(nand, { a: 'a', b: n1, y: n2 }, 'G2'); // n2 = ¬(a·n1)
+  b.module(nand, { a: 'b', b: n1, y: n3 }, 'G3'); // n3 = ¬(b·n1)
+  b.module(nand, { a: n2, b: n3, y: 'y' }, 'G4'); // y = ¬(n2·n3) = a⊕b
+  b.port('a', 'in', 'a');
+  b.port('b', 'in', 'b');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/** 同或门（门版）：【异或门】+【非门】 */
+function xnorByModules(id: string, name: string): Design {
+  const b = new DesignBuilder(id, name);
+  b.module(hashOf('异或门'), { a: 'a', b: 'b', y: 'x' }, 'X1');
+  b.module(hashOf('非门'), { a: 'x', y: 'y' }, 'N1');
+  b.port('a', 'in', 'a');
+  b.port('b', 'in', 'b');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/** 与非门 SR 锁存器（门版）：2 个【与非门】交叉耦合，低有效置位/复位 */
+function srLatchByModules(id: string, name: string): Design {
+  const b = new DesignBuilder(id, name);
+  const nand = hashOf('与非门');
+  b.module(nand, { a: 'sn', b: 'qn', y: 'q' }, 'G1');
+  b.module(nand, { a: 'rn', b: 'q', y: 'qn' }, 'G2');
+  b.port('sn', 'in', 'sn');
+  b.port('rn', 'in', 'rn');
+  b.port('q', 'out', 'q');
+  b.port('qn', 'out', 'qn');
+  return b.build();
+}
+
+/** 门控 D 锁存器（门版）：【非门】造 d̄ + 4 个【与非门】（2 门控 + 2 锁存） */
+function dLatchByModules(id: string, name: string): Design {
+  const b = new DesignBuilder(id, name);
+  const nand = hashOf('与非门');
+  b.module(hashOf('非门'), { a: 'd', y: 'nd' }, 'N1');
+  b.module(nand, { a: 'd', b: 'en', y: 'ns' }, 'G1');
+  b.module(nand, { a: 'nd', b: 'en', y: 'nr' }, 'G2');
+  b.module(nand, { a: 'ns', b: 'qn', y: 'q' }, 'G3');
+  b.module(nand, { a: 'nr', b: 'q', y: 'qn' }, 'G4');
+  b.port('d', 'in', 'd');
+  b.port('en', 'in', 'en');
+  b.port('q', 'out', 'q');
+  return b.build();
+}
+
+/** 主从 D 触发器（门版）：时钟反相 + 2 个【D锁存器】（主使能 nclk、从使能 clk），q/qn 出自从锁存器 */
+function dffByModules(id: string, name: string): Design {
+  const b = new DesignBuilder(id, name);
+  b.module(hashOf('非门'), { a: 'clk', y: 'nclk' }, 'N1');
+  b.module(hashOf('D锁存器'), { d: 'd', en: 'nclk', q: 'm', qn: 'mqn' }, 'MASTER');
+  b.module(hashOf('D锁存器'), { d: 'm', en: 'clk', q: 'q', qn: 'qn' }, 'SLAVE');
+  b.port('d', 'in', 'd');
+  b.port('clk', 'in', 'clk');
+  b.port('q', 'out', 'q');
+  b.port('qn', 'out', 'qn');
+  return b.build();
+}
+
 /** 某关卡有没有逻辑门版参考解；没有返回 null（此时退元件版即可） */
 export function teachingSolutionOf(levelId: string): Design | null {
   switch (levelId) {
+    case 's1-xor':
+      return xorByModules('teach-s1-xor', '异或门（门版）');
+    case 's1-xnor':
+      return xnorByModules('teach-s1-xnor', '同或门（门版）');
+    case 's2-sr-latch':
+      return srLatchByModules('teach-s2-sr', 'SR锁存器（门版）');
+    case 's2-d-latch':
+      return dLatchByModules('teach-s2-dl', 'D锁存器（门版）');
+    case 's2-dff':
+    case 's2-dff-cost':
+    case 's2-dff-fast':
+      return dffByModules(`teach-${levelId}`, 'D触发器（门版）');
     case 's3-half-adder':
       return halfAdderByModules('teach-s3-ha', '半加器（门版）');
     case 's3-full-adder':
