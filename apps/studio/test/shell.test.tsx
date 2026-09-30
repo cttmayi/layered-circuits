@@ -32,7 +32,7 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     fireEvent.click(screen.getByText(/去搭一下试试/));
     expect(screen.getByText(/委托单 · 认识三极管/)).toBeTruthy();
     expect(screen.getByText(/动手搭 · 跟着做/)).toBeTruthy();
-    expect(screen.getByText(/第一步：把基极电阻 R2/)).toBeTruthy();
+    expect(screen.getByText(/第一步：把三极管的基极/)).toBeTruthy();
   });
 
   it('首次启动进主菜单：关卡模式 / 自由搭建 / 无「继续上次」', () => {

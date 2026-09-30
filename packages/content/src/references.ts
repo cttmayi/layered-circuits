@@ -25,25 +25,24 @@ export function notGateRef(id = 'ref-not'): Design {
 /**
  * 教学关·认识三极管：反相开关（门磁警示灯）。
  * 三极管共射极天然反相：基极一通电就导通、把输出拉低；不通电时上拉电阻
- * 把输出钉回 1。y = ¬a（成本 8 = 1 三极管 + 1 上拉电阻 + 1 基极限流电阻）。
- * 基极限流：真实电路 b-e 只有约 0.7V，强信号直接怼基极会过流——基极串电阻。
+ * 把输出钉回 1。y = ¬a（成本 6 = 1 三极管 + 1 上拉电阻）。
+ * 输入 a 是弱信号源（带内阻），可以直接接基极；VCC 这种强电源直连基极
+ * 才会过流（b-e 只有约 0.7V），需要限流电阻。
  */
 export function npnIntroRef(id = 'ref-npn-intro'): Design {
   const b = new DesignBuilder(id, '认识三极管');
   b.vcc('vcc');
   b.gnd('gnd');
-  b.unit('npn', { c: 'y', b: 'n1', e: 'gnd' }, 'Q1'); // 共射极：集电极接输出
+  b.unit('npn', { c: 'y', b: 'a', e: 'gnd' }, 'Q1'); // 共射极：集电极接输出
   b.unit('res', { a: 'vcc', b: 'y' }, 'R1'); // 上拉：管子不导通时把输出钉回 1
-  b.unit('res', { a: 'a', b: 'n1' }, 'R2'); // 基极限流：b-e 约 0.7V，不能直接吃强信号
   b.port('a', 'in', 'a');
   b.port('y', 'out', 'y');
   return b.build();
 }
 
 /**
- * 教学关·认识三极管的半成品：上拉电阻 + 基极限流电阻（a→R2 已接）+
- * 集电极→输出、发射极→GND 都接好了，只差「R2 → 基极 b」这一条短线（玩家补）
- * —— 接上就亲眼看到「反着来」。
+ * 教学关·认识三极管的半成品：上拉电阻 + 集电极→输出、发射极→GND 都接好了，
+ * 只差「基极 b → 输入 a」这一条线（玩家补）—— 接上就亲眼看到「反着来」。
  */
 export function npnIntroSeed(id = 'seed-npn-intro'): Design {
   const b = new DesignBuilder(id, '认识三极管 · 半成品');
@@ -51,8 +50,7 @@ export function npnIntroSeed(id = 'seed-npn-intro'): Design {
   b.gnd('gnd');
   b.unit('npn', { c: 'y', b: 'b_dangling', e: 'gnd' }, 'Q1');
   b.unit('res', { a: 'vcc', b: 'y' }, 'R1'); // 上拉已接
-  b.unit('res', { a: 'a', b: 'b_dangling' }, 'R2'); // 基极限流已放：a→R2 已接，差 R2→基极
-  b.port('a', 'in', 'a');
+  b.port('a', 'in', 'a_dangling');
   b.port('y', 'out', 'y');
   return b.build();
 }
@@ -77,14 +75,13 @@ export function dioIntroSeed(id = 'seed-dio-intro'): Design {
 
 /**
  * 教学关·悬空与默认电平的半成品：三极管开关已接（集电极→输出、发射极→GND、
- * 基极经限流电阻 R2→输入），只差「上拉电阻 VCC → 输出 y」—— 上拉就是这关要教的主角。
+ * 基极→输入），只差「上拉电阻 VCC → 输出 y」—— 上拉就是这关要教的主角。
  */
 export function floatIntroSeed(id = 'seed-float-intro'): Design {
   const b = new DesignBuilder(id, '悬空与默认电平 · 半成品');
   b.vcc('vcc');
   b.gnd('gnd');
-  b.unit('npn', { c: 'y', b: 'n1', e: 'gnd' }, 'Q1');
-  b.unit('res', { a: 'a', b: 'n1' }, 'R2'); // 基极限流已接（a→R2→基极）
+  b.unit('npn', { c: 'y', b: 'a', e: 'gnd' }, 'Q1');
   b.port('a', 'in', 'a');
   b.port('y', 'out', 'y');
   return b.build();
@@ -107,14 +104,13 @@ export function dioIntroRef(id = 'ref-dio-intro'): Design {
   return b.build();
 }
 
-/** 教学关·悬空与默认电平：上拉反相，a → ¬y（成本 8 = 1 三极管 + 1 上拉 + 1 基极限流） */
+/** 教学关·悬空与默认电平：上拉反相，a → ¬y（成本 6 = 1 三极管 + 1 上拉电阻） */
 export function floatIntroRef(id = 'ref-float-intro'): Design {
   const b = new DesignBuilder(id, '悬空与默认电平');
   b.vcc('vcc');
   b.gnd('gnd');
   b.unit('res', { a: 'vcc', b: 'y' }, 'R1'); // 上拉：没人驱动时输出默认 1
-  b.unit('npn', { c: 'y', b: 'n1', e: 'gnd' }, 'Q1'); // 输入 1 时把输出拉低
-  b.unit('res', { a: 'a', b: 'n1' }, 'R2'); // 基极限流：b-e 约 0.7V，不能直接吃强信号
+  b.unit('npn', { c: 'y', b: 'a', e: 'gnd' }, 'Q1'); // 输入 a（弱源）直连基极
   b.port('a', 'in', 'a');
   b.port('y', 'out', 'y');
   return b.build();

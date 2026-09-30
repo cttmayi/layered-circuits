@@ -135,7 +135,7 @@ describe('本地重挑战榜（M3-E）', () => {
     let progress = emptyProgress();
     expect(leaderboard(progress).every((row) => !row.cleared)).toBe(true);
 
-    // 第 1 关：标准解 8 半单位通关（最优就是 8：基极限流电阻是强制规则，没有更省的省法）
+    // 第 1 关：标准解 8 半单位，通关（但已知最省是 6 —— 输入是弱信号源，可省掉基极限流电阻）
     progress = recordClear(progress, 's1-not', 100, 8);
     progress = recordAttempt(progress, 's1-not');
     progress = recordAttempt(progress, 's1-not');
@@ -147,8 +147,13 @@ describe('本地重挑战榜（M3-E）', () => {
     expect(not?.cleared).toBe(true);
     expect(not?.bestCostHalf).toBe(8);
     expect(not?.attempts).toBe(2);
-    expect(not?.bestKnownHalf).toBe(8); // 无更优解：已知最省 = 最优解
-    expect(not?.atBestKnown).toBe(true); // 8 = 已知最省：已到最省
+    expect(not?.bestKnownHalf).toBe(6);
+    expect(not?.atBestKnown).toBe(false); // 8 > 6：还没追到省电阻版
+
+    // 玩家用省电阻版做到 6 → 标「已到最省」
+    progress = recordClear(progress, 's1-not', 100, 6);
+    const not2 = leaderboard(progress).find((r) => r.levelId === 's1-not');
+    expect(not2?.atBestKnown).toBe(true);
 
     const xor = rows.find((r) => r.levelId === 's1-xor');
     expect(xor?.optimalHalf).toBe(56);

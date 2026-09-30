@@ -64,10 +64,10 @@ describe('组件库与成绩面板', () => {
     fireEvent.click(screen.getByText('组件库'));
     // 入门关（moduleAccess none）用不到模块：即使存档有模块也不显示
     expect(screen.getAllByText('我的模块（0）').length).toBeGreaterThanOrEqual(1);
-    // 重挑战榜：非门 8 = 已知最省 8 →「已到最省」；异或门已知最省 42（21 元）、
-    // 玩家 56（28 元）→「追赶 21」
+    // 重挑战榜：非门已知最省 6 半单位（3 元）、玩家 8（4 元）→「追赶 3」；
+    // 异或门已知最省 42（21 元）、玩家 56（28 元）→「追赶 21」
     expect(screen.getByText('非门', { selector: '.link' })).toBeTruthy();
-    expect(screen.getAllByText(/已到最省/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/追赶 3/)).toBeTruthy();
     expect(screen.getByText(/追赶 21/)).toBeTruthy();
   });
 

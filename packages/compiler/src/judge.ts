@@ -255,20 +255,19 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     }
   }
   // 1.1c) 三极管基极回路限流：把 b、e 看成同一个点（真实电路 b-e 导通时只有约 0.7V，
-  //       相当于短路）。这个点上如果同时出现「强驱动 1」（基极网直连 VCC / 输入引脚）
-  //       和「GND」（发射极网直连地），就是强信号直接怼 b-e 结 → 过流，打回；
-  //       经电阻的弱驱动（弱 1）+ GND 是合理的（限流电阻把强驱动变弱）。
-  //       限流电阻在基极侧或发射极侧都算——回路阻抗决定基极电流。
+  //       相当于短路）。这个点上如果出现「VCC 强电源直连基极」+「发射极网直连 GND」，
+  //       就是强信号直接怼 b-e 结 → 过流，打回。
+  //       输入端口是「弱信号源」（像传感器/按键带上拉、带内阻），直连基极是日常常态，
+  //       放行；经电阻的弱驱动 + GND 也合理（限流电阻把强驱动变弱）。
   if (usedUnits.has('npn')) {
     const unitOf = new Map(design.instances.map((i) => [i.id, i]));
     const netOf = (instId: string, pin: string) =>
       design.nets.find((n) => n.pins.some((p) => p.inst === instId && p.pin === pin));
-    const hasStrongSource = (net: (typeof design.nets)[number] | undefined) =>
+    const hasVccDirect = (net: (typeof design.nets)[number] | undefined) =>
       !!net?.pins.some((p) => {
         const other = unitOf.get(p.inst);
         return other !== undefined && other.kind === 'vcc';
-      }) ||
-      (net !== undefined && design.ports.some((p) => p.dir === 'in' && p.nets.includes(net.id)));
+      });
     const hasGndDirect = (net: (typeof design.nets)[number] | undefined) =>
       !!net?.pins.some((p) => {
         const other = unitOf.get(p.inst);
@@ -279,9 +278,9 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
       const netB = netOf(instance.id, 'b');
       const netE = netOf(instance.id, 'e');
       if (!netB || !netE) continue; // 基极/发射极悬空交给「浮空/缺连接」类检查
-      if (hasStrongSource(netB) && hasGndDirect(netE)) {
+      if (hasVccDirect(netB) && hasGndDirect(netE)) {
         errors.push(
-          `${instance.label || '三极管'} 的基极回路没有限流电阻：真实电路 b-e 只有约 0.7V，强信号直接怼基极会过流——请在基极串一个电阻，或在发射极到地之间加一个电阻限流。`,
+          `${instance.label || '三极管'} 的基极直接吃了 VCC 强电源：真实电路 b-e 只有约 0.7V，电源直怼基极会过流——请在基极串一个电阻限流（输入 a 这种弱信号源可以直接接）。`,
         );
       }
     }

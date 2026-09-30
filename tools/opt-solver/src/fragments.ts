@@ -5,10 +5,10 @@
  *  - 端口名里的 net 由求解器在组装时分配，片段内部自建中间节点（用 prefix 保证唯一）；
  *  - 成本不在这里硬编码，而是组装后由 `computeCosts` 真算（避免两套账）。
  *
- * 注意：判定强制「三极管基极回路必须有限流电阻」（真实电路 b-e 只有约 0.7V，
- * 强信号直怼基极会过流；基极直连输入会被打回），所以这里**不**再枚举
- * 省略基极限流电阻的片段（旧 notNoBaseResistor 的「更省解」非门 8→6、同或门
- * 56→54 在现行规则下都搭不出来）。
+ * 注意：判定只强制「VCC 强电源不能直连基极」（真实电路 b-e 只有约 0.7V，电源
+ * 直怼基极会过流）；输入端口是弱信号源（带内阻），可以直接接基极，所以求解器
+ * 仍要枚举省略基极限流电阻的片段（notNoBaseResistor）——它的「更省解」非门 8→6、
+ * 同或门 64→54 在现行规则下依然搭得出来。
  */
 
 import type { DesignBuilder, Unit } from '@lc/schema';
@@ -60,6 +60,24 @@ export const notFollower: Fragment = {
   build(b, ctx) {
     notCommonEmitter.build(b, { ...ctx, out: internal(ctx, 'x') });
     b.unit('npn', { c: 'vcc', b: internal(ctx, 'x'), e: ctx.out }, `${ctx.prefix}QF`);
+  },
+};
+
+/**
+ * 省略基极限流电阻的反相器：输入端口（弱信号源）直接驱动基极（成本 6）。
+ * 判定只罚「VCC 强电源直连基极」，输入直连是日常常态——玩家可以搭出这种结构，
+ * 求解器要把它也枚举进去，否则会漏掉玩家可搭的更省解（非门 8→6、同或门
+ * 64→54 就是它贡献的）。
+ */
+export const notNoBaseResistor: Fragment = {
+  id: 'not-no-base-res',
+  units: ['npn', 'res'],
+  name: '反相器（省略基极限流电阻）',
+  arity: 1,
+  build(b, ctx) {
+    const [a] = ctx.inputs as [string];
+    b.unit('npn', { c: ctx.out, b: a, e: 'gnd' }, `${ctx.prefix}Q1`);
+    b.unit('res', { a: 'vcc', b: ctx.out }, `${ctx.prefix}R2`);
   },
 };
 
@@ -159,6 +177,7 @@ export const andRtlSeries: Fragment = {
 
 export const BASE_FRAGMENTS: readonly Fragment[] = [
   notCommonEmitter,
+  notNoBaseResistor,
   notFollower,
   andDiode,
   orDiode,
