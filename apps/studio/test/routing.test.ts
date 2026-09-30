@@ -62,6 +62,25 @@ describe('避障布线', () => {
     expect(hitsAny(segs, [NPN])).toBe(false);
   });
 
+  it('水平段沿引脚高度平穿端点元件（从左侧穿进二极管到右侧引脚）会被剔除', () => {
+    // 用户报的真实场景：in-a.p(-34,200) → dio1.k(142,90)。D1 足迹 x∈[103,137]
+    // y∈[78,102]。旧候选最后一段沿 y=90 从拐点 (54,90) 平穿 D1 到右侧引脚
+    // （D1 是端点元件被豁免）→ 方向约束要求拐点在引脚外侧：x ≥ 142。
+    const D1: RouteObstacle = { id: 'dio1', x: 103, y: 78, w: 34, h: 24 };
+    const segs = routeSegments({ x: -34, y: 200 }, { x: 142, y: 90 }, 0, [D1], 'in-a', 'dio1');
+    // 没有任何一段的「主体」穿过 D1 中部
+    for (const [p, q] of segs) {
+      const midX = (p.x + q.x) / 2;
+      const midY = (p.y + q.y) / 2;
+      const throughCenter =
+        midX > D1.x + 4 && midX < D1.x + D1.w - 4 && midY > D1.y && midY < D1.y + D1.h;
+      expect(throughCenter).toBe(false);
+    }
+    // 最后一段从 D1 外侧接近引脚：拐点 x ≥ 引脚 x
+    const lastTurn = segs[segs.length - 1][0];
+    expect(lastTurn.x).toBeGreaterThanOrEqual(142);
+  });
+
   it('垂直出线段从底部引脚朝上拐也会被剔除', () => {
     // res 的 b 引脚在 (0,22)，足迹半高 20。垂直向上拐（my < 22）的拐点在矩形内
     // → 淘汰；水平出线（在器件下方）保留。

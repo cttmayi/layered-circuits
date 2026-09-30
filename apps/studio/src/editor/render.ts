@@ -223,9 +223,34 @@ export function routeObstacles(doc: Doc): RouteObstacle[] {
     .filter((o) => o.w > 0 && o.h > 0);
 }
 
-/** 点是否落在障碍矩形内（含边界）。用于剔除「朝器件内部拐」的走线候选 */
-export function pointInBox(p: { x: number; y: number }, r: RouteObstacle): boolean {
-  return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+/** 端点引脚相对其元件矩形的方位（引脚在元件的左/右/上/下侧） */
+export function pinSide(
+  p: { x: number; y: number },
+  box: RouteObstacle | undefined,
+): 'l' | 'r' | 'u' | 'd' | null {
+  if (!box) return null;
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.h / 2;
+  return Math.abs(p.x - cx) >= Math.abs(p.y - cy) ? (p.x < cx ? 'l' : 'r') : p.y < cy ? 'u' : 'd';
+}
+
+/** 出线段是否朝引脚的外侧走：水平段对左右侧引脚、垂直段对上下侧引脚才约束 */
+function outwardTurn(
+  turn: { x: number; y: number },
+  from: { x: number; y: number },
+  side: 'l' | 'r' | 'u' | 'd',
+): boolean {
+  if (turn.y === from.y) {
+    if (side === 'l') return turn.x <= from.x;
+    if (side === 'r') return turn.x >= from.x;
+    return true; // 引脚在顶/底部，水平段在元件外侧，无约束
+  }
+  if (turn.x === from.x) {
+    if (side === 'u') return turn.y <= from.y;
+    if (side === 'd') return turn.y >= from.y;
+    return true; // 引脚在左/右侧，垂直段在元件外侧，无约束
+  }
+  return true; // 斜段（直连），由 routeClear 负责
 }
 
 export function segHitsRect(
@@ -347,19 +372,21 @@ export function routeSegments(
     pick(mx0, my0);
     for (const d of [48, -48, 96, -96, 144, -144]) pick(mx0 + d, my0 + d);
   }
+  const boxOf = (id: string): RouteObstacle | undefined => obstacles.find((o) => o.id === id);
   for (const cand of candidates) {
-    // 出线段不得「朝器件内部拐」：第一段的拐点若落在起点元件矩形内、或
-    // 最后一段的拐点落在终点元件矩形内，说明折线从引脚往器件里穿进去了
-    // （视觉上电线穿过元件）。这种候选直接淘汰，让避障换一个方向绕。
-    if (skipA) {
-      const ba = obstacles.find((o) => o.id === skipA);
-      if (ba && cand[0] && pointInBox(cand[0][1], ba)) continue;
-    }
-    if (skipB) {
-      const bb = obstacles.find((o) => o.id === skipB);
-      const last = cand[cand.length - 1];
-      if (bb && last && pointInBox(last[0], bb)) continue;
-    }
+    // 出线段必须从「引脚的外侧」接近端点元件，否则折线会沿引脚高度水平
+    // 横穿进器件（比如从左侧平穿二极管到右侧引脚）。对每一段：若它跟引脚
+    // 同方向（水平段 vs 左右侧引脚 / 垂直段 vs 上下侧引脚），拐点就得在
+    // 引脚的外侧；朝器件内部拐的候选直接淘汰，让避障换方向绕。
+    const sideA = pinSide(a, boxOf(skipA));
+    const sideB = pinSide(b, boxOf(skipB));
+    if (sideA && cand[0] && !outwardTurn(cand[0][1], cand[0][0], sideA)) continue;
+    if (
+      sideB &&
+      cand[cand.length - 1] &&
+      !outwardTurn(cand[cand.length - 1][0], cand[cand.length - 1][1], sideB)
+    )
+      continue;
     if (!obstacles.length || routeClear(cand, obstacles, skipA, skipB)) return cand;
   }
   // 兜底：默认中点折线（旧行为），保证永远画得出线
