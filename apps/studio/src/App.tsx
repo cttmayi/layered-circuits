@@ -6,7 +6,7 @@ import {
   TEACHING_MODULES,
   teachingSolutionOf,
 } from '@lc/content';
-import { FAMILY_CONTRACTS, familySpecOf, type LogicFamily } from '@lc/schema';
+import { FAMILY_CONTRACTS, familySpecOf, type LogicFamily, levelViewOf } from '@lc/schema';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emptyDoc, notGateDemo } from './editor/demos';
 import {
@@ -806,7 +806,9 @@ export function App(): React.JSX.Element {
   };
 
   // ---- 关卡 / 模式入口（模式只在主菜单选，进关后不可改） ----
-  const currentLevel = levelOf(gameMode, levelId);
+  const currentLevelRaw = levelOf(gameMode, levelId);
+  // 教学关按玩家契约换内容（CMOS 契约下「认识三极管」→「认识 MOS」等）；id 不变
+  const currentLevel = currentLevelRaw ? levelViewOf(currentLevelRaw, progress.family) : null;
 
   /** 清掉跨关卡残留的临时状态 */
   const clearTransient = (): void => {
@@ -1037,7 +1039,8 @@ export function App(): React.JSX.Element {
 
   // ---- 主菜单（开场）：模式只在这是选 ----
   if (screen === 'menu') {
-    const resumeLevel = findLevel(session.levelId);
+    const resumeLevelRaw = findLevel(session.levelId);
+    const resumeLevel = resumeLevelRaw ? levelViewOf(resumeLevelRaw, progress.family) : null;
     const canResume =
       session.mode === 'level' &&
       Boolean(resumeLevel) &&
@@ -1067,6 +1070,7 @@ export function App(): React.JSX.Element {
     return (
       <WorldMap
         progress={progress}
+        family={progress.family}
         currentLevelId={levelId}
         onPick={enterLevel}
         onBack={goToMenu}
@@ -1466,6 +1470,7 @@ export function App(): React.JSX.Element {
           <Modal title="任务墙" onClose={() => setPanelOpen(null)}>
             <LevelMap
               progress={progress}
+              family={progress.family}
               currentLevelId={currentLevel.id}
               onPick={(id) => {
                 setPanelOpen(null);

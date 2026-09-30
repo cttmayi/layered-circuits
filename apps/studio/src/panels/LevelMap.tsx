@@ -6,6 +6,7 @@
  */
 
 import { ALL_LEVELS } from '@lc/content';
+import { type LogicFamily, levelViewOf } from '@lc/schema';
 import {
   isLevelUnlocked,
   MAX_STARS_PER_LEVEL,
@@ -16,6 +17,8 @@ import {
 
 export interface LevelMapProps {
   progress: Progress;
+  /** 玩家契约：教学关按契约显示对应工艺内容（CMOS 契约显示「认识 MOS」等） */
+  family: LogicFamily;
   currentLevelId: string;
   onPick: (levelId: string) => void;
 }
@@ -36,7 +39,12 @@ const STAGE_TITLE: Record<number, string> = {
   6: '第六章 · 整机',
 };
 
-export function LevelMap({ progress, currentLevelId, onPick }: LevelMapProps): React.JSX.Element {
+export function LevelMap({
+  progress,
+  family,
+  currentLevelId,
+  onPick,
+}: LevelMapProps): React.JSX.Element {
   const stages = [...new Set(ALL_LEVELS.map((level) => level.stage))].sort((a, b) => a - b);
   const earned = ALL_LEVELS.reduce(
     (sum, level) => sum + (progress.cleared[level.id]?.stars ?? 0),
@@ -58,6 +66,7 @@ export function LevelMap({ progress, currentLevelId, onPick }: LevelMapProps): R
             <h4>{STAGE_TITLE[stage] ?? `第 ${stage} 章`}</h4>
             <ul className="map-nodes">
               {levels.map((level) => {
+                const view = levelViewOf(level, family); // 教学关按契约换显示内容（id 不变）
                 const record = progress.cleared[level.id];
                 const unlocked = isLevelUnlocked(progress, level.id);
                 const cleared = (record?.clearedAt ?? 0) > 0;
@@ -70,9 +79,9 @@ export function LevelMap({ progress, currentLevelId, onPick }: LevelMapProps): R
                       disabled={!unlocked}
                       className={level.id === currentLevelId ? 'active' : ''}
                       onClick={() => onPick(level.id)}
-                      title={unlocked ? level.title : '前一单交付后才解锁'}
+                      title={unlocked ? view.title : '前一单交付后才解锁'}
                     >
-                      <span className="map-title">{level.title}</span>
+                      <span className="map-title">{view.title}</span>
                       {KIND_LABEL[level.kind] ? (
                         <span className="map-kind">{KIND_LABEL[level.kind]}</span>
                       ) : null}

@@ -8,11 +8,13 @@
  */
 
 import { ALL_LEVELS } from '@lc/content';
-import type { Level } from '@lc/schema';
+import { type Level, type LogicFamily, levelViewOf } from '@lc/schema';
 import { isCleared, isLevelUnlocked, type Progress, rankOf, reconCount } from '../level/progress';
 
 export interface WorldMapProps {
   progress: Progress;
+  /** 玩家契约：教学关按契约显示对应工艺内容（CMOS 契约显示「认识 MOS」等） */
+  family: LogicFamily;
   currentLevelId: string;
   onPick: (levelId: string) => void;
   onBack: () => void;
@@ -73,6 +75,7 @@ function pathBetween(a: { x: number; y: number }, b: { x: number; y: number }): 
 
 export function WorldMap({
   progress,
+  family,
   currentLevelId,
   onPick,
   onBack,
@@ -126,6 +129,7 @@ export function WorldMap({
           })}
         </svg>
         {ALL_LEVELS.map((level, i) => {
+          const view = levelViewOf(level, family); // 教学关按契约换显示内容（id 不变）
           const pos = NODE_POS[i];
           const state = stateOf(progress, level);
           const unlocked = state !== 'locked';
@@ -141,10 +145,10 @@ export function WorldMap({
               }}
               disabled={!unlocked}
               onClick={() => onPick(level.id)}
-              title={`${level.title}（${STATE_LABEL[state]}）`}
+              title={`${view.title}（${STATE_LABEL[state]}）`}
             >
               <span className="node-num">{i + 1}</span>
-              <span className="node-title">{level.title}</span>
+              <span className="node-title">{view.title}</span>
               <span className="node-stars">
                 {stars > 0 ? `${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}` : STATE_ICON[state]}
               </span>

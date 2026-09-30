@@ -45,6 +45,10 @@ import {
   cmosOrRef,
   cmosXnorRef,
   cmosXorRef,
+  nmosIntroRef,
+  nmosIntroSeed,
+  pmosIntroRef,
+  pmosIntroSeed,
   ttlAndRef,
   ttlNandRef,
   ttlNorRef,
@@ -192,6 +196,42 @@ export const STAGE1_LEVELS: Level[] = [
     ],
     moduleAccess: 'none',
     reference: npnIntroRef('ref-npn-intro'),
+    // 教学关按契约变体：CMOS 契约玩家从「认识 MOS」学起（教什么用什么）
+    familyRefs: {
+      cmos: {
+        reference: nmosIntroRef('ref-nmos-intro'),
+        optimalHalf: 6, // 1 N-MOS + 1 上拉电阻 = 2 + 4 半分（显示 3）
+        title: '认识 MOS · N-MOS',
+        allowedUnits: ['nmos', 'res'],
+        requiredUnits: ['nmos'],
+        brief:
+          'MOS 管是电压控制的开关：栅极一给高电平就导通、把输出拉低；栅极几乎不取电流。这一关用 N-MOS 做反相开关。',
+        teaching:
+          'N-MOS 有三只脚：栅极（g）、漏极（d）、源极（s）。它的脾气和 NPN 三极管很像——栅极高电平就导通（漏→源），把输出拉低（1 → 0）；栅极低电平截止，输出靠上拉电阻钉回 1（0 → 1）。和 NPN 最大的区别：MOS 是「电压控制」，栅极不取电流（NPN 的基极要电流），所以弱信号源直接接栅极毫无压力。这一关做「反相」：a=1 灯灭、a=0 灯亮。',
+        hint: 'N-MOS 栅极（g）接输入 a；漏极（d）接输出 y；源极（s）接 GND；输出再经一个上拉电阻接到 VCC。',
+        ports: [
+          { name: 'a', dir: 'in', width: 1 },
+          { name: 'y', dir: 'out', width: 1 },
+        ],
+        vectors: vectors1((a) => (a ? 0 : 1)),
+        seedDoc: nmosIntroSeed(),
+        guideSteps: [
+          '第一步：把 N-MOS 的栅极（g）接到输入 a —— MOS 是电压控制，弱信号源直接接就行',
+          '第二步：确认输出 y 挂着上拉电阻到 VCC（没有就补一个）',
+          '第三步：点「交付验收」，a=0 亮、a=1 灭就对了',
+        ],
+        classroom: {
+          title: 'N-MOS：电压开关',
+          analogy:
+            '水龙头——栅极是把手，给高电平（开水）就导通，水（电流）从漏极流到源极；拧上（低电平）就断流。',
+          points: [
+            '三只脚：栅极（g）是开关把手、漏极（d）是进水口、源极（s）是出水口',
+            '栅极高电平导通，把输出拉低（1→0）；栅极低电平截止，靠上拉电阻把输出钉回 1',
+            'MOS 是电压控制：栅极不取电流——弱信号源直接接栅极毫无压力（对比 NPN 基极要电流）',
+          ],
+        },
+      },
+    },
     unlockName: '跟随器',
     freqHz: 100_000,
   }),
@@ -228,6 +268,42 @@ export const STAGE1_LEVELS: Level[] = [
     ],
     moduleAccess: 'none',
     reference: dioIntroRef('ref-dio-intro'),
+    // 教学关按契约变体：CMOS 契约下这关换成「认识 MOS · P-MOS」（用户指定：二极管关换 CMOS 概念关）
+    familyRefs: {
+      cmos: {
+        reference: pmosIntroRef('ref-pmos-intro'),
+        optimalHalf: 6, // 1 P-MOS + 1 下拉电阻 = 2 + 4 半分（显示 3）
+        title: '认识 MOS · P-MOS',
+        allowedUnits: ['pmos', 'res'],
+        requiredUnits: ['pmos'],
+        brief:
+          'P-MOS 和 N-MOS 正好相反：栅极给低电平才导通，把输出拉高到 VCC。它是 CMOS 互补对的另一半。',
+        teaching:
+          'P-MOS 也是三只脚（栅极 g / 漏极 d / 源极 s），但脾气和 N-MOS 相反：栅极**低电平**才导通，把输出拉高到 VCC；栅极高电平截止，输出靠下拉电阻钉回 0。N-MOS 栅高导通、P-MOS 栅低导通——一对互补：CMOS 反相器就是上面 P 下面 N，任何时刻恰有一个导通。栅极悬空是 CMOS 大忌：悬空的栅极没人驱动，电平不确定，受噪声影响乱跳（不像三极管基极悬空只是截止）。',
+        hint: 'P-MOS 栅极（g）接输入 a；漏极（d）接输出 y；源极（s）接 VCC；输出再经一个下拉电阻接到 GND。',
+        ports: [
+          { name: 'a', dir: 'in', width: 1 },
+          { name: 'y', dir: 'out', width: 1 },
+        ],
+        vectors: vectors1((a) => (a ? 0 : 1)),
+        seedDoc: pmosIntroSeed(),
+        guideSteps: [
+          '第一步：把 P-MOS 的栅极（g）接到输入 a',
+          '第二步：确认输出 y 挂着下拉电阻到 GND（没有就补一个）',
+          '第三步：点「交付验收」，a=0 亮、a=1 灭就对了',
+        ],
+        classroom: {
+          title: 'P-MOS：反着来的开关',
+          analogy:
+            '电闸——栅极给低电平（拉闸）才导通，把输出顶到 VCC；栅极一松（高电平）就断流，靠下拉电阻兜底。',
+          points: [
+            '栅极低电平导通、高电平截止——和 N-MOS 正好相反，互补对的另一半',
+            '导通时把输出拉到 VCC（高）；没人导通时靠下拉电阻把输出钉回 0',
+            '栅极悬空是 CMOS 大忌：没人驱动、电平不确定，受噪声影响乱跳',
+          ],
+        },
+      },
+    },
     unlockName: '二极管或门',
     freqHz: 100_000,
   }),
@@ -262,6 +338,43 @@ export const STAGE1_LEVELS: Level[] = [
     ],
     moduleAccess: 'none',
     reference: floatIntroRef('ref-float-intro'),
+    // 教学关按契约变体：CMOS 契约下这关做 CMOS 反相器，讲「栅极悬空大忌」+ 推挽无电阻
+    familyRefs: {
+      cmos: {
+        reference: cmosInvRef('ref-float-cmos'),
+        optimalHalf: 4, // 1 pMOS + 1 nMOS = 2 + 2 半分（显示 2）：互补对推挽，不需要电阻
+        title: '悬空与默认电平（CMOS）',
+        allowedUnits: ['nmos', 'pmos', 'res'],
+        requiredUnits: ['nmos', 'pmos'],
+        brief:
+          '没人驱动的线会悬空乱跳——CMOS 里更危险：栅极悬空时 p/n 都可能微导通，VCC 直通 GND。这一关做 CMOS 反相器：互补对推挽，任何时刻都有管子强驱动，根本不需要电阻。',
+        teaching:
+          'CMOS 反相器 = 上 pMOS + 下 nMOS：输入 a 同时接两个栅极——a=0 时 pMOS 导通把输出拉到 VCC（强 1）、nMOS 截止；a=1 时反过来。这就是「推挽」：任何时刻都有一个管子强驱动输出，不用上拉/下拉电阻。对比前面：栅极悬空是 CMOS 大忌——悬空的栅极没人驱动，电平不确定（受噪声影响乱跳），CMOS 里还可能 p/n 同时微导通、VCC 直通 GND 发热。所以每个栅极都必须接点什么。',
+        hint: '把输入 a 分别接到 P1 的栅极和 N1 的栅极——两个栅极并在一起，就是互补对（不需要任何电阻）。',
+        ports: [
+          { name: 'a', dir: 'in', width: 1 },
+          { name: 'y', dir: 'out', width: 1 },
+        ],
+        vectors: vectors1((a) => (a ? 0 : 1)),
+        seedDoc: cmosInvSeed(),
+        guideSteps: [
+          '第一步：看——两个管子都放好了，但栅极悬空，输出 y 谁也驱动不了（悬空 = 没人驱动）',
+          '第二步：把输入 a 接到 P1 的栅极（pMOS 栅低才导通）',
+          '第三步：把输入 a 也接到 N1 的栅极（nMOS 栅高才导通）——两个栅极并在一起，互补对完成',
+          '第四步：点「交付验收」：a=0 亮、a=1 灭，强驱动、无电阻',
+        ],
+        classroom: {
+          title: '悬空与默认电平（CMOS 版）',
+          analogy:
+            '跷跷板——pMOS 压高、nMOS 压低，任何时刻都有一边落地（推挽）；没人坐上去就悬空乱晃（悬空）。',
+          points: [
+            '互补对推挽：上 pMOS + 下 nMOS，任何时刻恰有一个导通，输出被强驱动',
+            'CMOS 反相器不需要上拉/下拉电阻——这是它比 RTL 便宜又稳的原因',
+            '栅极悬空是 CMOS 大忌：没人驱动、电平不确定，还可能 p/n 同时微导通、VCC 直通 GND',
+          ],
+        },
+      },
+    },
     unlockName: '上拉反相器',
     freqHz: 100_000,
   }),

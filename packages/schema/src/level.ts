@@ -50,7 +50,15 @@ export type LevelKind = z.infer<typeof LevelKindSchema>;
 export const ModuleAccessSchema = z.enum(['none', 'all', 'listed']);
 export type ModuleAccess = z.infer<typeof ModuleAccessSchema>;
 
-/** 单个逻辑族契约下的差异化关卡规格（referenceSolution 之外的工艺答案） */
+/** 单个逻辑族契约下的差异化关卡规格（referenceSolution 之外的工艺答案）。
+ *
+ *  两种用法：
+ *  1. **功能关**：只填 reference / optimalHalf / (bestKnownHalf | timingBudgetPs) ——
+ *     该契约工艺下的标准答案与满分线（一键出答案、判定、预算都按它）。
+ *  2. **教学关**（有 classroom 的关）：可额外带 title / teaching / ports / vectors /
+ *     seedDoc / guideSteps / classroom / allowedUnits / requiredUnits 等整套内容覆盖 ——
+ *     让玩家在选定的契约下「教什么用什么」：CMOS 契约的教学关学 MOS 而不是三极管。
+ */
 export const FamilyLevelRefSchema = z.object({
   /** 该契约工艺下的参考解（例：CMOS 契约 = 互补 MOS 门，TTL 契约 = 跟随器推挽输出级） */
   reference: DesignSchema,
@@ -62,6 +70,38 @@ export const FamilyLevelRefSchema = z.object({
    *  为什么需要：各契约速度标准不同——CMOS 与门/或门是两级门（NAND/NOR + 反相），
    *  单级预算（如 s1-and 的 2ns）是按二极管与门定的，对 CMOS 太紧。 */
   timingBudgetPs: z.number().int().positive().optional(),
+
+  // ---- 教学关按契约的内容覆盖（以下全部可选，缺省沿用关卡原值）----
+  /** 教学关按契约的标题（例：CMOS 契约下「认识三极管」→「认识 MOS · N-MOS」） */
+  title: z.string().min(1).optional(),
+  /** 教学关按契约的委托简介 */
+  brief: z.string().optional(),
+  /** 教学关按契约的授课文案 */
+  teaching: z.string().optional(),
+  /** 教学关按契约的卡关提示 */
+  hint: z.string().optional(),
+  /** 教学关按契约的端口（换功能时端口可不同；缺省沿用关卡） */
+  ports: z.array(PortSpecSchema).optional(),
+  /** 教学关按契约的真值表（换功能时用；缺省沿用关卡） */
+  vectors: z.array(LevelVectorSchema).optional(),
+  /** 教学关按契约的半成品电路 */
+  seedDoc: DesignSchema.optional(),
+  /** 教学关按契约的引导步骤 */
+  guideSteps: z.array(z.string()).optional(),
+  /** 教学关按契约的「元件课堂」概念卡 */
+  classroom: z
+    .object({
+      title: z.string().min(1),
+      analogy: z.string().min(1),
+      points: z.array(z.string()).min(1),
+    })
+    .optional(),
+  /** 教学关按契约的可用元件（教学关不加契约元件并集，直接替换——「教什么用什么」） */
+  allowedUnits: z.array(z.enum(UNITS)).optional(),
+  /** 教学关按契约的必用元件 */
+  requiredUnits: z.array(z.enum(UNITS)).optional(),
+  /** 教学关按契约的判定契约（缺省沿用关卡声明；教学关默认宽松不查强度） */
+  family: z.enum(['rtl', 'dtl', 'ttl', 'cmos']).optional(),
 });
 
 export type FamilyLevelRef = z.infer<typeof FamilyLevelRefSchema>;
@@ -211,9 +251,52 @@ export interface FamilyLevelSpec {
  * - 功能关：玩家契约有 familyRefs 条目 → 用该契约的参考解/满分线/预算，元件集 = 关卡允许 ∪ 契约元件；
  *   否则回退 rtl 规格（关卡原样）。
  */
+/**
+ * 教学关按契约的「内容视图」：玩家选定契约后，教学关换成该契约的教学内容
+ * （标题/文案/端口/真值表/种子图/引导/概念卡/满分线/参考解），id 不变 →
+ * 进度、解锁链、存档全部兼容。非教学关或没有对应契约变体时原样返回。
+ * 功能关的差异化只影响判定/一键答案（familySpecOf），显示与内容不变。
+ */
+export function levelViewOf(level: Level, family: LogicFamily): Level {
+  const ref = level.classroom ? level.familyRefs?.[family] : undefined;
+  if (!ref) return level;
+  return {
+    ...level,
+    title: ref.title ?? level.title,
+    brief: ref.brief ?? level.brief,
+    teaching: ref.teaching ?? level.teaching,
+    hint: ref.hint ?? level.hint,
+    ...(ref.ports ? { ports: ref.ports } : {}),
+    ...(ref.vectors ? { vectors: ref.vectors } : {}),
+    ...(ref.seedDoc ? { seedDoc: ref.seedDoc } : {}),
+    ...(ref.guideSteps ? { guideSteps: ref.guideSteps } : {}),
+    ...(ref.classroom ? { classroom: ref.classroom } : {}),
+    ...(ref.allowedUnits ? { allowedUnits: ref.allowedUnits } : {}),
+    ...(ref.requiredUnits ? { requiredUnits: ref.requiredUnits } : {}),
+    ...(ref.family ? { family: ref.family } : {}),
+    ...(ref.timingBudgetPs !== undefined ? { timingBudgetPs: ref.timingBudgetPs } : {}),
+    referenceSolution: ref.reference,
+    optimalHalf: ref.optimalHalf,
+    budgetHalf: budgetFromOptimal(ref.optimalHalf, 0.2),
+  };
+}
+
 export function familySpecOf(level: Level, family: LogicFamily): FamilyLevelSpec {
   const teaching = level.classroom !== undefined;
   if (teaching) {
+    const ref = level.familyRefs?.[family];
+    if (ref) {
+      // 教学关按契约变体：内容/元件/参考解/满分线全套换（「教什么用什么」）
+      return {
+        family: ref.family ?? level.family,
+        units: [...(ref.allowedUnits ?? level.allowedUnits)],
+        reference: ref.reference,
+        optimalHalf: ref.optimalHalf,
+        budgetHalf: budgetFromOptimal(ref.optimalHalf, 0.2),
+        bestKnownHalf: ref.bestKnownHalf ?? ref.optimalHalf,
+        timingBudgetPs: ref.timingBudgetPs ?? level.timingBudgetPs,
+      };
+    }
     const f = level.family;
     return {
       family: f,

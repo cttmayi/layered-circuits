@@ -12,6 +12,56 @@
 
 import { type Design, DesignBuilder } from '@lc/schema';
 
+// ---- 教学关按契约的变体参考解（CMOS 契约下「认识三极管/二极管」换成 MOS 教学）----
+
+/** 认识 MOS · N-MOS 的参考解：N-MOS 栅高导通拉低 + 上拉电阻钉 1（成本 6 半分 = 显示 3） */
+export function nmosIntroRef(id = 'ref-nmos-intro'): Design {
+  const b = new DesignBuilder(id, '认识 N-MOS');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('nmos', { d: 'y', g: 'a', s: 'gnd' }, 'N1'); // 栅极高电平导通：漏→源，把输出拉低
+  b.unit('res', { a: 'vcc', b: 'y' }, 'R1'); // 上拉：管子截止时把输出钉回 1
+  b.port('a', 'in', 'a');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/** 认识 MOS · N-MOS 的半成品：管子放好但栅极悬空、输入 a 没接 */
+export function nmosIntroSeed(id = 'seed-nmos-intro'): Design {
+  const b = new DesignBuilder(id, '认识 N-MOS · 半成品');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('nmos', { d: 'y', g: 'g_dangling', s: 'gnd' }, 'N1');
+  b.unit('res', { a: 'vcc', b: 'y' }, 'R1'); // 上拉已接
+  b.port('a', 'in', 'a_dangling');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/** 认识 MOS · P-MOS 的参考解：P-MOS 栅低导通拉高 + 下拉电阻钉 0（成本 6 半分 = 显示 3） */
+export function pmosIntroRef(id = 'ref-pmos-intro'): Design {
+  const b = new DesignBuilder(id, '认识 P-MOS');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('pmos', { d: 'y', g: 'a', s: 'vcc' }, 'P1'); // 栅极低电平导通：源→漏，把输出拉高
+  b.unit('res', { a: 'y', b: 'gnd' }, 'R1'); // 下拉：管子截止时把输出钉回 0
+  b.port('a', 'in', 'a');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/** 认识 MOS · P-MOS 的半成品：管子放好但栅极悬空、输入 a 没接 */
+export function pmosIntroSeed(id = 'seed-pmos-intro'): Design {
+  const b = new DesignBuilder(id, '认识 P-MOS · 半成品');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('pmos', { d: 'y', g: 'g_dangling', s: 'vcc' }, 'P1');
+  b.unit('res', { a: 'y', b: 'gnd' }, 'R1'); // 下拉已接
+  b.port('a', 'in', 'a_dangling');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
 /** CMOS 或非门：上 pMOS 串联、下 nMOS 并联（成本 8 半分 = 显示 4） */
 export function cmosNorRef(id = 'ref-cmos-nor'): Design {
   const b = new DesignBuilder(id, 'CMOS 或非门');
