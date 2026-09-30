@@ -29,13 +29,14 @@ describe('组件库与成绩面板', () => {
   });
 
   it('存档里有模块与通关记录时：入门关（非门）不显示模块，但重挑战榜显示「追赶已知最省」', () => {
-    // 预置一份存档：一个模块版本 + 第 1 关通关记录
+    // 预置一份存档：一个模块版本 + 非门（已到最省 8）+ 异或门（已知最省 42、玩家 56）
     localStorage.setItem(
       PROGRESS_KEY,
       JSON.stringify({
         cleared: {
           ...teachCleared(),
           's1-not': { score: 100, bestCostHalf: 8, clearedAt: Date.now() },
+          's1-xor': { score: 78, bestCostHalf: 56, clearedAt: Date.now() },
         },
         attempts: { 's1-not': 3 },
         library: [
@@ -63,9 +64,11 @@ describe('组件库与成绩面板', () => {
     fireEvent.click(screen.getByText('组件库'));
     // 入门关（moduleAccess none）用不到模块：即使存档有模块也不显示
     expect(screen.getAllByText('我的模块（0）').length).toBeGreaterThanOrEqual(1);
-    // 重挑战榜：非门已知最省 6 半单位（3），玩家 8（4）→ 显示「追赶 3」
+    // 重挑战榜：非门 8 = 已知最省 8 →「已到最省」；异或门已知最省 42（21 元）、
+    // 玩家 56（28 元）→「追赶 21」
     expect(screen.getByText('非门', { selector: '.link' })).toBeTruthy();
-    expect(screen.getByText(/追赶 3/)).toBeTruthy();
+    expect(screen.getAllByText(/已到最省/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/追赶 21/)).toBeTruthy();
   });
 
   it('非门关已有画布存档时，读档恢复也不背全量组件库', () => {

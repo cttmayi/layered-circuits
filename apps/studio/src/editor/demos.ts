@@ -82,6 +82,8 @@ export function npnIntroSeedDoc(): Doc {
     sym({ id: 'r1', kind: 'unit', unit: 'res', x: 300, y: 150, label: 'R1' }),
     sym({ id: 'q1', kind: 'unit', unit: 'npn', x: 300, y: 230, label: 'Q1' }),
     sym({ id: 'gnd', kind: 'gnd', x: 300, y: 340, label: 'GND' }),
+    // 基极限流电阻：真实 b-e 只有约 0.7V，强信号不能直接怼基极——a→R2→基极
+    sym({ id: 'r2', kind: 'unit', unit: 'res', x: 180, y: 230, rot: 1, label: 'R2' }),
     // 灯是「真两脚器件」：p 接输出信号、g 接公共地——灯下面那个地是给灯用的回路端
     sym({ id: 'gnd2', kind: 'gnd', x: 660, y: 340, label: '' }),
   ];
@@ -90,14 +92,15 @@ export function npnIntroSeedDoc(): Doc {
     { kind: 'wall', x: 6, y: 90, w: 44, h: 280 },
     { kind: 'wall', x: 668, y: 90, w: 44, h: 280 },
   ];
-  // 上拉 VCC→R1→Q1 集电极、集电极→输出、发射极→GND、灯的地端→GND 都已接好；
-  // 只差基极 b→输入 a
+  // 上拉 VCC→R1→Q1 集电极、集电极→输出、发射极→GND、灯的地端→GND、基极限流
+  // a→R2 都已接好；只差「R2 → 基极 b」这一条短线（玩家补）
   doc.wires = [
     wire('vcc', 'p', 'r1', 'a'),
     wire('r1', 'b', 'q1', 'c'),
     wire('q1', 'c', 'out-y', 'p'),
     wire('q1', 'e', 'gnd', 'p'),
     wire('out-y', 'g', 'gnd2', 'p'),
+    wire('in-a', 'p', 'r2', 'a'),
   ];
   return doc;
 }
@@ -142,16 +145,19 @@ export function floatIntroSeedDoc(): Doc {
     sym({ id: 'vcc', kind: 'vcc', x: 420, y: 70, label: 'VCC' }),
     sym({ id: 'gnd', kind: 'gnd', x: 300, y: 340, label: 'GND' }),
     sym({ id: 'q1', kind: 'unit', unit: 'npn', x: 300, y: 230, label: 'Q1' }),
+    // 基极限流电阻：真实 b-e 只有约 0.7V，强信号不能直接怼基极——a→R2→基极
+    sym({ id: 'r2', kind: 'unit', unit: 'res', x: 180, y: 230, rot: 1, label: 'R2' }),
   ];
   // 场景背景：推门按钮装在左墙、弹簧门在右墙门洞里
   doc.backdrop = [
     { kind: 'wall', x: 6, y: 90, w: 44, h: 280 },
     { kind: 'doorFrame', x: 640, y: 90, w: 76, h: 280 },
   ];
-  // 三极管开关已接（集电极→输出、基极→输入、发射极→GND）；只差上拉电阻 VCC→y
+  // 三极管开关已接（集电极→输出、发射极→GND），基极经限流电阻接输入；只差上拉电阻 VCC→y
   doc.wires = [
     wire('q1', 'c', 'out-y', 'p'),
-    wire('q1', 'b', 'in-a', 'p'),
+    wire('q1', 'b', 'r2', 'b'),
+    wire('r2', 'a', 'in-a', 'p'),
     wire('q1', 'e', 'gnd', 'p'),
   ];
   return doc;
