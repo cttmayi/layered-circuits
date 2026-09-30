@@ -14,7 +14,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { PROGRESS_KEY } from '../src/level/progress';
-import { startJob } from './helpers';
+import { renderApp, startJob } from './helpers';
 
 // jsdom 里容器尺寸量不到，工作台会退回 200×200；相机初始为 (340,220)、缩放 1
 const CAMERA = { x: 340, y: 220 };
@@ -56,7 +56,7 @@ const LEVEL_TOTAL = ALL_LEVELS.length;
 
 describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁下一关', () => {
   it('用鼠标搭出第 1 关的标准解并通过校验，通关闭环产生可复用的【非门】模块', async () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
 
@@ -143,7 +143,7 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
 
     // ---- 5. 组件库与解锁状态反馈到界面 ----
     await waitFor(
-      () => expect(screen.getByText(new RegExp(`已通关 1/${LEVEL_TOTAL}`))).toBeTruthy(),
+      () => expect(screen.getByText(new RegExp(`已通关 4/${LEVEL_TOTAL}`))).toBeTruthy(),
       { timeout: 5000 },
     );
     // 封装出的【非门】出现在元件库「我的模块」里，成本 4，可以直接拖到下一关复用

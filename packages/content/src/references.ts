@@ -22,6 +22,41 @@ export function notGateRef(id = 'ref-not'): Design {
   return b.build();
 }
 
+/** 教学关·认识三极管：射极跟随器，a → y（同相，成本 6 = 1 三极管 + 1 下拉电阻） */
+export function npnIntroRef(id = 'ref-npn-intro'): Design {
+  const b = new DesignBuilder(id, '认识三极管');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('npn', { c: 'vcc', b: 'a', e: 'y' }, 'Q1'); // 基极直连输入：受控开关
+  b.unit('res', { a: 'y', b: 'gnd' }, 'R1'); // 发射极下拉：没人踩时输出稳为 0
+  b.port('a', 'in', 'a');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/** 教学关·认识二极管：单向导通，a → y（成本 5 = 1 二极管 + 1 下拉电阻） */
+export function dioIntroRef(id = 'ref-dio-intro'): Design {
+  const b = new DesignBuilder(id, '认识二极管');
+  b.gnd('gnd');
+  b.unit('dio', { a: 'a', k: 'y' }, 'D1'); // 阳极接输入：正向才导通
+  b.unit('res', { a: 'y', b: 'gnd' }, 'R1'); // 下拉：输入为 0 时输出稳为 0
+  b.port('a', 'in', 'a');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/** 教学关·悬空与默认电平：上拉反相，a → ¬y（成本 6 = 1 三极管 + 1 上拉电阻） */
+export function floatIntroRef(id = 'ref-float-intro'): Design {
+  const b = new DesignBuilder(id, '悬空与默认电平');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('res', { a: 'vcc', b: 'y' }, 'R1'); // 上拉：没人驱动时输出默认 1
+  b.unit('npn', { c: 'y', b: 'a', e: 'gnd' }, 'Q1'); // 基极直连：输入 1 时把输出拉低
+  b.port('a', 'in', 'a');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
 /** 二极管与门：a·b → y（成本 4） */
 export function andGateRef(id = 'ref-and'): Design {
   const b = new DesignBuilder(id, '与门');

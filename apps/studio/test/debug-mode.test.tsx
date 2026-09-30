@@ -6,7 +6,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
-import { goToLevel, startJob } from './helpers';
+import { goToLevel, renderApp, startJob, teachCleared } from './helpers';
 
 describe('调试模式 · 一键出答案', () => {
   beforeEach(() => {
@@ -14,7 +14,7 @@ describe('调试模式 · 一键出答案', () => {
   });
 
   it('默认隐藏；打开调试模式后出现「一键出答案」，点击搭出参考解', async () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     expect(screen.queryByText('一键出答案')).toBeNull();
 
@@ -32,7 +32,7 @@ describe('调试模式 · 一键出答案', () => {
   });
 
   it('一键出答案后交付验收：功能通过、最优成本满分', async () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     fireEvent.click(screen.getByText('调试模式'));
     fireEvent.click(screen.getByText('一键出答案'));
@@ -51,12 +51,12 @@ describe('调试模式 · 一键出答案', () => {
   });
 
   it('调试模式开关持久化：刷新后仍开着', () => {
-    const first = render(<App />);
+    const first = renderApp();
     startJob('非门');
     fireEvent.click(screen.getByText('调试模式'));
     expect(screen.getByText('一键出答案')).toBeTruthy();
     first.unmount();
-    render(<App />);
+    render(<App />); // 模拟刷新：调试开关与存档保留
     goToLevel('非门');
     expect(screen.getByText('一键出答案')).toBeTruthy();
   });
@@ -66,7 +66,10 @@ describe('调试模式 · 一键出答案', () => {
     localStorage.setItem(
       'lc-studio-progress-v1',
       JSON.stringify({
-        cleared: { 's2-dff-fast': { score: 100, bestCostHalf: 48, clearedAt: Date.now() } },
+        cleared: {
+          ...teachCleared(),
+          's2-dff-fast': { score: 100, bestCostHalf: 48, clearedAt: Date.now() },
+        },
         attempts: {},
         library: [],
       }),
@@ -90,7 +93,7 @@ describe('调试模式 · 一键出答案', () => {
   });
 
   it('无门版的关（非门）：一键出答案直接出元件版，不弹窗', () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     fireEvent.click(screen.getByText('调试模式'));
     fireEvent.click(screen.getByText('一键出答案'));

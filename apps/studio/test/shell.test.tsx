@@ -6,13 +6,23 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
-import { goToLevel, startJob } from './helpers';
+import { goToLevel, renderApp, startJob } from './helpers';
 
 describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
   beforeEach(() => localStorage.clear());
 
+  it('教学关在主线最前：认识三极管开放，认识二极管锁定（真实解锁链）', () => {
+    render(<App />); // 不 seed：验证全新存档的解锁链
+    fireEvent.click(screen.getByText('关卡模式'));
+    const npnBtn = screen.getByText('认识三极管').closest('button') as HTMLButtonElement;
+    const dioBtn = screen.getByText('认识二极管').closest('button') as HTMLButtonElement;
+    expect(npnBtn.disabled).toBe(false); // 第一关开放
+    expect(dioBtn.disabled).toBe(true); // 前一关没通关不解锁
+    expect(screen.getByText('非门').closest('button')?.disabled).toBe(true);
+  });
+
   it('首次启动进主菜单：关卡模式 / 自由搭建 / 无「继续上次」', () => {
-    render(<App />);
+    renderApp();
     expect(screen.getByText('逐层电路')).toBeTruthy();
     expect(screen.getByText('关卡模式')).toBeTruthy();
     expect(screen.getByText('自由搭建')).toBeTruthy();
@@ -22,9 +32,9 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
   });
 
   it('主菜单 → 关卡模式 → 地图：第一章标题出现，未解锁的关节点不可点', () => {
-    render(<App />);
+    renderApp();
     fireEvent.click(screen.getByText('关卡模式'));
-    expect(screen.getByText('第一章 · 基础门电路')).toBeTruthy();
+    expect(screen.getByText('第一章 · 元件入门与基础门电路')).toBeTruthy();
     const notBtn = screen.getByText('非门').closest('button') as HTMLButtonElement;
     const andBtn = screen.getByText('与门').closest('button') as HTMLButtonElement;
     expect(notBtn.disabled).toBe(false); // 第一关可接
@@ -32,7 +42,7 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
   });
 
   it('开工后刷新（重新进 App）：主菜单有「继续上次」，点它直接回工作台不弹委托', () => {
-    const first = render(<App />);
+    const first = renderApp();
     startJob('非门');
     first.unmount();
     // 模拟刷新：localStorage 还在，重新挂载
@@ -45,14 +55,14 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
   });
 
   it('自由搭建从主菜单进：工作台出现，但没有「交付验收」（关卡专属）', () => {
-    render(<App />);
+    renderApp();
     fireEvent.click(screen.getByText('自由搭建'));
     expect(screen.getByText(/电路工作台/)).toBeTruthy();
     expect(screen.queryByText('交付验收')).toBeNull();
   });
 
   it('进关即开工：新单不再弹「新委托」，直接进工作台；刷新后不重弹', () => {
-    const first = render(<App />);
+    const first = renderApp();
     goToLevel('非门'); // 第一关：新单也直接开工
     expect(screen.queryByText('新委托')).toBeNull();
     expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
@@ -65,11 +75,11 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
 
   it('主菜单「新游戏」：确认后清空存档、回到全新主菜单', () => {
     // 先有进度：通关第 1 关 + 钱包余额
-    const first = render(<App />);
+    const first = renderApp();
     goToLevel('非门');
     first.unmount();
     const before = JSON.parse(localStorage.getItem('lc-studio-progress-v1') ?? '{}');
-    expect(Object.keys(before.cleared ?? {}).length).toBe(0);
+    expect(before.cleared?.['s1-not'] ?? false).toBe(false); // 还没通关非门
     expect(before.started?.['s1-not']).toBe(true); // 进关即开工已持久化
     // 有存档 → 主菜单出现「继续上次」
     render(<App />);

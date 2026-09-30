@@ -56,6 +56,15 @@ export function LevelCard({
       <p className="contract-summary">
         款项 {contract.pay} · 交期 {contract.deadline} · 禁忌 {contract.taboo}
       </p>
+      {level.requiredUnits.length > 0 && (
+        <p className="dim small required-units">
+          本单要求：必须用{' '}
+          {level.requiredUnits
+            .map((u) => ({ npn: '三极管', res: '电阻', dio: '二极管', cap: '电容' })[u] ?? u)
+            .join('、')}{' '}
+          —— 它才是这关要教的主角
+        </p>
+      )}
 
       <div className="budget">
         <div className="budget-bar">

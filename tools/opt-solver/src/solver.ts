@@ -60,6 +60,9 @@ export function sourcesOf(level: Level): SourceSignal[] {
 }
 
 export function targetMaskOf(level: Level): Mask | null {
+  // 教学关（必用元件）不做组合最优搜索：它的「最省」概念是「带指定元件的最省」，
+  // 门目录里最省的直连导线会因缺元件被打回，而片段目录又没有替补构造，搜索无意义。
+  if (level.requiredUnits.length > 0) return null;
   const inputs = requiredPorts(level).inputs;
   const outputs = requiredPorts(level).outputs;
   // 掩码空间只适合「1 输入信号 → 1 输出」的底层门关卡：

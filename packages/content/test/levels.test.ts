@@ -6,7 +6,7 @@
  */
 
 import { computeCosts, judgeDesign, wrapModule } from '@lc/compiler';
-import { costHalfOf, InMemoryModuleLibrary } from '@lc/schema';
+import { costHalfOf, DesignBuilder, InMemoryModuleLibrary } from '@lc/schema';
 import { describe, expect, it } from 'vitest';
 import { findLevel, nextLevelId, requiredPortsOf, STAGE1_LEVELS } from '../src/index';
 
@@ -17,7 +17,13 @@ describe('阶段 1 关卡内容', () => {
     const ids = STAGE1_LEVELS.map((level) => level.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(STAGE1_LEVELS.every((level) => level.stage === 1)).toBe(true);
-    expect(STAGE1_LEVELS[0]?.id).toBe('s1-not');
+    // 三个「元件入门」教学关打头，然后是正式逻辑门
+    expect(STAGE1_LEVELS[0]?.id).toBe('s1-npn');
+    expect(STAGE1_LEVELS[1]?.id).toBe('s1-dio');
+    expect(STAGE1_LEVELS[2]?.id).toBe('s1-float');
+    expect(nextLevelId('s1-npn')).toBe('s1-dio');
+    expect(nextLevelId('s1-dio')).toBe('s1-float');
+    expect(nextLevelId('s1-float')).toBe('s1-not');
     expect(nextLevelId('s1-not')).toBe('s1-and');
     // 阶段 1 的最后一关之后进入阶段 2（时序单元），整条线是一个连续的教学顺序
     expect(nextLevelId('s1-xnor')).toBe('s2-sr-latch');
@@ -83,6 +89,20 @@ describe('阶段 1 关卡内容', () => {
       });
       expect(result.timingOk, `${level.id} 硬核时序`).toBe(true);
       expect(result.pass, `${level.id} 硬核模式也应通关`).toBe(true);
+    }
+  });
+
+  it('教学关必用元件：直连导线（成本 0）会因缺元件被打回', () => {
+    for (const id of ['s1-npn', 's1-dio', 's1-float'] as const) {
+      const level = findLevel(id)!;
+      expect(level.requiredUnits.length, `${id} 应有必用元件`).toBeGreaterThan(0);
+      // 一根导线直连输入输出：功能上能对上 y=a/¬a，但没有元件 → 必须打回
+      const b = new DesignBuilder(`direct-${id}`, '直连');
+      b.port('a', 'in', 'x');
+      b.port('y', 'out', 'x');
+      const result = judgeDesign(b.build(), level, { library: emptyLibrary });
+      expect(result.pass, `${id} 直连导线不该过关`).toBe(false);
+      expect(result.errors.join(), `${id} 应提示缺元件`).toMatch(/要求用到/);
     }
   });
 

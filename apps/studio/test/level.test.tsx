@@ -22,7 +22,7 @@ import {
 } from '../src/level/index';
 import { docFor } from '../src/level/session';
 import { handleRequest } from '../src/sim/handle';
-import { goToLevel, startJob } from './helpers';
+import { goToLevel, renderApp, startJob, teachCleared } from './helpers';
 
 beforeEach(() => {
   localStorage.clear();
@@ -51,22 +51,23 @@ describe('关卡内容与进度', () => {
 
   it('解锁顺序：第一关开放，之后必须前一关真的通关（失败尝试不解锁）', () => {
     let progress = emptyProgress();
-    expect(isLevelUnlocked(progress, 's1-not')).toBe(true);
-    expect(isLevelUnlocked(progress, 's1-and')).toBe(false);
+    // 第一个教学关（认识三极管）开放，之后必须前一关真的通关
+    expect(isLevelUnlocked(progress, 's1-npn')).toBe(true);
+    expect(isLevelUnlocked(progress, 's1-dio')).toBe(false);
 
     // 失败尝试只累加次数，不解锁
-    progress = recordAttempt(progress, 's1-not');
-    expect(progress.attempts['s1-not']).toBe(1);
-    expect(isCleared(progress, 's1-not')).toBe(false);
-    expect(isLevelUnlocked(progress, 's1-and')).toBe(false);
+    progress = recordAttempt(progress, 's1-npn');
+    expect(progress.attempts['s1-npn']).toBe(1);
+    expect(isCleared(progress, 's1-npn')).toBe(false);
+    expect(isLevelUnlocked(progress, 's1-dio')).toBe(false);
 
     // 通关后解锁下一关，并记住最好成绩
-    progress = recordClear(progress, 's1-not', 100, 8);
-    expect(isCleared(progress, 's1-not')).toBe(true);
-    expect(isLevelUnlocked(progress, 's1-and')).toBe(true);
-    progress = recordClear(progress, 's1-not', 60, 10);
-    expect(progress.cleared['s1-not']?.score).toBe(100); // 只保留最好成绩
-    expect(progress.cleared['s1-not']?.bestCostHalf).toBe(8); // 保留最低成本
+    progress = recordClear(progress, 's1-npn', 100, 6);
+    expect(isCleared(progress, 's1-npn')).toBe(true);
+    expect(isLevelUnlocked(progress, 's1-dio')).toBe(true);
+    progress = recordClear(progress, 's1-npn', 60, 8);
+    expect(progress.cleared['s1-npn']?.score).toBe(100); // 只保留最好成绩
+    expect(progress.cleared['s1-npn']?.bestCostHalf).toBe(6); // 保留最低成本
   });
 
   it('组件库跨关卡保留：切关卡时玩家的模块始终在画布上下文里', () => {
@@ -208,7 +209,7 @@ describe('关卡判定：第 1 关标准解（单管反相器，成本 4）', ()
 
 describe('关卡界面', () => {
   it('第 1 关：显示目标真值表、锁住未开放元件；地图上只有第一关可点', async () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
 
     // 关卡卡片：委托单 + 图纸（黑盒侦察没做完前，输出列是看不清的）
@@ -232,7 +233,7 @@ describe('关卡界面', () => {
     const budgetText = document.querySelector('.budget-text')?.textContent ?? '';
     expect(budgetText).toContain('款项');
     expect(budgetText).toContain('5');
-    expect(screen.getByText(new RegExp(`已通关 0/${LEVEL_TOTAL}`))).toBeTruthy();
+    expect(screen.getByText(new RegExp(`已通关 3/${LEVEL_TOTAL}`))).toBeTruthy();
 
     // 关卡地图：非门是进行中（已开工可继续），与门是锁定的灰态（不能点）
     fireEvent.click(screen.getByText('← 返回地图'));
@@ -243,7 +244,7 @@ describe('关卡界面', () => {
   });
 
   it('点「交付验收」会走判定通道并报告被打回（空电路）', async () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     const judgeButtons = screen.getAllByText('交付验收');
     judgeButtons[0]?.click();
@@ -271,7 +272,10 @@ describe('关卡界面', () => {
     localStorage.setItem(
       'lc-studio-progress-v1',
       JSON.stringify({
-        cleared: { 's1-not': { score: 100, bestCostHalf: 8, clearedAt: Date.now() } },
+        cleared: {
+          ...teachCleared(),
+          's1-not': { score: 100, bestCostHalf: 8, clearedAt: Date.now() },
+        },
         attempts: { 's1-not': 2 },
         library: [],
       }),
@@ -282,7 +286,7 @@ describe('关卡界面', () => {
     await waitFor(() => expect(screen.getByText(/委托单 · 与门/)).toBeTruthy(), {
       timeout: 5000,
     });
-    expect(screen.getByText(new RegExp(`已通关 1/${LEVEL_TOTAL}`))).toBeTruthy();
+    expect(screen.getByText(new RegExp(`已通关 4/${LEVEL_TOTAL}`))).toBeTruthy();
     // 地图：非门已通关，与门是进行中（已解锁可接）
     fireEvent.click(screen.getByText('← 返回地图'));
     const notNode = screen.getByText('非门').closest('button');

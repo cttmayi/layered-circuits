@@ -6,7 +6,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { PROGRESS_KEY } from '../src/level/progress';
-import { startJob } from './helpers';
+import { renderApp, startJob } from './helpers';
 
 function recordCells(): HTMLButtonElement[] {
   return [...document.querySelectorAll('.recon-table .record-cell')] as HTMLButtonElement[];
@@ -23,7 +23,7 @@ describe('黑盒侦察', () => {
   beforeEach(() => localStorage.clear());
 
   it('第 1 关：图纸输出列是问号，测试仪测出来后才能填', () => {
-    render(<App />);
+    renderApp();
     openRecon();
     // 未测之前没有读数
     expect(screen.getByText('还没测过')).toBeTruthy();
@@ -38,7 +38,7 @@ describe('黑盒侦察', () => {
   });
 
   it('填错会被指出来，填对则解锁图纸并记入「自主测绘」', () => {
-    render(<App />);
+    renderApp();
     openRecon();
     const cells = recordCells();
     // 故意把两行都填 0（第 1 行应该是 1）
@@ -74,7 +74,7 @@ describe('黑盒侦察', () => {
   });
 
   it('「直接看答案」也能解锁图纸，但记成 skipped（不算自主测绘）', () => {
-    render(<App />);
+    renderApp();
     openRecon();
     fireEvent.click(screen.getByText('直接看答案'));
     // 必须弹出居中的「图纸解开了」反馈弹窗

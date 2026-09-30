@@ -3,7 +3,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
-import { startJob } from './helpers';
+import { renderApp, startJob } from './helpers';
 
 const CAMERA = { x: 340, y: 220 };
 const SIZE = 200;
@@ -31,7 +31,7 @@ beforeEach(() => localStorage.clear());
 
 describe('双击连线删除', () => {
   it('搭一条线 → 双击它 → 线消失', async () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     place('电阻', 690, 180); // R：引脚在上下两端
     place('VCC 电源', 690, 80); // VCC：引脚在下方
@@ -58,7 +58,7 @@ describe('双击连线删除', () => {
   });
 
   it('双击空白处不会误删', async () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     place('电阻', 690, 180);
     place('VCC 电源', 690, 80);

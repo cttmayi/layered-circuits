@@ -9,7 +9,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
-import { goToLevel, startJob } from './helpers';
+import { goToLevel, renderApp, startJob } from './helpers';
 
 describe('左右侧面板展开/收起', () => {
   beforeEach(() => {
@@ -17,7 +17,7 @@ describe('左右侧面板展开/收起', () => {
   });
 
   it('左侧分组可折叠：收「我的元件」后三极管不可见，再点展开恢复', () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     // 三个分组都在
     expect(screen.getByText('我的元件')).toBeTruthy();
@@ -35,7 +35,7 @@ describe('左右侧面板展开/收起', () => {
   });
 
   it('左侧整体收起：元件库消失，点边缘条展开恢复', () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     fireEvent.click(screen.getByRole('button', { name: '收起元件库' }));
     expect(screen.queryByText('三极管 NPN')).toBeNull();
@@ -45,7 +45,7 @@ describe('左右侧面板展开/收起', () => {
   });
 
   it('右侧整体收起：验收面板隐藏但迷你侧栏可用；展开恢复', async () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     // 右侧面板默认展开：「交付验收」出现两处（工具栏 + 验收面板）
     expect(screen.getAllByText('交付验收').length).toBeGreaterThanOrEqual(2);
@@ -63,7 +63,7 @@ describe('左右侧面板展开/收起', () => {
   });
 
   it('开合选择持久化：收起左侧后重进工作台仍是收起', () => {
-    const first = render(<App />);
+    const first = renderApp();
     startJob('非门');
     fireEvent.click(screen.getByRole('button', { name: '收起元件库' }));
     expect(screen.queryByText('三极管 NPN')).toBeNull();

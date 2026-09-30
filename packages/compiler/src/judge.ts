@@ -234,12 +234,24 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
   }
 
   // 1.1) 素材约束（GDD 第 3 节 / 4.4 复古复用关）——约束必须由判定执行，光在 UI 上禁用是拦不住的
+  const usedUnits = new Set<string>();
   for (const instance of design.instances) {
     if (instance.kind !== 'unit') continue;
+    usedUnits.add(instance.unit);
     if (!level.allowedUnits.includes(instance.unit)) {
       errors.push(
         `本关不提供【${UNIT_LABELS[instance.unit] ?? instance.unit}】，请只用：${level.allowedUnits.join('、')}`,
       );
+    }
+  }
+  // 1.1b) 教学关必用元件：防止用「一根导线」钻空子（直连也能满足真值表，但没学会元件）
+  if (level.requiredUnits.length > 0) {
+    for (const need of level.requiredUnits) {
+      if (!usedUnits.has(need)) {
+        errors.push(
+          `本关要求用到【${UNIT_LABELS[need] ?? need}】——它才是这关要教的主角，别用导线绕过。`,
+        );
+      }
     }
   }
   const modulePolicy = checkModulePolicy(design, level, options.library);

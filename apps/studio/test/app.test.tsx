@@ -10,6 +10,7 @@ import { App } from '../src/App';
 import { notGateDemo } from '../src/editor/demos';
 import { toDesign } from '../src/editor/model';
 import { handleRequest } from '../src/sim/handle';
+import { renderApp } from './helpers';
 
 afterEach(() => {
   localStorage.clear();
@@ -166,7 +167,7 @@ describe('仿真通道（Worker 与主线程共用 handleRequest）', () => {
 
 describe('工作台界面', () => {
   it('渲染工具栏、成本面板与真值表（载入非门示例后自动仿真）', async () => {
-    render(<App />);
+    renderApp();
     // 主菜单 → 自由搭建 → 工作台
     fireEvent.click(screen.getByText('自由搭建'));
     expect(screen.getByText(/电路工作台/)).toBeTruthy();

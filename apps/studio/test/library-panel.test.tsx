@@ -8,7 +8,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { PROGRESS_KEY } from '../src/level/progress';
-import { goToLevel, startJob } from './helpers';
+import { goToLevel, renderApp, startJob, teachCleared } from './helpers';
 
 describe('组件库与成绩面板', () => {
   beforeEach(() => {
@@ -16,7 +16,7 @@ describe('组件库与成绩面板', () => {
   });
 
   it('点「组件库」弹出面板：我的模块 / 本地重挑战榜 / 存档按钮', () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     fireEvent.click(screen.getByText('组件库'));
     expect(screen.getByRole('dialog', { name: '组件库与成绩' })).toBeTruthy();
@@ -33,7 +33,10 @@ describe('组件库与成绩面板', () => {
     localStorage.setItem(
       PROGRESS_KEY,
       JSON.stringify({
-        cleared: { 's1-not': { score: 100, bestCostHalf: 8, clearedAt: Date.now() } },
+        cleared: {
+          ...teachCleared(),
+          's1-not': { score: 100, bestCostHalf: 8, clearedAt: Date.now() },
+        },
         attempts: { 's1-not': 3 },
         library: [
           {
@@ -71,7 +74,10 @@ describe('组件库与成绩面板', () => {
     localStorage.setItem(
       PROGRESS_KEY,
       JSON.stringify({
-        cleared: { 's1-not': { score: 100, bestCostHalf: 8, clearedAt: Date.now() } },
+        cleared: {
+          ...teachCleared(),
+          's1-not': { score: 100, bestCostHalf: 8, clearedAt: Date.now() },
+        },
         attempts: {},
         library: [
           {
@@ -147,6 +153,7 @@ describe('组件库与成绩面板', () => {
       PROGRESS_KEY,
       JSON.stringify({
         cleared: {
+          ...teachCleared(),
           's1-not': { score: 100, bestCostHalf: 8, clearedAt: Date.now() },
           's1-and': { score: 100, bestCostHalf: 10, clearedAt: Date.now() },
           's1-or': { score: 100, bestCostHalf: 10, clearedAt: Date.now() },
@@ -184,7 +191,7 @@ describe('委托单与结算（P0 游戏化外壳）', () => {
   beforeEach(() => localStorage.clear());
 
   it('第 1 关进关即开工：委托方、人话需求、合同条款直接显示在左侧委托卡上', () => {
-    render(<App />);
+    renderApp();
     goToLevel('非门'); // 进关即开工，不再弹「新委托」
     expect(screen.queryByText('新委托')).toBeNull();
     expect(screen.getAllByText('修表铺 · 老周').length).toBeGreaterThanOrEqual(1);
@@ -198,7 +205,10 @@ describe('委托单与结算（P0 游戏化外壳）', () => {
     localStorage.setItem(
       PROGRESS_KEY,
       JSON.stringify({
-        cleared: { 's1-not': { score: 100, bestCostHalf: 8, bestProfitHalf: 2, clearedAt: 1 } },
+        cleared: {
+          ...teachCleared(),
+          's1-not': { score: 100, bestCostHalf: 8, bestProfitHalf: 2, clearedAt: 1 },
+        },
         attempts: {},
         library: [],
         walletHalf: 2,
@@ -213,13 +223,13 @@ describe('任务墙与星级（P1）', () => {
   beforeEach(() => localStorage.clear());
 
   it('交付后结算页显示星级（星级规则与进度测试同源）', () => {
-    render(<App />);
+    renderApp();
     // 未交付时没有结算页
     expect(screen.queryByText(/验收报告/)).toBeNull();
   });
 
   it('点「任务墙」弹出章节地图：未解锁的章节节点是禁用的', () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     fireEvent.click(screen.getByText('任务墙'));
     expect(screen.getByRole('dialog', { name: '任务墙' })).toBeTruthy();
@@ -241,6 +251,7 @@ describe('任务墙与星级（P1）', () => {
       PROGRESS_KEY,
       JSON.stringify({
         cleared: {
+          ...teachCleared(),
           's1-not': { score: 100, bestCostHalf: 8, bestProfitHalf: 2, stars: 3, clearedAt: 1 },
         },
         attempts: {},
@@ -254,7 +265,7 @@ describe('任务墙与星级（P1）', () => {
     expect(screen.getByText('★★★')).toBeTruthy();
     // 1 单 + 1 元 → 还是学徒，提示升到维修铺师傅还差什么
     expect(screen.getByText(/学徒/)).toBeTruthy();
-    expect(screen.getByText(/已交付 1\/18 · 星 3\/54/)).toBeTruthy();
+    expect(screen.getByText(/已交付 4\/21 · 星 3\/63/)).toBeTruthy();
   });
 });
 
@@ -262,7 +273,7 @@ describe('在委托单上接支线（操作在工作台内完成）', () => {
   beforeEach(() => localStorage.clear());
 
   it('在左侧委托单上点接加急单，支线状态生效', () => {
-    render(<App />);
+    renderApp();
     goToLevel('非门'); // 进关即开工，支线在工作台里随时可选
     const job = screen.getByText(/加急单/).closest('button');
     expect(job).toBeTruthy();
@@ -272,7 +283,7 @@ describe('在委托单上接支线（操作在工作台内完成）', () => {
   });
 
   it('不接支线：只做主线', () => {
-    render(<App />);
+    renderApp();
     goToLevel('非门');
     expect(screen.queryByText(/已接支线/)).toBeNull();
   });
@@ -282,7 +293,7 @@ describe('元件拖拽放置', () => {
   beforeEach(() => localStorage.clear());
 
   it('从元件库把三极管拖到画布，松手即放置（成本更新）', async () => {
-    render(<App />);
+    renderApp();
     startJob('非门');
     const canvasEl = document.querySelector('.canvas-wrap canvas') as HTMLButtonElement;
     const dataTransfer = {

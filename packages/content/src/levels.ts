@@ -15,9 +15,12 @@ import { STAGE3_LEVELS } from './levels-ari.js';
 import { STAGE2_LEVELS } from './levels-seq.js';
 import {
   andGateRef,
+  dioIntroRef,
+  floatIntroRef,
   nandGateRef,
   norFastRef,
   notGateRef,
+  npnIntroRef,
   orGateRef,
   xnorGateRef,
   xorGateRef,
@@ -65,6 +68,8 @@ function gateLevel(input: {
   timingBudgetPs: number;
   /** 覆写本关可用元件（例如「只发三极管和电阻」） */
   allowedUnits?: readonly Unit[];
+  /** 教学关必用元件（防止直连导线钻空子） */
+  requiredUnits?: readonly Unit[];
   /** 覆写白名单（moduleAccess = 'listed' 时生效） */
   allowedModules?: readonly string[];
   /** 复古复用关禁用的模块名 */
@@ -97,6 +102,7 @@ function gateLevel(input: {
     mode: 'logic',
     timingBudgetPs: input.timingBudgetPs,
     allowedUnits: [...(input.allowedUnits ?? STAGE1_UNITS)],
+    requiredUnits: [...(input.requiredUnits ?? [])],
     moduleAccess: input.moduleAccess,
     allowedModules: [...(input.allowedModules ?? [])],
     bannedModules: [...(input.bannedModules ?? [])],
@@ -111,6 +117,64 @@ function gateLevel(input: {
 }
 
 export const STAGE1_LEVELS: Level[] = [
+  // ---- 三个「元件入门」教学关（面向高中生：大白话 + 生活类比，先建立元件直觉）----
+  gateLevel({
+    id: 's1-npn',
+    title: '认识三极管',
+    brief:
+      '三极管像一个「电的水闸」：基极是闸门把手，集电极→发射极是水管。做一个人踩脚垫就响的自动门铃。',
+    teaching:
+      '三极管（NPN）有三只脚：基极（b）、集电极（c）、发射极（e）。基极一通电，集电极到发射极的通路就导通 —— 像水闸的把手一提，水就流过去。这一关做「同相」：踩（1）响（1）、抬（0）停（0）。那颗下拉电阻很关键：没人踩时管子不导通，输出会「悬空」乱跳，电阻把它稳稳拉回 0。',
+    hint: '基极接输入 a；集电极接 VCC；发射极接输出 y，再经一个电阻接到 GND。',
+    inputs: 1,
+    fn: (a) => (a ? 1 : 0),
+    optimalHalf: 6,
+    timingBudgetPs: 2000,
+    allowedUnits: ['npn', 'res'],
+    requiredUnits: ['npn'],
+    moduleAccess: 'none',
+    reference: npnIntroRef('ref-npn-intro'),
+    unlockName: '跟随器',
+    freqHz: 100_000,
+  }),
+  gateLevel({
+    id: 's1-dio',
+    title: '认识二极管',
+    brief:
+      '二极管只能让电流往一个方向流 —— 像单向门，只能推开不能往回拉（手机充电线的防反接保护就是这个原理）。',
+    teaching:
+      '二极管有两个方向：阳极（a）和阴极（k），电流只许从阳极流向阴极；接反了电路就不通。这一关做「单向门铃」：只认进门的方向。输出接一个下拉电阻，没人按（0）时稳为 0。',
+    hint: '阳极接输入 a，阴极接输出 y；输出 y 再经一个电阻接到 GND。接反了验收会打回。',
+    inputs: 1,
+    fn: (a) => (a ? 1 : 0),
+    optimalHalf: 5,
+    timingBudgetPs: 2000,
+    allowedUnits: ['dio', 'res'],
+    requiredUnits: ['dio'],
+    moduleAccess: 'none',
+    reference: dioIntroRef('ref-dio-intro'),
+    unlockName: '二极管缓冲',
+    freqHz: 100_000,
+  }),
+  gateLevel({
+    id: 's1-float',
+    title: '悬空与默认电平',
+    brief:
+      '没人驱动的线会「悬空」乱跳。用电阻把输出稳稳接到 VCC（默认 1）或 GND（默认 0）—— 像弹簧门没人推时自己关着。',
+    teaching:
+      '上拉电阻 = 把输出默认钉在 1；下拉电阻 = 默认钉在 0。这一关用上拉：平时输出默认 1，输入 a 一给电，三极管就把输出拉低（0）—— 也就是把 a「反」了一下。下一关非门就用这个原理。',
+    hint: '输出 y 经一个电阻接到 VCC（上拉，默认 1）；三极管集电极接 y、发射极接 GND、基极接输入 a。',
+    inputs: 1,
+    fn: (a) => (a ? 0 : 1),
+    optimalHalf: 6,
+    timingBudgetPs: 2000,
+    allowedUnits: ['npn', 'res'],
+    requiredUnits: ['npn'],
+    moduleAccess: 'none',
+    reference: floatIntroRef('ref-float-intro'),
+    unlockName: '上拉反相器',
+    freqHz: 100_000,
+  }),
   gateLevel({
     id: 's1-not',
     title: '非门',

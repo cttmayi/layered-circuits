@@ -1,9 +1,10 @@
 /**
- * 关卡地图（选关界面）：13 关排成一条蛇形的「检修之路」。
+ * 关卡地图（选关界面）：21 关按章节排成蛇形的「检修之路」。
  *
  * 连线画在 SVG 里，每个关卡节点是叠在上面的 <button>（可点击、可键盘、可禁用）：
  * 状态 🔒 未解锁 / 📄 新单 / 🔧 进行中 / ★ 已通关。前一关真通关才点亮下一关；
  * 点节点进入工作台（新单弹委托，进行中/已通关直接继续）。
+ * 每章最多两行蛇形（6 个一行），坐标按关卡总数动态生成。
  */
 
 import { ALL_LEVELS } from '@lc/content';
@@ -17,30 +18,36 @@ export interface WorldMapProps {
   onBack: () => void;
 }
 
-/** 18 个节点的蛇形坐标（viewBox 960×760，三章各占一行半） */
-const NODE_POS: Array<{ x: number; y: number }> = [
-  // 第一章（8 关）
-  { x: 120, y: 120 },
-  { x: 320, y: 120 },
-  { x: 520, y: 120 },
-  { x: 720, y: 120 },
-  { x: 900, y: 120 },
-  { x: 900, y: 260 },
-  { x: 720, y: 260 },
-  { x: 520, y: 260 },
-  // 第二章（5 关）
-  { x: 320, y: 260 },
-  { x: 120, y: 260 },
-  { x: 120, y: 420 },
-  { x: 320, y: 420 },
-  { x: 520, y: 420 },
-  // 第三章（5 关）
-  { x: 720, y: 420 },
-  { x: 900, y: 420 },
-  { x: 900, y: 580 },
-  { x: 720, y: 580 },
-  { x: 520, y: 580 },
-];
+/** 每行最多 6 个节点；行高 140，viewBox 高 760 容得下 4 行 */
+const PER_ROW = 6;
+const ROW_Y = [120, 260, 420, 580];
+
+/** 蛇形坐标：每章内部从左上开始，偶数行从左到右、奇数行从右到左 */
+function nodePositions(): Array<{ x: number; y: number }> {
+  const pos: Array<{ x: number; y: number }> = [];
+  const byStage = new Map<number, Level[]>();
+  for (const level of ALL_LEVELS) {
+    const list = byStage.get(level.stage);
+    if (list) list.push(level);
+    else byStage.set(level.stage, [level]);
+  }
+  let row = 0;
+  let idx = 0;
+  for (const levels of byStage.values()) {
+    const rows = Math.ceil(levels.length / PER_ROW);
+    for (let rr = 0; rr < rows; rr++) {
+      const count = Math.min(PER_ROW, levels.length - rr * PER_ROW);
+      const y = ROW_Y[row] ?? 120 + row * 140;
+      for (let c = 0; c < count; c++) {
+        const i = rr % 2 === 0 ? c : count - 1 - c; // 奇数行蛇形往回
+        pos[idx] = { x: 120 + i * 156, y };
+        idx++;
+      }
+      row++;
+    }
+  }
+  return pos;
+}
 
 function stateOf(progress: Progress, level: Level): 'locked' | 'new' | 'working' | 'cleared' {
   if (isCleared(progress, level.id)) return 'cleared';
@@ -70,8 +77,19 @@ export function WorldMap({
   onPick,
   onBack,
 }: WorldMapProps): React.JSX.Element {
+  const NODE_POS = nodePositions();
   const rank = rankOf(progress);
   const cleared = ALL_LEVELS.filter((l) => isCleared(progress, l.id)).length;
+  // 章节标题放在该章第一行的上方（第一章 11 关占 2 行，后两章各 1 行）
+  const stageTitleY = (stage: number): number => {
+    let row = 0;
+    for (const s of [1, 2, 3]) {
+      const count = ALL_LEVELS.filter((l) => l.stage === s).length;
+      if (s === stage) return ROW_Y[row] - 60;
+      row += Math.ceil(count / PER_ROW);
+    }
+    return 60;
+  };
   return (
     <div className="screen screen-map">
       <header className="map-head">
@@ -85,13 +103,13 @@ export function WorldMap({
       </header>
       <div className="map-stage">
         <svg className="map-svg" viewBox="0 0 960 760" role="img" aria-label="关卡连线">
-          <text x={80} y={60} className="stage-title">
-            第一章 · 基础门电路
+          <text x={80} y={stageTitleY(1)} className="stage-title">
+            第一章 · 元件入门与基础门电路
           </text>
-          <text x={80} y={200} className="stage-title">
+          <text x={80} y={stageTitleY(2)} className="stage-title">
             第二章 · 时序电路
           </text>
-          <text x={80} y={360} className="stage-title">
+          <text x={80} y={stageTitleY(3)} className="stage-title">
             第三章 · 算术与存储
           </text>
           {ALL_LEVELS.slice(1).map((level, i) => {
