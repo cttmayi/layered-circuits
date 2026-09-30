@@ -1,6 +1,6 @@
 import type { JudgeResult } from '@lc/compiler';
-import { ALL_LEVELS, findLevel } from '@lc/content';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ALL_LEVELS, findLevel, TEACHING_MODULES, teachingSolutionOf } from '@lc/content';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emptyDoc, notGateDemo } from './editor/demos';
 import {
   createSym,
@@ -13,6 +13,7 @@ import {
   type PlaceKind,
   pinNames,
   pinOffsets,
+  type StoredModule,
   type Sym,
   samePin,
   toDesign,
@@ -137,7 +138,7 @@ export function App(): React.JSX.Element {
   // URL 带 ?debug=1：进入即强制开调试模式并记住（重启/刷新后保持），普通玩法不受影响
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('debug') === '1') setDebugMode(true);
-  }, []);
+  }, [setDebugMode]);
   /** 低频面板弹窗：任务墙 / 工具铺 / 组件库 / 波形（点击启动，不用时不留侧栏） */
   const [panelOpen, setPanelOpen] = useState<null | 'map' | 'shop' | 'library' | 'wave'>(null);
   /** 画布探针：买下探针后可点连线钉读数 */
@@ -721,21 +722,32 @@ export function App(): React.JSX.Element {
     setSelectedWires([]);
   };
 
-  /** 调试模式：一键把本关参考解搭到画布上（可改、可直接验收） */
-  const solveOneKey = (): void => {
+  /** 调试模式：一键把本关参考解搭到画布上（可改、可直接验收）。element=元件版；gate=逻辑门版（简洁版） */
+  const solveOneKey = (variant: 'element' | 'gate'): void => {
     if (!currentLevel) {
       setToast('调试模式的「一键出答案」只在关卡模式有效');
       return;
     }
-    const ref = currentLevel.referenceSolution;
+    const ref =
+      variant === 'gate' ? teachingSolutionOf(currentLevel.id) : currentLevel.referenceSolution;
     if (!ref) {
-      setToast('本关没有参考解，无法一键出答案');
+      setToast(
+        variant === 'gate'
+          ? '本关没有逻辑门版参考解（点「一键出答案」可看元件版）'
+          : '本关没有参考解，无法一键出答案',
+      );
       return;
     }
-    const base = docForLevel(currentLevel, doc.library);
-    const next = fromDesign(ref, base);
-    loadDoc({ ...next, library: doc.library });
-    setToast('参考解已搭好（调试模式）—— 可以直接交付验收');
+    // 门版引用了教学门积木：并入画布库（同时出现在左侧「我的模块」，可直接拖用）
+    const extra = variant === 'gate' ? TEACHING_STORED : [];
+    const library = [...doc.library, ...extra];
+    const next = fromDesign(ref, docForLevel(currentLevel, library));
+    loadDoc({ ...next, library });
+    setToast(
+      variant === 'gate'
+        ? '逻辑门版已搭好（成本与元件版相同，可直接验收）—— 门积木已加入左侧「我的模块」'
+        : '参考解已搭好（调试模式）—— 可以直接交付验收',
+    );
   };
 
   // ---- 关卡 / 模式入口（模式只在主菜单选，进关后不可改） ----
@@ -1010,14 +1022,23 @@ export function App(): React.JSX.Element {
             调试模式
           </button>
           {debugMode && (
-            <button
-              type="button"
-              className="primary"
-              onClick={solveOneKey}
-              title="把本关参考解电路直接搭到画布上（调试用），可继续修改或直接验收"
-            >
-              一键出答案
-            </button>
+            <>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => solveOneKey('element')}
+                title="把本关参考解电路（晶体管级）直接搭到画布上（调试用），可继续修改或直接验收"
+              >
+                一键出答案
+              </button>
+              <button
+                type="button"
+                onClick={() => solveOneKey('gate')}
+                title="简洁版：用逻辑门积木搭出本关参考解（半加器=异或门+与门；加法器=全加器串联），成本与元件版相同，方便看懂原理"
+              >
+                门版答案
+              </button>
+            </>
           )}
         </div>
         {gameMode === 'level' && (
@@ -1426,6 +1447,20 @@ export function App(): React.JSX.Element {
   );
 }
 
+/** 教学用门级模块 → 画布库条目（hash 内容稳定，重复注入无害） */
+const TEACHING_STORED: StoredModule[] = TEACHING_MODULES.map((m) => ({
+  hash: m.hash,
+  name: m.name,
+  version: m.version,
+  stage: m.stage,
+  costHalf: m.costHalf,
+  isSequential: m.isSequential,
+  ports: m.ports,
+  template: m,
+  sources: [],
+  createdAt: 0,
+}));
+
 /** 面板开合等 UI 偏好的持久化：刷新后保持用户上次的选择 */
 function usePersistentBool(key: string, def: boolean): [boolean, (v: boolean) => void] {
   const [value, setValue] = useState<boolean>(() => {
@@ -1437,14 +1472,17 @@ function usePersistentBool(key: string, def: boolean): [boolean, (v: boolean) =>
     }
     return def;
   });
-  const set = (next: boolean): void => {
-    setValue(next);
-    try {
-      localStorage.setItem(key, next ? '1' : '0');
-    } catch {
-      // 忽略写失败
-    }
-  };
+  const set = useCallback(
+    (next: boolean): void => {
+      setValue(next);
+      try {
+        localStorage.setItem(key, next ? '1' : '0');
+      } catch {
+        // 忽略写失败
+      }
+    },
+    [key],
+  );
   return [value, set];
 }
 

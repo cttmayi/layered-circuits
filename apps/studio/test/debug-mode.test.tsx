@@ -55,4 +55,38 @@ describe('调试模式 · 一键出答案', () => {
     goToLevel('非门');
     expect(screen.getByText('一键出答案')).toBeTruthy();
   });
+
+  it('门版答案：半加器用模块积木（异或门+与门），交付验收满分', async () => {
+    // 半加器是第三章关卡：预置前一关（s2-dff-fast）通关，解锁第三章
+    localStorage.setItem(
+      'lc-studio-progress-v1',
+      JSON.stringify({
+        cleared: { 's2-dff-fast': { score: 100, bestCostHalf: 48, clearedAt: Date.now() } },
+        attempts: {},
+        library: [],
+      }),
+    );
+    render(<App />);
+    startJob('半加器');
+    fireEvent.click(screen.getByText('调试模式'));
+    fireEvent.click(screen.getByText('门版答案'));
+    expect(screen.getByText(/逻辑门版已搭好/)).toBeTruthy();
+    // 门版 = 模块积木：左侧「我的模块」出现教学门（异或门 / 与门 / 全加器等）
+    await waitFor(() => expect(screen.getByText(/我的模块（\d+）/)).toBeTruthy());
+    // 验收 → 满分
+    const judgeButtons = screen.getAllByText('交付验收');
+    judgeButtons[judgeButtons.length - 1]?.click();
+    await waitFor(() => expect(screen.getByText(/验收通过|合格|已通过/)).toBeTruthy(), {
+      timeout: 5000,
+    });
+    expect(screen.getByText(/满分|成本正好等于最优|评 A|星 ?3/)).toBeTruthy();
+  });
+
+  it('没有门版的关（非门）：点门版答案给提示，不炸', () => {
+    render(<App />);
+    startJob('非门');
+    fireEvent.click(screen.getByText('调试模式'));
+    fireEvent.click(screen.getByText('门版答案'));
+    expect(screen.getByText(/本关没有逻辑门版参考解/)).toBeTruthy();
+  });
 });

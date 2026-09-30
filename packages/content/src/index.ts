@@ -7,3 +7,4 @@ export * from './levels-seq.js';
 export * from './references.js';
 export * from './references-ari.js';
 export * from './references-seq.js';
+export * from './teachings.js';

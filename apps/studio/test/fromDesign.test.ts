@@ -4,7 +4,7 @@
  */
 
 import { judgeDesign } from '@lc/compiler';
-import { ALL_LEVELS } from '@lc/content';
+import { ALL_LEVELS, TEACHING_MODULES, teachingSolutionOf } from '@lc/content';
 import { InMemoryModuleLibrary } from '@lc/schema';
 import { describe, expect, it } from 'vitest';
 import { fromDesign, toDesign } from '../src/editor/model';
@@ -56,5 +56,58 @@ describe('fromDesign 还原器（一键出答案）', () => {
       base.syms.filter((s) => s.kind === 'input' || s.kind === 'output').length,
     );
     expect(doc.wires.length).toBe(0);
+  });
+});
+
+describe('逻辑门版参考解（简洁版一键出答案）', () => {
+  /** 教学门积木 → 画布库条目（与 App 注入 doc.library 的方式一致） */
+  const stored = TEACHING_MODULES.map((m) => ({
+    hash: m.hash,
+    name: m.name,
+    version: m.version,
+    stage: m.stage,
+    costHalf: m.costHalf,
+    isSequential: m.isSequential,
+    ports: m.ports,
+    template: m,
+    sources: [],
+    createdAt: 0,
+  }));
+
+  it('5 个算术关都有门版；直接判定通关且满分，成本不高于元件版', () => {
+    const library = new InMemoryModuleLibrary([...TEACHING_MODULES]);
+    let checked = 0;
+    for (const level of ALL_LEVELS) {
+      const teaching = teachingSolutionOf(level.id);
+      if (!teaching) continue;
+      checked++;
+      const r = judgeDesign(teaching, level, { library, hardcore: true });
+      expect(r.pass, `${level.id} 门版应通关：${r.errors.join('；')}`).toBe(true);
+      expect(r.score, `${level.id} 门版应满分`).toBe(100);
+      expect(r.costHalf, `${level.id} 门版成本应 ≤ 元件版`).toBeLessThanOrEqual(level.optimalHalf);
+    }
+    expect(checked).toBe(5);
+  });
+
+  it('门版 还原 → 再导出 → 判定通关且满分（App 的完整链路）', () => {
+    const library = new InMemoryModuleLibrary([...TEACHING_MODULES]);
+    let checked = 0;
+    for (const level of ALL_LEVELS) {
+      const teaching = teachingSolutionOf(level.id);
+      if (!teaching) continue;
+      checked++;
+      const base = docForLevel(level, stored);
+      const doc = fromDesign(teaching, base);
+      // 门版用模块积木：画布上应该是 module sym 而不是几百个晶体管
+      expect(
+        doc.syms.filter((s) => s.kind === 'module').length,
+        `${level.id} 门版应全是模块积木`,
+      ).toBe(teaching.instances.filter((i) => i.kind === 'module').length);
+      const design = toDesign(doc);
+      const r = judgeDesign(design, level, { library, hardcore: true });
+      expect(r.pass, `${level.id} 门版还原后应通关：${r.errors.join('；')}`).toBe(true);
+      expect(r.score, `${level.id} 门版还原后应满分`).toBe(100);
+    }
+    expect(checked).toBe(5);
   });
 });
