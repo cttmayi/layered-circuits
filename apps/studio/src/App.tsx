@@ -128,6 +128,9 @@ export function App(): React.JSX.Element {
 
   const [showTruth, setShowTruth] = useState(true);
   const [showWave, setShowWave] = useState(false);
+  /** 左右侧面板整体收起/展开（体验：布线时把侧栏收起来腾画布），选择记忆在 localStorage */
+  const [leftOpen, setLeftOpen] = usePersistentBool('lc-ui-left-open', true);
+  const [rightOpen, setRightOpen] = usePersistentBool('lc-ui-right-open', true);
   /** 低频面板弹窗：任务墙 / 工具铺 / 组件库 / 波形（点击启动，不用时不留侧栏） */
   const [panelOpen, setPanelOpen] = useState<null | 'map' | 'shop' | 'library' | 'wave'>(null);
   /** 画布探针：买下探针后可点连线钉读数 */
@@ -1079,28 +1082,40 @@ export function App(): React.JSX.Element {
       </header>
 
       <div className="body">
-        <Palette
-          placing={placing}
-          onPick={setPlacing}
-          library={doc.library}
-          level={currentLevel}
-          header={
-            currentLevel && (
-              <LevelCard
-                level={currentLevel}
-                costHalf={snapshot?.cost.half ?? 0}
-                reconDone={Boolean(progress.recon[currentLevel.id])}
-                sideJob={sideJobKey}
-                doneSideJobs={Object.keys(progress.sideJobs)
-                  .filter((id) => id.startsWith(`${currentLevel.id}:`))
-                  .map((id) => id.slice(currentLevel.id.length + 1))}
-                onPickSideJob={setSideJobKey}
-                onShowHint={() => setToast(currentLevel.hint)}
-                onOpenRecon={() => setReconOpen(true)}
-              />
-            )
-          }
-        />
+        {leftOpen && (
+          <Palette
+            placing={placing}
+            onPick={setPlacing}
+            library={doc.library}
+            level={currentLevel}
+            header={
+              currentLevel && (
+                <LevelCard
+                  level={currentLevel}
+                  costHalf={snapshot?.cost.half ?? 0}
+                  reconDone={Boolean(progress.recon[currentLevel.id])}
+                  sideJob={sideJobKey}
+                  doneSideJobs={Object.keys(progress.sideJobs)
+                    .filter((id) => id.startsWith(`${currentLevel.id}:`))
+                    .map((id) => id.slice(currentLevel.id.length + 1))}
+                  onPickSideJob={setSideJobKey}
+                  onShowHint={() => setToast(currentLevel.hint)}
+                  onOpenRecon={() => setReconOpen(true)}
+                />
+              )
+            }
+          />
+        )}
+        <div className={`edge-strip left${leftOpen ? '' : ' closed'}`}>
+          <button
+            type="button"
+            onClick={() => setLeftOpen(!leftOpen)}
+            title={leftOpen ? '收起元件库（腾出画布空间）' : '展开元件库'}
+            aria-label={leftOpen ? '收起元件库' : '展开元件库'}
+          >
+            {leftOpen ? '◀' : '▶'}
+          </button>
+        </div>
 
         <div className="canvas-wrap" ref={containerRef}>
           <canvas
@@ -1199,129 +1214,75 @@ export function App(): React.JSX.Element {
           )}
         </div>
 
-        <div className="side">
-          {currentLevel && (
-            <JudgePanel
-              level={judgedLevel ?? currentLevel}
-              result={judgeResult}
-              busy={judging}
-              record={levelRecord}
-              attempts={progress.attempts[currentLevel.id] ?? 0}
-              onJudge={() => void runJudge()}
-              onClear={() => void clearLevel()}
-            />
-          )}
-          {currentLevel && settlement && (
-            <SettlementPanel
-              level={currentLevel}
-              stars={settlementStars}
-              reconMeasured={progress.recon[currentLevel.id] === 'measured'}
-              sideJob={activeSideJob}
-              sideJobDone={Boolean(progress.sideJobs[`${currentLevel.id}:${activeSideJob?.key}`])}
-              levelName={currentLevel.unlock?.name ?? currentLevel.title}
-              result={settlement}
-              previousScore={levelRecord?.score ?? null}
-              walletHalf={progress.walletHalf}
-              nextLevelTitle={
-                ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]?.title
+        {rightOpen && (
+          <div className="side">
+            {currentLevel && (
+              <JudgePanel
+                level={judgedLevel ?? currentLevel}
+                result={judgeResult}
+                busy={judging}
+                record={levelRecord}
+                attempts={progress.attempts[currentLevel.id] ?? 0}
+                onJudge={() => void runJudge()}
+                onClear={() => void clearLevel()}
+              />
+            )}
+            {currentLevel && settlement && (
+              <SettlementPanel
+                level={currentLevel}
+                stars={settlementStars}
+                reconMeasured={progress.recon[currentLevel.id] === 'measured'}
+                sideJob={activeSideJob}
+                sideJobDone={Boolean(progress.sideJobs[`${currentLevel.id}:${activeSideJob?.key}`])}
+                levelName={currentLevel.unlock?.name ?? currentLevel.title}
+                result={settlement}
+                previousScore={levelRecord?.score ?? null}
+                walletHalf={progress.walletHalf}
+                nextLevelTitle={
+                  ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]?.title
+                }
+                onNextLevel={() => {
+                  const next =
+                    ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1];
+                  if (next) enterLevel(next.id);
+                }}
+                onDismiss={() => setSettlement(null)}
+              />
+            )}
+            <div className="rail">
+              <button type="button" onClick={() => setPanelOpen('map')} title="章节地图 / 选关">
+                任务墙
+              </button>
+              <button type="button" onClick={() => setPanelOpen('shop')} title="花钱买设备">
+                工具铺
+              </button>
+              <button type="button" onClick={() => setPanelOpen('library')} title="封装复用 / 存档">
+                组件库
+              </button>
+              <button type="button" onClick={() => setPanelOpen('wave')} title="端口波形">
+                波形
+              </button>
+            </div>
+            <Inspector
+              snapshot={snapshot}
+              units={units}
+              selectionLabel={
+                selectedSyms.length === 0
+                  ? null
+                  : selectedSyms.length === 1
+                    ? describeSym(selectedSyms[0] as Sym, doc)
+                    : `已选中 ${selectedSyms.length} 个元件`
               }
-              onNextLevel={() => {
-                const next = ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1];
-                if (next) enterLevel(next.id);
-              }}
-              onDismiss={() => setSettlement(null)}
+              pinTable={
+                selectedSyms.length === 1
+                  ? pinNames(selectedSyms[0] as Sym, doc.library).map((pin) => ({
+                      pin,
+                      text: signalText(pinSignals.get(`${(selectedSyms[0] as Sym).id}.${pin}[0]`)),
+                    }))
+                  : []
+              }
             />
-          )}
-          <div className="rail">
-            <button type="button" onClick={() => setPanelOpen('map')} title="章节地图 / 选关">
-              任务墙
-            </button>
-            <button type="button" onClick={() => setPanelOpen('shop')} title="花钱买设备">
-              工具铺
-            </button>
-            <button type="button" onClick={() => setPanelOpen('library')} title="封装复用 / 存档">
-              组件库
-            </button>
-            <button type="button" onClick={() => setPanelOpen('wave')} title="端口波形">
-              波形
-            </button>
-          </div>
-          <Inspector
-            snapshot={snapshot}
-            units={units}
-            selectionLabel={
-              selectedSyms.length === 0
-                ? null
-                : selectedSyms.length === 1
-                  ? describeSym(selectedSyms[0] as Sym, doc)
-                  : `已选中 ${selectedSyms.length} 个元件`
-            }
-            pinTable={
-              selectedSyms.length === 1
-                ? pinNames(selectedSyms[0] as Sym, doc.library).map((pin) => ({
-                    pin,
-                    text: signalText(pinSignals.get(`${(selectedSyms[0] as Sym).id}.${pin}[0]`)),
-                  }))
-                : []
-            }
-          />
-          {(showWave || panelOpen === 'wave') && judgeResult && (
-            <WaveformPanel
-              result={judgeResult}
-              hasScope={ownsEquipment(progress, 'scope')}
-              portNames={[
-                ...Object.keys(judgeResult.rows[0]?.inputs ?? {}),
-                ...new Set(judgeResult.rows.flatMap((r) => Object.keys(r.expected))),
-              ]}
-            />
-          )}
-          {showTruth && <TruthTable snapshot={snapshot} />}
-
-          {panelOpen === 'map' && currentLevel && (
-            <Modal title="任务墙" onClose={() => setPanelOpen(null)}>
-              <LevelMap
-                progress={progress}
-                currentLevelId={currentLevel.id}
-                onPick={(id) => {
-                  setPanelOpen(null);
-                  enterLevel(id);
-                }}
-              />
-            </Modal>
-          )}
-          {panelOpen === 'shop' && (
-            <Modal title="工具铺" onClose={() => setPanelOpen(null)}>
-              <WorkshopPanel
-                progress={progress}
-                onBuy={(id) => {
-                  const result = buyEquipment(progress, id);
-                  setProgress(result.progress);
-                  if (result.error) setToast(result.error);
-                  else
-                    setToast(
-                      `已买下设备（可用余额 ${(result.progress.walletHalf - result.progress.spentHalf) / 2} 元）`,
-                    );
-                }}
-              />
-            </Modal>
-          )}
-          {panelOpen === 'library' && (
-            <Modal title="组件库与成绩" onClose={() => setPanelOpen(null)}>
-              <LibraryPanel
-                library={doc.library}
-                rows={leaderboard(progress)}
-                currentLevelId={currentLevel?.id}
-                onExport={doExport}
-                onImport={doImport}
-                onJumpToLevel={(id) => {
-                  setPanelOpen(null);
-                  enterLevel(id);
-                }}
-              />
-            </Modal>
-          )}
-          {panelOpen === 'wave' && judgeResult && (
-            <Modal title="波形" onClose={() => setPanelOpen(null)}>
+            {(showWave || panelOpen === 'wave') && judgeResult && (
               <WaveformPanel
                 result={judgeResult}
                 hasScope={ownsEquipment(progress, 'scope')}
@@ -1330,12 +1291,117 @@ export function App(): React.JSX.Element {
                   ...new Set(judgeResult.rows.flatMap((r) => Object.keys(r.expected))),
                 ]}
               />
-            </Modal>
+            )}
+            {showTruth && <TruthTable snapshot={snapshot} />}
+          </div>
+        )}
+
+        {panelOpen === 'map' && currentLevel && (
+          <Modal title="任务墙" onClose={() => setPanelOpen(null)}>
+            <LevelMap
+              progress={progress}
+              currentLevelId={currentLevel.id}
+              onPick={(id) => {
+                setPanelOpen(null);
+                enterLevel(id);
+              }}
+            />
+          </Modal>
+        )}
+        {panelOpen === 'shop' && (
+          <Modal title="工具铺" onClose={() => setPanelOpen(null)}>
+            <WorkshopPanel
+              progress={progress}
+              onBuy={(id) => {
+                const result = buyEquipment(progress, id);
+                setProgress(result.progress);
+                if (result.error) setToast(result.error);
+                else
+                  setToast(
+                    `已买下设备（可用余额 ${(result.progress.walletHalf - result.progress.spentHalf) / 2} 元）`,
+                  );
+              }}
+            />
+          </Modal>
+        )}
+        {panelOpen === 'library' && (
+          <Modal title="组件库与成绩" onClose={() => setPanelOpen(null)}>
+            <LibraryPanel
+              library={doc.library}
+              rows={leaderboard(progress)}
+              currentLevelId={currentLevel?.id}
+              onExport={doExport}
+              onImport={doImport}
+              onJumpToLevel={(id) => {
+                setPanelOpen(null);
+                enterLevel(id);
+              }}
+            />
+          </Modal>
+        )}
+        {panelOpen === 'wave' && judgeResult && (
+          <Modal title="波形" onClose={() => setPanelOpen(null)}>
+            <WaveformPanel
+              result={judgeResult}
+              hasScope={ownsEquipment(progress, 'scope')}
+              portNames={[
+                ...Object.keys(judgeResult.rows[0]?.inputs ?? {}),
+                ...new Set(judgeResult.rows.flatMap((r) => Object.keys(r.expected))),
+              ]}
+            />
+          </Modal>
+        )}
+        <div className={`edge-strip right${rightOpen ? '' : ' closed'}`}>
+          <button
+            type="button"
+            onClick={() => setRightOpen(!rightOpen)}
+            title={rightOpen ? '收起右侧面板（验收/属性）' : '展开右侧面板（验收/属性）'}
+            aria-label={rightOpen ? '收起右侧面板' : '展开右侧面板'}
+          >
+            {rightOpen ? '▶' : '◀'}
+          </button>
+          {!rightOpen && (
+            <div className="rail-mini">
+              <button type="button" onClick={() => setPanelOpen('map')} title="章节地图 / 选关">
+                任务墙
+              </button>
+              <button type="button" onClick={() => setPanelOpen('shop')} title="花钱买设备">
+                工具铺
+              </button>
+              <button type="button" onClick={() => setPanelOpen('library')} title="封装复用 / 存档">
+                组件库
+              </button>
+              <button type="button" onClick={() => setPanelOpen('wave')} title="端口波形">
+                波形
+              </button>
+            </div>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+/** 面板开合等 UI 偏好的持久化：刷新后保持用户上次的选择 */
+function usePersistentBool(key: string, def: boolean): [boolean, (v: boolean) => void] {
+  const [value, setValue] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw !== null) return raw === '1';
+    } catch {
+      // 忽略读失败
+    }
+    return def;
+  });
+  const set = (next: boolean): void => {
+    setValue(next);
+    try {
+      localStorage.setItem(key, next ? '1' : '0');
+    } catch {
+      // 忽略写失败
+    }
+  };
+  return [value, set];
 }
 
 function snap(v: number): number {

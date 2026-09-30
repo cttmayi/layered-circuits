@@ -1,4 +1,5 @@
 import type { Level } from '@lc/schema';
+import { type ReactNode, useState } from 'react';
 import type { PlaceKind, StoredModule, UnitKind } from '../editor/model';
 import { drawIcon } from '../editor/render';
 
@@ -53,7 +54,92 @@ const UNITS: Array<{ unit: UnitKind; name: string; cost: string; note: string }>
   { unit: 'cap', name: '电容', cost: '3', note: '只计入成本，不参与逻辑仿真' },
 ];
 
-/** 左侧元件库：4 种基础元件 + 电源/端口 + 玩家封装出来的模块（关卡的素材约束在这里生效） */
+/** 分组折叠的持久化键：值为数组（当前展开的分组 key） */
+const SECTIONS_KEY = 'lc-ui-palette-sections';
+
+const SECTIONS = {
+  parts: 'parts',
+  power: 'power',
+  modules: 'modules',
+} as const;
+
+function useOpenSections(): [Set<string>, (key: string) => void] {
+  const [open, setOpen] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(SECTIONS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as string[];
+        if (Array.isArray(parsed) && parsed.length > 0) return new Set(parsed);
+      }
+    } catch {
+      // 忽略坏存档
+    }
+    return new Set(Object.values(SECTIONS));
+  });
+  const toggle = (key: string): void => {
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        localStorage.setItem(SECTIONS_KEY, JSON.stringify([...next]));
+      } catch {
+        // 忽略写入失败
+      }
+      return next;
+    });
+  };
+  return [open, toggle];
+}
+
+function SectionHead({
+  title,
+  badge,
+  open,
+  onToggle,
+}: {
+  title: string;
+  badge?: string;
+  open: boolean;
+  onToggle: () => void;
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      className="palette-section-head"
+      onClick={onToggle}
+      title={open ? '收起本组' : '展开本组'}
+      aria-expanded={open}
+    >
+      <span className={`palette-caret${open ? ' open' : ''}`}>▸</span>
+      <span className="palette-section-title">{title}</span>
+      {badge !== undefined && <span className="palette-section-count">{badge}</span>}
+    </button>
+  );
+}
+
+function Section({
+  open,
+  onToggle,
+  title,
+  badge,
+  children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  title: string;
+  badge?: string;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <section className="palette-section">
+      <SectionHead title={title} badge={badge} open={open} onToggle={onToggle} />
+      {open && <div className="palette-section-body">{children}</div>}
+    </section>
+  );
+}
+
+/** 左侧元件库：可折叠分组（我的元件 / 电源与端口 / 我的模块）+ 整体可收起（见 App 的 edge-strip） */
 export function Palette({
   placing,
   onPick,
@@ -61,6 +147,7 @@ export function Palette({
   level,
   header,
 }: PaletteProps): React.JSX.Element {
+  const [openSections, toggleSection] = useOpenSections();
   const unitAllowed = (unit: UnitKind): boolean => !level || level.allowedUnits.includes(unit);
   const modulesAllowed = level?.moduleAccess !== 'none';
   /** 模块关卡的可用性：白名单 / 复古关禁用（与判定里的策略保持一致） */
@@ -102,108 +189,129 @@ export function Palette({
       onPick({ kind });
   };
 
+  const availableUnits = UNITS.filter((u) => unitAllowed(u.unit)).length;
+
   return (
     <aside className="palette">
       {header}
-      <h3>基础元件</h3>
-      {UNITS.map((item) => {
-        const locked = !unitAllowed(item.unit);
-        return (
-          <button
-            key={item.unit}
-            type="button"
-            disabled={locked}
-            draggable={!locked}
-            onDragStart={(e) => {
-              e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'unit', unit: item.unit }));
-              e.dataTransfer.effectAllowed = 'copy';
-              e.dataTransfer.setDragImage(dragImage(item.unit), 48, 48);
-            }}
-            title={locked ? lockReason(item.unit) : `${item.note}（拖到画布放置，或点击后点画布）`}
-            className={isArmed('unit', item.unit) ? 'palette-item active' : 'palette-item'}
-            onClick={() => pick('unit', item.unit)}
-          >
-            <span className="palette-name">
-              {item.name} {locked && <em className="locked">本关不可用</em>}
-            </span>
-            <span className="palette-cost">成本 {item.cost}</span>
-            <span className="palette-note">{locked ? lockReason(item.unit) : item.note}</span>
-          </button>
-        );
-      })}
+      <Section
+        open={openSections.has(SECTIONS.parts)}
+        onToggle={() => toggleSection(SECTIONS.parts)}
+        title="我的元件"
+        badge={level ? `可用 ${availableUnits}/${UNITS.length}` : String(UNITS.length)}
+      >
+        {UNITS.map((item) => {
+          const locked = !unitAllowed(item.unit);
+          return (
+            <button
+              key={item.unit}
+              type="button"
+              disabled={locked}
+              draggable={!locked}
+              onDragStart={(e) => {
+                e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'unit', unit: item.unit }));
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setDragImage(dragImage(item.unit), 48, 48);
+              }}
+              title={
+                locked ? lockReason(item.unit) : `${item.note}（拖到画布放置，或点击后点画布）`
+              }
+              className={isArmed('unit', item.unit) ? 'palette-item active' : 'palette-item'}
+              onClick={() => pick('unit', item.unit)}
+            >
+              <span className="palette-name">
+                {item.name} {locked && <em className="locked">本关不可用</em>}
+              </span>
+              <span className="palette-cost">成本 {item.cost}</span>
+              <span className="palette-note">{locked ? lockReason(item.unit) : item.note}</span>
+            </button>
+          );
+        })}
+      </Section>
 
-      <h3>电源与端口</h3>
-      {(
-        [
-          ['vcc', 'VCC 电源', '免费端口'],
-          ['gnd', 'GND 地', '免费端口'],
-          ['input', '输入引脚', '可点击切换电平'],
-          ['output', '输出引脚', '显示实时电平'],
-        ] as Array<[string, string, string]>
-      ).map(([kind, name, note]) => {
-        // 关卡模式下端口已预置（a/b/y 是契约），输入/输出引脚不开放自加；VCC/GND 保留就近取电
-        const locked = (kind === 'input' || kind === 'output') && Boolean(level);
-        return (
-          <button
-            key={kind}
-            type="button"
-            disabled={locked}
-            draggable={!locked}
-            onDragStart={(e) => {
-              e.dataTransfer.setData(DRAG_MIME, kind);
-              e.dataTransfer.effectAllowed = 'copy';
-              e.dataTransfer.setDragImage(dragImage(kind), 48, 48);
-            }}
-            title={locked ? portLockReason : `${note}（拖到画布放置）`}
-            className={isArmed(kind) ? 'palette-item active' : 'palette-item'}
-            onClick={() => pick(kind)}
-          >
-            <span className="palette-name">
-              {name} {locked && <em className="locked">本关不可用</em>}
-            </span>
-            <span className="palette-note">{locked ? portLockReason : note}</span>
-          </button>
-        );
-      })}
+      <Section
+        open={openSections.has(SECTIONS.power)}
+        onToggle={() => toggleSection(SECTIONS.power)}
+        title="电源与端口"
+        badge="4"
+      >
+        {(
+          [
+            ['vcc', 'VCC 电源', '免费端口'],
+            ['gnd', 'GND 地', '免费端口'],
+            ['input', '输入引脚', '可点击切换电平'],
+            ['output', '输出引脚', '显示实时电平'],
+          ] as Array<[string, string, string]>
+        ).map(([kind, name, note]) => {
+          // 关卡模式下端口已预置（a/b/y 是契约），输入/输出引脚不开放自加；VCC/GND 保留就近取电
+          const locked = (kind === 'input' || kind === 'output') && Boolean(level);
+          return (
+            <button
+              key={kind}
+              type="button"
+              disabled={locked}
+              draggable={!locked}
+              onDragStart={(e) => {
+                e.dataTransfer.setData(DRAG_MIME, kind);
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setDragImage(dragImage(kind), 48, 48);
+              }}
+              title={locked ? portLockReason : `${note}（拖到画布放置）`}
+              className={isArmed(kind) ? 'palette-item active' : 'palette-item'}
+              onClick={() => pick(kind)}
+            >
+              <span className="palette-name">
+                {name} {locked && <em className="locked">本关不可用</em>}
+              </span>
+              <span className="palette-note">{locked ? portLockReason : note}</span>
+            </button>
+          );
+        })}
+      </Section>
 
-      <h3>我的模块（{library.length}）</h3>
-      {level && !modulesAllowed && (
-        <p className="palette-empty">本关要求从底层元件手搭，暂不开放组件库模块。</p>
-      )}
-      {library.length === 0 && (
-        <p className="palette-empty">
-          搭好电路后点「封装为模块」，就能像元件一样复用，成本会自动递归累加。
-        </p>
-      )}
-      {library.map((mod) => {
-        const locked = !modulesAllowed || !moduleAllowed(mod.name);
-        return (
-          <button
-            key={mod.hash}
-            type="button"
-            className={isArmed('module', mod.hash) ? 'palette-item active' : 'palette-item'}
-            disabled={locked}
-            draggable={!locked}
-            onDragStart={(e) => {
-              e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'module', hash: mod.hash }));
-              e.dataTransfer.effectAllowed = 'copy';
-              e.dataTransfer.setDragImage(dragImage('module'), 48, 48);
-            }}
-            onClick={() => pick('module', undefined, mod.hash)}
-            title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}（拖到画布放置）`}
-          >
-            <span className="palette-name">
-              {mod.name} v{mod.version} {mod.isSequential && <em>时序</em>}
-            </span>
-            <span className="palette-cost">成本 {mod.costHalf / 2}</span>
-            <span className="palette-note">
-              {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
-              {mod.ports.filter((p) => p.dir === 'out').length} 出 · #{mod.hash.slice(0, 6)}
-            </span>
-            {locked && <span className="palette-lock">{moduleLockReason(mod.name)}</span>}
-          </button>
-        );
-      })}
+      <Section
+        open={openSections.has(SECTIONS.modules)}
+        onToggle={() => toggleSection(SECTIONS.modules)}
+        title={`我的模块（${library.length}）`}
+      >
+        {level && !modulesAllowed && (
+          <p className="palette-empty">本关要求从底层元件手搭，暂不开放组件库模块。</p>
+        )}
+        {library.length === 0 && (
+          <p className="palette-empty">
+            搭好电路后点「封装为模块」，就能像元件一样复用，成本会自动递归累加。
+          </p>
+        )}
+        {library.map((mod) => {
+          const locked = !modulesAllowed || !moduleAllowed(mod.name);
+          return (
+            <button
+              key={mod.hash}
+              type="button"
+              className={isArmed('module', mod.hash) ? 'palette-item active' : 'palette-item'}
+              disabled={locked}
+              draggable={!locked}
+              onDragStart={(e) => {
+                e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'module', hash: mod.hash }));
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setDragImage(dragImage('module'), 48, 48);
+              }}
+              onClick={() => pick('module', undefined, mod.hash)}
+              title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}（拖到画布放置）`}
+            >
+              <span className="palette-name">
+                {mod.name} v{mod.version} {mod.isSequential && <em>时序</em>}
+              </span>
+              <span className="palette-cost">成本 {mod.costHalf / 2}</span>
+              <span className="palette-note">
+                {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
+                {mod.ports.filter((p) => p.dir === 'out').length} 出 · #{mod.hash.slice(0, 6)}
+              </span>
+              {locked && <span className="palette-lock">{moduleLockReason(mod.name)}</span>}
+            </button>
+          );
+        })}
+      </Section>
     </aside>
   );
 }

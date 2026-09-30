@@ -117,6 +117,70 @@ body,
   min-height: 0;
 }
 
+/* 左右侧面板的收起条：常驻一条细边，点箭头收/展；右侧收起时兼作迷你侧栏 */
+.edge-strip {
+  width: 16px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--panel-2);
+}
+
+.edge-strip.left {
+  border-right: 1px solid var(--line);
+}
+
+.edge-strip.right {
+  border-left: 1px solid var(--line);
+}
+
+.edge-strip > button {
+  width: 100%;
+  flex: none;
+  background: transparent;
+  border: none;
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 1;
+  padding: 7px 0;
+  cursor: pointer;
+}
+
+.edge-strip > button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.edge-strip.right.closed {
+  width: 34px;
+}
+
+.rail-mini {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 2px 4px 6px;
+}
+
+.rail-mini button {
+  writing-mode: vertical-rl;
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 8px 3px;
+  background: var(--panel);
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.rail-mini button:hover {
+  color: var(--text);
+  border-color: #3b556e;
+}
+
 .palette {
   width: 208px;
   flex: none;
@@ -124,6 +188,66 @@ body,
   border-right: 1px solid var(--line);
   padding: 10px;
   overflow-y: auto;
+}
+
+/* 可折叠分组（我的元件 / 电源与端口 / 我的模块） */
+.palette-section {
+  margin-top: 8px;
+}
+
+.palette-section:first-child {
+  margin-top: 4px;
+}
+
+.palette-section-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 8px 2px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.palette-section-head:hover {
+  color: var(--text);
+}
+
+.palette-caret {
+  font-size: 9px;
+  display: inline-block;
+  transition: transform 0.12s ease;
+  color: var(--dim);
+}
+
+.palette-caret.open {
+  transform: rotate(90deg);
+}
+
+.palette-section-title {
+  font-weight: 600;
+}
+
+.palette-section-count {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+.palette-section-body {
+  padding: 7px 0 3px;
 }
 
 .palette h3,
