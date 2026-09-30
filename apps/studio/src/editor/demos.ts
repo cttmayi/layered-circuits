@@ -18,7 +18,7 @@ function sym(partial: Partial<Sym> & Pick<Sym, 'id' | 'kind' | 'x' | 'y' | 'labe
 }
 
 export function emptyDoc(): Doc {
-  return { id: 'scratch', name: '未命名电路', syms: [], wires: [], library: [] };
+  return { id: 'scratch', name: '未命名电路', syms: [], wires: [], library: [], backdrop: [] };
 }
 
 export function notGateDemo(): Doc {
@@ -82,6 +82,11 @@ export function npnIntroSeedDoc(): Doc {
     sym({ id: 'q1', kind: 'unit', unit: 'npn', x: 300, y: 230, label: 'Q1' }),
     sym({ id: 'r1', kind: 'unit', unit: 'res', x: 500, y: 230, rot: 1, label: 'R1' }),
   ];
+  // 场景背景：门磁按钮装在左墙、警示灯挂在右墙，中间是电路
+  doc.backdrop = [
+    { kind: 'wall', x: 6, y: 90, w: 44, h: 280 },
+    { kind: 'wall', x: 668, y: 90, w: 44, h: 280 },
+  ];
   // 上拉电阻 VCC→输出、集电极→输出、发射极→GND 都已接好；只差基极 b→输入 a
   doc.wires = [
     wire('vcc', 'p', 'r1', 'a'),
@@ -103,6 +108,11 @@ export function dioIntroSeedDoc(): Doc {
     sym({ id: 'gnd', kind: 'gnd', x: 480, y: 340, label: 'GND' }),
     sym({ id: 'r1', kind: 'unit', unit: 'res', x: 480, y: 230, rot: 1, label: 'R1' }),
   ];
+  // 场景背景：两节电池装在左墙电池架、设备灯在右墙
+  doc.backdrop = [
+    { kind: 'wall', x: 6, y: 90, w: 44, h: 280 },
+    { kind: 'wall', x: 668, y: 90, w: 44, h: 280 },
+  ];
   // 两节电池直接并联到输出（信号冲突/倒灌），负载下拉电阻已接；玩家加二极管隔开
   doc.wires = [
     wire('in-a', 'p', 'out-y', 'p'),
@@ -123,6 +133,11 @@ export function floatIntroSeedDoc(): Doc {
     sym({ id: 'vcc', kind: 'vcc', x: 420, y: 70, label: 'VCC' }),
     sym({ id: 'gnd', kind: 'gnd', x: 300, y: 340, label: 'GND' }),
     sym({ id: 'q1', kind: 'unit', unit: 'npn', x: 300, y: 230, label: 'Q1' }),
+  ];
+  // 场景背景：推门按钮装在左墙、弹簧门在右墙门洞里
+  doc.backdrop = [
+    { kind: 'wall', x: 6, y: 90, w: 44, h: 280 },
+    { kind: 'doorFrame', x: 640, y: 90, w: 76, h: 280 },
   ];
   // 三极管开关已接（集电极→输出、基极→输入、发射极→GND）；只差上拉电阻 VCC→y
   doc.wires = [

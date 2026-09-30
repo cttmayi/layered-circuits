@@ -72,12 +72,26 @@ export interface Wire {
   b: PinRef;
 }
 
+export type BackdropKind = 'wall' | 'doorFrame';
+
+/** 教学关场景背景（装饰，不参与电路）：墙 / 门洞，画在元件与导线之下 */
+export interface BackdropItem {
+  kind: BackdropKind;
+  /** 左上角世界坐标（与元件同一坐标系） */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface Doc {
   id: string;
   name: string;
   syms: Sym[];
   wires: Wire[];
   library: StoredModule[];
+  /** 教学关场景背景（普通关卡没有） */
+  backdrop?: BackdropItem[];
 }
 
 /** 画布上「待放置」的元件类型（左侧组件库 → 画布） */

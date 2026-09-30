@@ -554,6 +554,11 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
     }
   }
 
+  // 教学关场景背景（墙/门洞等装饰，画在元件与导线之下，跟随平移缩放）
+  if (doc.backdrop) {
+    for (const b of doc.backdrop) drawBackdrop(ctx, scene, b);
+  }
+
   for (const sym of doc.syms) drawSymbol(ctx, scene, sym);
 
   // 画布探针：圆点 + 电平/强度读数（跟着仿真实时变）
@@ -608,6 +613,39 @@ function drawGrid(ctx: CanvasRenderingContext2D, scene: Scene): void {
   ctx.restore();
 }
 
+/** 教学关场景背景：墙 / 门洞（纯装饰，半透明，不遮住元件） */
+function drawBackdrop(
+  ctx: CanvasRenderingContext2D,
+  scene: Scene,
+  b: import('./model.ts').BackdropItem,
+): void {
+  const { camera, width, height } = scene;
+  const p = worldToScreen(camera, width, height, b.x, b.y);
+  const sw = b.w * camera.scale;
+  const sh = b.h * camera.scale;
+  ctx.save();
+  ctx.fillStyle = 'rgba(62, 82, 102, 0.2)';
+  ctx.strokeStyle = 'rgba(120, 155, 190, 0.38)';
+  ctx.lineWidth = 2;
+  ctx.fillRect(p.x, p.y, sw, sh);
+  ctx.strokeRect(p.x, p.y, sw, sh);
+  // 顶面（受光）
+  ctx.fillStyle = 'rgba(150, 185, 215, 0.22)';
+  ctx.fillRect(p.x, p.y, sw, Math.max(3, 4 * camera.scale));
+  if (b.kind === 'doorFrame') {
+    // 门洞：墙内挖一个深色门洞
+    const dx = p.x + sw * 0.3;
+    const dw = sw * 0.4;
+    const dy = p.y + sh * 0.12;
+    const dh = sh * 0.76;
+    ctx.fillStyle = 'rgba(6, 10, 15, 0.92)';
+    ctx.fillRect(dx, dy, dw, dh);
+    ctx.strokeStyle = 'rgba(90, 112, 132, 0.5)';
+    ctx.strokeRect(dx, dy, dw, dh);
+  }
+  ctx.restore();
+}
+
 /**
  * 教学关实物图标（画在端口位置、世界坐标原点居中、由信号驱动状态）：
  * - button 按钮（输入）：按下=1 发亮，松开=0 灰
@@ -637,14 +675,10 @@ function drawSprite(
     ctx.arc(0, -4, 14, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    // 按钮杆：按下时缩进去
+    // 按钮杆：按下时缩进去（状态由图形表达，不画文字避免与端口名重叠）
     ctx.fillStyle = on ? onColor : offStroke;
     ctx.fillRect(-5, on ? 10 : 8, 10, on ? 4 : 6);
     ctx.strokeRect(-7, 14, 14, 4);
-    ctx.fillStyle = on ? onColor : PALETTE.bodyDim;
-    ctx.font = 'bold 9px ui-sans-serif, system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(on ? '按下' : '松开', 0, 34);
   } else if (sprite === 'lamp') {
     // 灯泡：亮（1）= 发黄光 + 光线；灭（0）= 灰玻璃
     if (on) {
