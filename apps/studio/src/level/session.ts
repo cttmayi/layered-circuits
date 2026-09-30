@@ -7,8 +7,8 @@
 
 import { ALL_LEVELS, findLevel } from '@lc/content';
 import type { Level } from '@lc/schema';
-import { notGateDemo } from '../editor/demos';
-import { type Doc, fromDesign, type StoredModule } from '../editor/model';
+import { notGateDemo, teachingSeedDoc } from '../editor/demos';
+import type { Doc, StoredModule } from '../editor/model';
 import { docForLevel, isLevelUnlocked, loadProgress, type Progress } from './progress';
 
 export type GameMode = 'level' | 'free';
@@ -59,9 +59,11 @@ export function docFor(mode: GameMode, levelId: string, library: StoredModule[])
   }
   // 教学关半成品：无存档时画布预置搭到一半的电路（玩家补关键连接），
   // 而不是一张空白画布 —— 这就是「教学感」的核心：讲解后跟着模仿。
+  // 画布布局用手写的教学 Doc（输入左、输出右、元件居中，一眼看到差哪步），
+  // 判定仍靠 levels 的 seedDoc（Design）：玩家补完关键连接后就是参考解。
   if (level.seedDoc) {
     return {
-      ...fromDesign(level.seedDoc, docForLevel(level, [])),
+      ...teachingSeedDoc(level.id),
       library: level.moduleAccess === 'none' ? [] : library,
       name: level.title,
     };

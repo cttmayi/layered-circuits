@@ -64,3 +64,69 @@ export function danglingDemo(): Doc {
   doc.wires = [wire('in1', 'p', 'q1', 'b')];
   return doc;
 }
+
+/**
+ * 教学关半成品画布：横向布局（输入在左、输出在右、元件居中、电源顶底），
+ * 让「还差哪一步」一眼可见。与 levels 里的 seedDoc（Design）连接一致：
+ * 玩家补完关键连接后就是参考解。三个教学关各一个。
+ */
+export function npnIntroSeedDoc(): Doc {
+  const doc = emptyDoc();
+  doc.name = '认识三极管 · 半成品';
+  doc.syms = [
+    sym({ id: 'in-a', kind: 'input', x: 60, y: 230, label: 'a', value: 0 }),
+    sym({ id: 'out-y', kind: 'output', x: 660, y: 230, label: 'y' }),
+    sym({ id: 'vcc', kind: 'vcc', x: 300, y: 70, label: 'VCC' }),
+    sym({ id: 'gnd', kind: 'gnd', x: 500, y: 340, label: 'GND' }),
+    sym({ id: 'q1', kind: 'unit', unit: 'npn', x: 300, y: 230, label: 'Q1' }),
+    sym({ id: 'r1', kind: 'unit', unit: 'res', x: 500, y: 230, rot: 1, label: 'R1' }),
+  ];
+  // 集电极←VCC、发射极→输出、发射极→下拉电阻→GND 都已接好；只差基极 b→输入 a
+  doc.wires = [
+    wire('vcc', 'p', 'q1', 'c'),
+    wire('q1', 'e', 'out-y', 'p'),
+    wire('q1', 'e', 'r1', 'a'),
+    wire('r1', 'b', 'gnd', 'p'),
+  ];
+  return doc;
+}
+
+export function dioIntroSeedDoc(): Doc {
+  const doc = emptyDoc();
+  doc.name = '认识二极管 · 半成品';
+  doc.syms = [
+    sym({ id: 'in-a', kind: 'input', x: 60, y: 230, label: 'a', value: 0 }),
+    sym({ id: 'out-y', kind: 'output', x: 660, y: 230, label: 'y' }),
+    sym({ id: 'gnd', kind: 'gnd', x: 480, y: 340, label: 'GND' }),
+    sym({ id: 'r1', kind: 'unit', unit: 'res', x: 480, y: 230, rot: 1, label: 'R1' }),
+  ];
+  // 下拉电阻已接（输出→GND）；二极管本体和方向是玩家的事
+  doc.wires = [wire('out-y', 'p', 'r1', 'a'), wire('r1', 'b', 'gnd', 'p')];
+  return doc;
+}
+
+export function floatIntroSeedDoc(): Doc {
+  const doc = emptyDoc();
+  doc.name = '悬空与默认电平 · 半成品';
+  doc.syms = [
+    sym({ id: 'in-a', kind: 'input', x: 60, y: 230, label: 'a', value: 0 }),
+    sym({ id: 'out-y', kind: 'output', x: 660, y: 230, label: 'y' }),
+    sym({ id: 'vcc', kind: 'vcc', x: 420, y: 70, label: 'VCC' }),
+    sym({ id: 'gnd', kind: 'gnd', x: 300, y: 340, label: 'GND' }),
+    sym({ id: 'q1', kind: 'unit', unit: 'npn', x: 300, y: 230, label: 'Q1' }),
+  ];
+  // 三极管开关已接（集电极→输出、基极→输入、发射极→GND）；只差上拉电阻 VCC→y
+  doc.wires = [
+    wire('q1', 'c', 'out-y', 'p'),
+    wire('q1', 'b', 'in-a', 'p'),
+    wire('q1', 'e', 'gnd', 'p'),
+  ];
+  return doc;
+}
+
+/** 教学关半成品画布分发（levels 的 seedDoc 只负责判定，这里管画布布局） */
+export function teachingSeedDoc(levelId: string): Doc {
+  if (levelId === 's1-dio') return dioIntroSeedDoc();
+  if (levelId === 's1-float') return floatIntroSeedDoc();
+  return npnIntroSeedDoc();
+}
