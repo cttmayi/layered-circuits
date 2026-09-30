@@ -51,7 +51,9 @@ export function LevelCard({
       <h3>委托单 · {level.title}</h3>
       <p className="commission-client">
         <span className="client-tag">委托方</span>
-        <span>{commission.client}</span> —— 「{commission.note}」
+        <span className="commission-note" title={commission.note}>
+          {commission.client} —— 「{commission.note}」
+        </span>
       </p>
       <p className="contract-summary">
         款项 {contract.pay} · 交期 {contract.deadline} · 禁忌 {contract.taboo}

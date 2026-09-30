@@ -194,7 +194,7 @@ describe('委托单与结算（P0 游戏化外壳）', () => {
     renderApp();
     goToLevel('非门'); // 进关即开工，不再弹「新委托」
     expect(screen.queryByText('新委托')).toBeNull();
-    expect(screen.getAllByText('修表铺 · 老周').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/修表铺 · 老周/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/收音机的指示灯接反了/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/款项/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/禁忌/).length).toBeGreaterThanOrEqual(1);
