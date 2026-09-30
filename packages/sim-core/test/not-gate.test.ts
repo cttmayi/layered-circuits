@@ -63,9 +63,15 @@ describe('RTL 非门（2 三极管 + 3 电阻，成本 7）', () => {
     expect(lastChange - t0).toBe(2500);
   });
 
-  it('未连接的输入引脚不会导致 X 泛滥，只报「基极悬空」警告', () => {
+  it('输入未设置时不报悬空误报；把输入显式设为 Z（真的没接驱动）才报「基极悬空」', () => {
     const net = buildNotGate();
     const sim = new Simulator(net, { mode: 'logic' });
+    sim.settle();
+    // 上电/输入未设置阶段：任何电路都会瞬间悬空，报出来是误报
+    expect(sim.readPort('out')).toBe(1);
+    expect(sim.allDiagnostics.some((d) => d.kind === 'floating-input')).toBe(false);
+    // 输入被显式设置（这里设成 Z = 端口存在但没接驱动）→ 真悬空 → 才报
+    sim.setInput('in', 'Z');
     sim.settle();
     expect(sim.readPort('out')).toBe(1); // 输入 Z → Q1 截止 → A 上拉为 1 → Q2 导通
     const floating = sim.allDiagnostics.filter((d) => d.kind === 'floating-input');

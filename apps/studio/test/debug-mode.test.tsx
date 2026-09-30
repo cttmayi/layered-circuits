@@ -36,6 +36,9 @@ describe('调试模式 · 一键出答案', () => {
     startJob('非门');
     fireEvent.click(screen.getByText('调试模式'));
     fireEvent.click(screen.getByText('一键出答案'));
+    // 自动仿真跑完（真值表出现）后，仿真诊断里不得有「基极悬空」误报
+    await waitFor(() => expect(screen.getByText(/真值表（\d+ 行）/)).toBeTruthy());
+    expect(screen.queryByText(/基极悬空|未连接任何驱动/)).toBeNull();
     // 验收（工具栏那枚）
     const judgeButtons = screen.getAllByText('交付验收');
     judgeButtons[judgeButtons.length - 1]?.click();
@@ -43,6 +46,8 @@ describe('调试模式 · 一键出答案', () => {
       timeout: 5000,
     });
     expect(screen.getByText(/满分|成本正好等于最优|评 A|星 ?3/)).toBeTruthy();
+    // 一键出答案的参考解不该有任何「悬空」警告（画布导线是完整的）
+    expect(screen.queryByText(/基极悬空|未连接任何驱动/)).toBeNull();
   });
 
   it('调试模式开关持久化：刷新后仍开着', () => {

@@ -112,6 +112,10 @@ export class Simulator {
   private readonly outPorts = new Map<string, FlatPort>();
   /** 三极管基极「曾处于悬空」的节点 → 元素下标（仿真停下时才判定并报告） */
   private readonly floatingBase = new Map<number, number>();
+  /** 输入端口总数（用于判定「所有输入都设置过」——输入没设置完之前不算仿真开始） */
+  private readonly inputPortCount: number;
+  /** 已被 setInput/setInputAt 设置过的输入端口元素下标 */
+  private readonly setInputElems = new Set<number>();
 
   constructor(net: FlatNet, options: SimOptions) {
     this.net = net;
@@ -126,6 +130,7 @@ export class Simulator {
     this.changeCount = new Uint32Array(net.nodeCount);
     this.inFifo = new Uint8Array(net.elemCount);
     this.queuedTime = new Float64Array(net.elemCount).fill(Number.NaN);
+    this.inputPortCount = net.ports.filter((p) => p.dir === 'in').length;
 
     for (const port of net.ports) {
       if (port.dir === 'in') {
@@ -142,11 +147,13 @@ export class Simulator {
 
   // ---------------------------------------------------------------- 生命周期
 
-  /** 上电：源在 t=0 建立，其余元件按延迟逐级传播（见构造函数注释） */
+  /** 上电：源在 t=0 建立，其余元件按延迟逐级传播（见构造函数注释）。
+   *  上电阶段输入引脚还没设置、任何节点都是 Z，此时报告悬空是误报（任何电路都会报），
+   *  所以这里不报告浮动；悬空检查只发生在输入设置完之后的收敛（见 settle 的注释）。 */
   private powerUp(): void {
     if (this.mode === 'logic') {
       for (let e = 0; e < this.net.elemCount; e++) this.schedule(e, 0);
-      this.settle();
+      this.settle(false);
       return;
     }
     for (let e = 0; e < this.net.elemCount; e++) {
@@ -157,13 +164,14 @@ export class Simulator {
           : (this.net.elemDelayPs[e] as number);
       this.schedule(e, delay);
     }
-    this.drainUntil(0);
+    this.drainUntil(0, Number.POSITIVE_INFINITY, false);
   }
 
   reset(): void {
     this.nodeSig.fill(SIG_Z);
     this.contrib.fill(SIG_Z);
     this.changeCount.fill(0);
+    this.setInputElems.clear();
     this.timePs = 0;
     this.fifo = [];
     this.fifoHead = 0;
@@ -191,8 +199,12 @@ export class Simulator {
     this.powerUp();
   }
 
-  /** 逻辑模式：迭代到收敛。返回是否收敛（false = 振荡/组合环） */
-  settle(): boolean {
+  /** 逻辑模式：迭代到收敛。返回是否收敛（false = 振荡/组合环）
+   *  @param reportFloating 收敛后是否检查「仍悬空的三极管基极」。上电（powerUp）阶段
+   *     输入引脚还没设置、所有节点都是 Z，此时报告悬空是误报（任何电路都会报），
+   *     所以 powerUp 传 false；输入设置完之后的收敛才传默认 true —— 那时仍悬空
+   *     才是玩家真的忘了接输入。 */
+  settle(reportFloating = true): boolean {
     if (this.mode !== 'logic') {
       throw new Error('settle() 只能在 logic 模式下调用');
     }
@@ -212,7 +224,8 @@ export class Simulator {
     }
     this.fifo = [];
     this.fifoHead = 0;
-    this.reportFloatingBases();
+    // 输入全部设置过才算仿真开始：上电/设置输入的中间态悬空是初始化，不算玩家错误
+    if (reportFloating && this.allInputsSet()) this.reportFloatingBases();
     return true;
   }
 
@@ -253,6 +266,8 @@ export class Simulator {
   setInput(portIdOrName: string, value: Logic): void {
     const port = this.inPorts.get(portIdOrName);
     if (!port) throw new Error(`未找到输入端口：${portIdOrName}`);
+    // 无论值变没变，只要被显式设置过就算「输入已驱动」——未设置之前不算仿真开始
+    this.setInputElems.add(port.elem);
     const encoded = value === 'Z' ? 3 : value === 'X' ? VX : (value as number);
     if (this.net.elemParam[port.elem] === encoded) return;
     this.net.elemParam[port.elem] = encoded;
@@ -285,6 +300,7 @@ export class Simulator {
       // 队列可能已经空了：时间仍然要推到 atPs，激励才有确定的落点
       this.timePs = atPs;
     }
+    this.setInputElems.add(port.elem);
     const encoded = value === 'Z' ? 3 : value === 'X' ? VX : (value as number);
     if (this.net.elemParam[port.elem] === encoded) return;
     this.net.elemParam[port.elem] = encoded;
@@ -342,7 +358,11 @@ export class Simulator {
     this.pushHeap({ time: atPs, seq: this.seq++, elem });
   }
 
-  private drainUntil(limitPs: number, maxEvents = Number.POSITIVE_INFINITY): boolean {
+  private drainUntil(
+    limitPs: number,
+    maxEvents = Number.POSITIVE_INFINITY,
+    reportFloating = true,
+  ): boolean {
     const budget = this.eventCount + maxEvents;
     while (this.heap.length > 0) {
       const top = this.heap[0] as HeapEntry;
@@ -378,7 +398,9 @@ export class Simulator {
       this.evalElement(top.elem, top.time);
     }
     // 队列已空时不要推进 timePs：调用方（波形/延迟测量）需要「最后一次事件发生的时刻」
-    if (this.heap.length === 0) this.reportFloatingBases();
+    if (this.heap.length === 0 && reportFloating && this.allInputsSet()) {
+      this.reportFloatingBases();
+    }
     return true;
   }
 
@@ -387,6 +409,12 @@ export class Simulator {
    * 为什么不在求值时立刻报警：时序模式下上电要一级一级传播，中途基极短暂悬空是正常的，
    * 只有稳定后仍然悬空才说明玩家真的忘了接。
    */
+  private allInputsSet(): boolean {
+    // 所有输入端口都被显式设置过，才算是「仿真真正开始」——在这之前（上电 / 逐个
+    // setInput 的中间态）节点悬空是初始化过程，不是玩家电路的错误。
+    return this.setInputElems.size >= this.inputPortCount;
+  }
+
   private reportFloatingBases(): void {
     for (const [node, elem] of this.floatingBase) {
       if ((this.nodeSig[node] as number) !== SIG_Z) continue;
