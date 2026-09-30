@@ -265,7 +265,9 @@ export function docForLevel(level: Level, library: StoredModule[]): Doc {
     name: level.title,
     syms,
     wires: [],
-    library,
+    // 入门关（moduleAccess 'none'）根本用不到模块：初始画布不背全量组件库，
+    // 免得一个非门关卡的存档里塞着十几二十个无关模块的模板（又大又乱）。
+    library: level.moduleAccess === 'none' ? [] : library,
   };
 }
 

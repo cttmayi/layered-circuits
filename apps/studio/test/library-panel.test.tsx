@@ -28,7 +28,7 @@ describe('组件库与成绩面板', () => {
     expect(screen.getByText(/还没有封装过模块/)).toBeTruthy();
   });
 
-  it('存档里有模块与通关记录时：显示版本、重挑战行与「追赶已知最省」', () => {
+  it('存档里有模块与通关记录时：入门关（非门）不显示模块，但重挑战榜显示「追赶已知最省」', () => {
     // 预置一份存档：一个模块版本 + 第 1 关通关记录
     localStorage.setItem(
       PROGRESS_KEY,
@@ -58,11 +58,49 @@ describe('组件库与成绩面板', () => {
     render(<App />);
     goToLevel('非门'); // 已通关的关：不弹委托，直接进工作台
     fireEvent.click(screen.getByText('组件库'));
-    expect(screen.getAllByText('我的模块（1）').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/1 个版本 · 最新 v1\.0 · 成本 4/)).toBeTruthy();
+    // 入门关（moduleAccess none）用不到模块：即使存档有模块也不显示
+    expect(screen.getAllByText('我的模块（0）').length).toBeGreaterThanOrEqual(1);
     // 重挑战榜：非门已知最省 6 半单位（3），玩家 8（4）→ 显示「追赶 3」
     expect(screen.getByText('非门', { selector: '.link' })).toBeTruthy();
     expect(screen.getByText(/追赶 3/)).toBeTruthy();
+  });
+
+  it('允许模块的关（与非门）：显示存档里的模块版本与溯源', () => {
+    // 预置存档：一个模块版本 + 前三关通关记录（解锁「与非门」，moduleAccess all）
+    localStorage.setItem(
+      PROGRESS_KEY,
+      JSON.stringify({
+        cleared: {
+          's1-not': { score: 100, bestCostHalf: 8, clearedAt: Date.now() },
+          's1-and': { score: 100, bestCostHalf: 10, clearedAt: Date.now() },
+          's1-or': { score: 100, bestCostHalf: 10, clearedAt: Date.now() },
+        },
+        attempts: {},
+        library: [
+          {
+            hash: 'hash-not-1',
+            name: '非门',
+            version: '1.0',
+            stage: 1,
+            costHalf: 8,
+            isSequential: false,
+            ports: [
+              { id: 'a', name: 'a', dir: 'in', width: 1 },
+              { id: 'y', name: 'y', dir: 'out', width: 1 },
+            ],
+            template: { hash: 'hash-not-1' },
+            levelId: 's1-not',
+            sources: [],
+            createdAt: Date.now(),
+          },
+        ],
+      }),
+    );
+    render(<App />);
+    goToLevel('与非门');
+    fireEvent.click(screen.getByText('组件库'));
+    expect(screen.getAllByText('我的模块（1）').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/1 个版本 · 最新 v1\.0 · 成本 4/)).toBeTruthy();
   });
 });
 

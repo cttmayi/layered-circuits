@@ -237,7 +237,11 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(doc));
+        // 画布存档不背组件库：模块是全局进度（progress.library）的一部分，
+        // 读档时 docFor 会重新注入。一个非门关卡带着 16 个无关模块的模板
+        // 序列化，既占 localStorage 又让导出数据又大又乱。
+        const { library: _library, ...canvas } = doc;
+        localStorage.setItem(storageKey, JSON.stringify(canvas));
       } catch {
         /* 存档失败无所谓 */
       }
