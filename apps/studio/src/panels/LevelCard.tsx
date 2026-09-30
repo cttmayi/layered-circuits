@@ -55,9 +55,20 @@ export function LevelCard({
           {commission.client} —— 「{commission.note}」
         </span>
       </p>
-      <p className="contract-summary">
-        款项 {contract.pay} · 交期 {contract.deadline} · 禁忌 {contract.taboo}
-      </p>
+      <ul className="contract-list">
+        <li>
+          <span className="contract-key">成本</span>
+          <strong className="contract-val">
+            {contract.costCap === null ? '按最省结算' : `≤ ${contract.costCap.toFixed(1)} 元`}
+          </strong>
+        </li>
+        {contract.timingCap !== null && (
+          <li>
+            <span className="contract-key">关键路径</span>
+            <strong className="contract-val">≤ {contract.timingCap.toFixed(1)} ns</strong>
+          </li>
+        )}
+      </ul>
       {level.requiredUnits.length > 0 && (
         <p className="dim small required-units">
           本单要求：必须用{' '}

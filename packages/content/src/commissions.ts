@@ -95,25 +95,16 @@ export function commissionOf(level: Level): Commission {
   return COMMISSIONS[level.id] ?? { ...FALLBACK, note: level.brief || FALLBACK.note };
 }
 
-/** 合同条款：款项 / 交期 / 素材禁忌 —— 全部由关卡现有字段推导，叙事不引入新规则 */
-export function contractOf(level: Level): { pay: string; deadline: string; taboo: string } {
-  const pay =
-    level.kind === 'cost'
-      ? '不限预算，按最省结算'
-      : `${level.budgetHalf / 2} 元（材料费自负，省下的算你的）`;
-  const deadline =
-    level.timingBudgetPs !== undefined
-      ? `关键路径 ≤ ${(level.timingBudgetPs / 1000).toFixed(2)} ns`
-      : level.mode === 'timing'
-        ? '按硬核时序验收'
-        : '交期不紧';
-  const taboo =
-    level.allowedUnits.length < 4
-      ? `只许用${level.allowedUnits.map(unitName).join('、')}`
-      : '不限制元件';
-  return { pay, deadline, taboo };
+/** 合同条款：成本上限 / 关键路径上限 —— 全部由关卡现有字段推导，叙事不引入新规则 */
+export interface ContractTerms {
+  /** 成本上限（元）；null = 不限预算 */
+  costCap: number | null;
+  /** 关键路径上限（ns）；null = 不设时限 */
+  timingCap: number | null;
 }
 
-function unitName(unit: string): string {
-  return { npn: '三极管', res: '电阻', dio: '二极管', cap: '电容' }[unit] ?? unit;
+export function contractOf(level: Level): ContractTerms {
+  const costCap = level.kind === 'cost' ? null : level.budgetHalf / 2;
+  const timingCap = level.timingBudgetPs !== undefined ? level.timingBudgetPs / 1000 : null;
+  return { costCap, timingCap };
 }

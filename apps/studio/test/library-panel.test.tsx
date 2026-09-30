@@ -197,7 +197,8 @@ describe('委托单与结算（P0 游戏化外壳）', () => {
     expect(screen.getAllByText(/修表铺 · 老周/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/收音机的指示灯接反了/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/款项/).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/禁忌/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/成本/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/关键路径/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('委托单 · 非门')).toBeTruthy();
   });
 

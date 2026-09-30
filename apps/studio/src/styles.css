@@ -1349,11 +1349,28 @@ body,
 }
 
 /* 图纸卡：合同一行摘要 */
-.contract-summary {
-  margin: 4px 0 8px;
+/* 合同条款：紧凑两行列表（成本 / 关键路径） */
+.contract-list {
+  list-style: none;
+  margin: 6px 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+.contract-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 11px;
   line-height: 1.5;
+}
+.contract-key {
   color: #8b9bab;
+}
+.contract-val {
+  color: #dce7f1;
+  font-weight: 600;
 }
 
 /* 支线状态行 */
