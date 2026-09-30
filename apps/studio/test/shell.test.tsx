@@ -27,7 +27,7 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     fireEvent.click(screen.getByText('认识三极管'));
     // 先讲课：概念卡弹窗（生活类比 + 要点）
     expect(screen.getByRole('dialog', { name: '元件课堂' })).toBeTruthy();
-    expect(screen.getByText(/电的水闸/)).toBeTruthy();
+    expect(screen.getByText(/反着来的开关/)).toBeTruthy();
     // 点「去搭一下试试」→ 工作台：委托单 + 引导条（跟着做）
     fireEvent.click(screen.getByText(/去搭一下试试/));
     expect(screen.getByText(/委托单 · 认识三极管/)).toBeTruthy();

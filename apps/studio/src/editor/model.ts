@@ -59,6 +59,11 @@ export interface Sym {
   label: string;
   /** 关卡内建模块（不可删除/编辑的库元件）标记 */
   locked?: boolean;
+  /**
+   * 教学关实物图标：input 端口画成按钮（按下=1）、output 画成灯泡/铃铛/门
+   * （由信号驱动状态：亮/响/开=1）。普通关卡没有 sprite，维持抽象端口。
+   */
+  sprite?: 'button' | 'lamp' | 'bell' | 'door';
 }
 
 export interface Wire {

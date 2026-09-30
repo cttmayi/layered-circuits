@@ -22,28 +22,32 @@ export function notGateRef(id = 'ref-not'): Design {
   return b.build();
 }
 
-/** 教学关·认识三极管：射极跟随器，a → y（同相，成本 6 = 1 三极管 + 1 下拉电阻） */
+/**
+ * 教学关·认识三极管：反相开关（门磁警示灯）。
+ * 三极管共射极天然反相：基极一通电就导通、把输出拉低；不通电时上拉电阻
+ * 把输出钉回 1。y = ¬a（成本 6 = 1 三极管 + 1 上拉电阻）。
+ */
 export function npnIntroRef(id = 'ref-npn-intro'): Design {
   const b = new DesignBuilder(id, '认识三极管');
   b.vcc('vcc');
   b.gnd('gnd');
-  b.unit('npn', { c: 'vcc', b: 'a', e: 'y' }, 'Q1'); // 基极直连输入：受控开关
-  b.unit('res', { a: 'y', b: 'gnd' }, 'R1'); // 发射极下拉：没人踩时输出稳为 0
+  b.unit('npn', { c: 'y', b: 'a', e: 'gnd' }, 'Q1'); // 共射极：集电极接输出
+  b.unit('res', { a: 'vcc', b: 'y' }, 'R1'); // 上拉：管子不导通时把输出钉回 1
   b.port('a', 'in', 'a');
   b.port('y', 'out', 'y');
   return b.build();
 }
 
 /**
- * 教学关·认识三极管的半成品：VCC→集电极、发射极→输出、下拉电阻都接好了，
- * 只差「基极 b → 输入 a」这一条线（玩家补）—— 其余引脚悬空是刻意的（画布引导）。
+ * 教学关·认识三极管的半成品：上拉电阻 + 集电极→输出、发射极→GND 都接好了，
+ * 只差「基极 b → 输入 a」这一条线（玩家补）—— 接上就亲眼看到「反着来」。
  */
 export function npnIntroSeed(id = 'seed-npn-intro'): Design {
   const b = new DesignBuilder(id, '认识三极管 · 半成品');
   b.vcc('vcc');
   b.gnd('gnd');
-  b.unit('npn', { c: 'vcc', b: 'b_dangling', e: 'y' }, 'Q1');
-  b.unit('res', { a: 'y', b: 'gnd' }, 'R1');
+  b.unit('npn', { c: 'y', b: 'b_dangling', e: 'gnd' }, 'Q1');
+  b.unit('res', { a: 'vcc', b: 'y' }, 'R1'); // 上拉已接
   b.port('a', 'in', 'a_dangling');
   b.port('y', 'out', 'y');
   return b.build();

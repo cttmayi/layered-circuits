@@ -21,8 +21,8 @@ export interface Commission {
 
 const COMMISSIONS: Record<string, Commission> = {
   's1-npn': {
-    client: '修表铺 · 老周',
-    note: '客人踩上门口脚垫铃就响，脚一抬铃停。',
+    client: '传达室 · 老李',
+    note: '门窗装了门磁：门窗关好绿灯亮（一切正常），门窗一开灯就灭。',
   },
   's1-dio': {
     client: '五金店 · 王嫂',

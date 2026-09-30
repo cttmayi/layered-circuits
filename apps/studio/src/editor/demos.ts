@@ -74,19 +74,20 @@ export function npnIntroSeedDoc(): Doc {
   const doc = emptyDoc();
   doc.name = '认识三极管 · 半成品';
   doc.syms = [
-    sym({ id: 'in-a', kind: 'input', x: 60, y: 230, label: 'a', value: 0 }),
-    sym({ id: 'out-y', kind: 'output', x: 660, y: 230, label: 'y' }),
-    sym({ id: 'vcc', kind: 'vcc', x: 300, y: 70, label: 'VCC' }),
-    sym({ id: 'gnd', kind: 'gnd', x: 500, y: 340, label: 'GND' }),
+    // 实物图标：输入=门磁按钮（按下=开门=1）、输出=警示灯（1=亮）
+    sym({ id: 'in-a', kind: 'input', x: 60, y: 230, label: 'a', value: 0, sprite: 'button' }),
+    sym({ id: 'out-y', kind: 'output', x: 660, y: 230, label: 'y', sprite: 'lamp' }),
+    sym({ id: 'vcc', kind: 'vcc', x: 500, y: 70, label: 'VCC' }),
+    sym({ id: 'gnd', kind: 'gnd', x: 300, y: 340, label: 'GND' }),
     sym({ id: 'q1', kind: 'unit', unit: 'npn', x: 300, y: 230, label: 'Q1' }),
     sym({ id: 'r1', kind: 'unit', unit: 'res', x: 500, y: 230, rot: 1, label: 'R1' }),
   ];
-  // 集电极←VCC、发射极→输出、发射极→下拉电阻→GND 都已接好；只差基极 b→输入 a
+  // 上拉电阻 VCC→输出、集电极→输出、发射极→GND 都已接好；只差基极 b→输入 a
   doc.wires = [
-    wire('vcc', 'p', 'q1', 'c'),
-    wire('q1', 'e', 'out-y', 'p'),
-    wire('q1', 'e', 'r1', 'a'),
-    wire('r1', 'b', 'gnd', 'p'),
+    wire('vcc', 'p', 'r1', 'a'),
+    wire('r1', 'b', 'out-y', 'p'),
+    wire('q1', 'c', 'out-y', 'p'),
+    wire('q1', 'e', 'gnd', 'p'),
   ];
   return doc;
 }

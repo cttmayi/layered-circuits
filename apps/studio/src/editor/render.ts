@@ -608,6 +608,154 @@ function drawGrid(ctx: CanvasRenderingContext2D, scene: Scene): void {
   ctx.restore();
 }
 
+/**
+ * 教学关实物图标（画在端口位置、世界坐标原点居中、由信号驱动状态）：
+ * - button 按钮（输入）：按下=1 发亮，松开=0 灰
+ * - lamp   灯泡（输出）：亮=1 发黄光，灭=0 灰
+ * - bell   铃铛（输出）：响=1 发黄，不响=0 灰
+ * - door   门（输出）：关好=1 贴框，开着=0 甩开
+ */
+function drawSprite(
+  ctx: CanvasRenderingContext2D,
+  sprite: NonNullable<Sym['sprite']>,
+  signal: number,
+): void {
+  const on = logicValueOf(signal) === 1; // 亮 / 响 / 开
+  const onColor = '#ffd479';
+  const onSoft = 'rgba(255,212,121,0.3)';
+  const offFill = '#2a3139';
+  const offStroke = '#5b6b7d';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (sprite === 'button') {
+    // 按钮：按下（1）= 发亮并压下；松开（0）= 灰并弹起
+    ctx.strokeStyle = on ? onColor : offStroke;
+    ctx.fillStyle = on ? onSoft : offFill;
+    ctx.beginPath();
+    ctx.arc(0, -4, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // 按钮杆：按下时缩进去
+    ctx.fillStyle = on ? onColor : offStroke;
+    ctx.fillRect(-5, on ? 10 : 8, 10, on ? 4 : 6);
+    ctx.strokeRect(-7, 14, 14, 4);
+    ctx.fillStyle = on ? onColor : PALETTE.bodyDim;
+    ctx.font = 'bold 9px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(on ? '按下' : '松开', 0, 34);
+  } else if (sprite === 'lamp') {
+    // 灯泡：亮（1）= 发黄光 + 光线；灭（0）= 灰玻璃
+    if (on) {
+      ctx.fillStyle = onSoft;
+      ctx.beginPath();
+      ctx.arc(0, -5, 20, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = on ? onColor : offStroke;
+    ctx.fillStyle = on ? onColor : offFill;
+    ctx.beginPath();
+    ctx.arc(0, -5, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // 灯丝
+    ctx.strokeStyle = on ? '#fff6d9' : PALETTE.bodyDim;
+    ctx.beginPath();
+    ctx.moveTo(-3, -7);
+    ctx.lineTo(0, -4);
+    ctx.lineTo(3, -7);
+    ctx.stroke();
+    // 底座
+    ctx.strokeStyle = on ? onColor : offStroke;
+    ctx.fillStyle = on ? 'rgba(255,212,121,0.5)' : '#232a31';
+    ctx.beginPath();
+    ctx.moveTo(-6, 5);
+    ctx.lineTo(6, 5);
+    ctx.lineTo(4, 12);
+    ctx.lineTo(-4, 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    if (on) {
+      ctx.strokeStyle = onColor;
+      ctx.lineWidth = 1.6;
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * 20, -5 + Math.sin(a) * 20);
+        ctx.lineTo(Math.cos(a) * 27, -5 + Math.sin(a) * 27);
+        ctx.stroke();
+      }
+      ctx.lineWidth = 2;
+    }
+  } else if (sprite === 'bell') {
+    // 铃铛：响（1）= 发黄 + 两边的「叮」；不响（0）= 灰
+    ctx.strokeStyle = on ? onColor : offStroke;
+    ctx.fillStyle = on ? onColor : offFill;
+    ctx.beginPath();
+    ctx.arc(0, -2, 13, Math.PI, 0);
+    ctx.lineTo(12, 8);
+    ctx.lineTo(-12, 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // 铃锤
+    ctx.strokeStyle = on ? onColor : offStroke;
+    ctx.beginPath();
+    ctx.moveTo(0, 8);
+    ctx.lineTo(0, 14);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 17, 3, 0, Math.PI * 2);
+    ctx.stroke();
+    // 提手
+    ctx.beginPath();
+    ctx.moveTo(0, -13);
+    ctx.lineTo(0, -18);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, -21, 3, 0, Math.PI * 2);
+    ctx.stroke();
+    if (on) {
+      ctx.strokeStyle = onColor;
+      ctx.lineWidth = 1.6;
+      for (const dir of [1, -1]) {
+        ctx.beginPath();
+        ctx.moveTo(18 * dir, 2);
+        ctx.quadraticCurveTo(26 * dir, 2, 26 * dir, -5);
+        ctx.stroke();
+      }
+      ctx.lineWidth = 2;
+    }
+  } else if (sprite === 'door') {
+    // 门：门框 + 门扇。关好（1）= 门扇贴框；开着（0）= 门扇甩开
+    ctx.strokeStyle = offStroke;
+    ctx.lineWidth = 1.6;
+    ctx.strokeRect(-14, -20, 28, 40);
+    ctx.lineWidth = 2;
+    if (on) {
+      ctx.fillStyle = on ? 'rgba(92,196,130,0.25)' : offFill;
+      ctx.strokeStyle = on ? '#5cc482' : offStroke;
+      ctx.fillRect(-11, -17, 22, 34);
+      ctx.strokeRect(-11, -17, 22, 34);
+      ctx.fillStyle = on ? '#5cc482' : PALETTE.bodyDim;
+      ctx.beginPath();
+      ctx.arc(7, 0, 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = offStroke;
+      ctx.beginPath();
+      ctx.moveTo(-14, -20);
+      ctx.lineTo(-2, -10);
+      ctx.lineTo(-2, 10);
+      ctx.lineTo(-14, 20);
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+}
+
 function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void {
   const { doc, camera, width, height } = scene;
   const p = worldToScreen(camera, width, height, sym.x, sym.y);
@@ -785,6 +933,12 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
     case 'input':
     case 'output': {
       const isIn = key === 'input';
+      // 教学关实物图标（按钮/灯泡/铃铛/门）：由信号驱动状态，替代抽象方框
+      if (sym.sprite) {
+        const sig = scene.pinSignals.get(pinKey({ inst: sym.id, pin: 'p', bit: 0 }));
+        drawSprite(ctx, sym.sprite, sig ?? SIG_Z);
+        break;
+      }
       const width = sym.width ?? 1;
       const h = Math.max(26, (width - 1) * 14 + 26);
       ctx.fillStyle = isIn ? PALETTE.portInFill : PALETTE.portOutFill;
@@ -839,6 +993,13 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
   const labelY = sym.rot % 2 === 1 ? f.h / 2 + 14 * camera.scale : f.h / 2 + 13 * camera.scale;
 
   if (key === 'input' || key === 'output') {
+    if (sym.sprite) {
+      // 实物图标端口：状态由图形表达，下方只标端口名
+      ctx.font = `${Math.max(9, 11 * camera.scale)}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.fillStyle = PALETTE.textDim;
+      ctx.fillText(sym.label, 0, labelY + 10);
+      return;
+    }
     const width = sym.width ?? 1;
     if (width > 1) {
       // 总线端口：把各位 lane 的信号拼成数值显示（小端）

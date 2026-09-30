@@ -106,6 +106,27 @@ describe('阶段 1 关卡内容', () => {
     }
   });
 
+  it('教学关·认识三极管是反相开关：真值表 ¬a，无上拉（悬空）打回', () => {
+    const level = findLevel('s1-npn')!;
+    // 反相：门窗关（0）灯亮（1）、门窗开（1）灯灭（0）
+    expect(level.vectors.map((v) => [v.inputs.a, v.expect?.y])).toEqual([
+      [0, 1],
+      [1, 0],
+    ]);
+    // 只用三极管、不挂上拉：a=0 时输出悬空（Z ≠ 1）→ 打回 —— 这就是「上拉钉默认值」的教学门槛
+    const b = new DesignBuilder('t1-no-pullup', '无上拉');
+    b.gnd('gnd');
+    b.unit('npn', { c: 'y', b: 'a', e: 'gnd' }, 'Q1');
+    b.port('a', 'in', 'a');
+    b.port('y', 'out', 'y');
+    const r = judgeDesign(b.build(), level, { library: emptyLibrary });
+    expect(r.pass, '无上拉不该过关').toBe(false);
+    // 挂上拉 + 三极管（标准解）过关且满分
+    const ok = judgeDesign(level.referenceSolution!, level, { library: emptyLibrary });
+    expect(ok.pass).toBe(true);
+    expect(ok.score).toBe(100);
+  });
+
   it('判定能识别错误答案：功能错 / 超预算 / 缺端口 / 做成时序电路', () => {
     const notLevel = findLevel('s1-not')!;
 
