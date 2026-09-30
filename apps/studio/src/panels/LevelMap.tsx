@@ -40,6 +40,8 @@ export function LevelMap({
   onPick,
 }: LevelMapProps): React.JSX.Element {
   const stages = [...new Set(ALL_LEVELS.map((level) => level.stage))].sort((a, b) => a - b);
+  // 教学关不评星：星总数只统计普通关
+  const ratedLevels = ALL_LEVELS.filter((level) => !level.classroom);
   const earned = ALL_LEVELS.reduce(
     (sum, level) => sum + (progress.cleared[level.id]?.stars ?? 0),
     0,
@@ -50,7 +52,7 @@ export function LevelMap({
       <h3>任务墙</h3>
       <p className="panel-note">
         已交付 {Object.keys(progress.cleared).length}/{ALL_LEVELS.length} · 星 {earned}/
-        {ALL_LEVELS.length * MAX_STARS_PER_LEVEL} · 自主测绘 {reconCount(progress)}
+        {ratedLevels.length * MAX_STARS_PER_LEVEL} · 自主测绘 {reconCount(progress)}
       </p>
       {stages.map((stage) => {
         const levels = ALL_LEVELS.filter((level) => level.stage === stage);
@@ -85,7 +87,9 @@ export function LevelMap({
                       )}
                       <span className={`map-stars ${state}`}>
                         {cleared
-                          ? `${'★'.repeat(stars)}${'☆'.repeat(MAX_STARS_PER_LEVEL - stars)}`
+                          ? level.classroom
+                            ? '✓ 已掌握'
+                            : `${'★'.repeat(stars)}${'☆'.repeat(MAX_STARS_PER_LEVEL - stars)}`
                           : unlocked
                             ? '未开工'
                             : '未解锁'}

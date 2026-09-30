@@ -58,16 +58,18 @@ export function SettlementPanel({
           「{result.pass ? '东西能用，做得好。' : '这版还不行，麻烦师傅再改改。'}」
         </p>
 
-        <div className={`grade grade-${grade.toLowerCase()}`}>
-          <span className="grade-letter">{grade}</span>
-          <span className="grade-text">
-            <strong>{result.score} 分</strong>
-            <em>
-              功能 {result.failedRows === 0 ? '✓' : '✗'} · 用料 {result.overBudget ? '超支' : '✓'} ·
-              时序 {result.timingBudgetPs === null || result.timingOk ? '✓' : '✗'}
-            </em>
-          </span>
-        </div>
+        {!level.classroom && (
+          <div className={`grade grade-${grade.toLowerCase()}`}>
+            <span className="grade-letter">{grade}</span>
+            <span className="grade-text">
+              <strong>{result.score} 分</strong>
+              <em>
+                功能 {result.failedRows === 0 ? '✓' : '✗'} · 用料 {result.overBudget ? '超支' : '✓'}{' '}
+                · 时序 {result.timingBudgetPs === null || result.timingOk ? '✓' : '✗'}
+              </em>
+            </span>
+          </div>
+        )}
 
         <table className="kv">
           <tbody>
@@ -118,22 +120,32 @@ export function SettlementPanel({
           </tbody>
         </table>
 
-        <p className={`stars stars-${stars}`}>
-          {'★'.repeat(stars)}
-          {'☆'.repeat(3 - stars)}
-          <em>
-            {stars >= 3
-              ? '三星：成本与延迟都压到 0.5×预算'
-              : stars === 2
-                ? '还差一颗星：把成本或延迟压到 0.75×预算以内'
-                : '先做到功能 + 预算内，再追延迟'}
-          </em>
-        </p>
+        {level.classroom ? (
+          <p className="teaching-done">
+            ✓ 教学关完成 —— 元件已学会，本单不评星、不设预算与延迟要求
+          </p>
+        ) : (
+          <>
+            <p className={`stars stars-${stars}`}>
+              {'★'.repeat(stars)}
+              {'☆'.repeat(3 - stars)}
+              <em>
+                {stars >= 3
+                  ? '三星：成本与延迟都压到 0.5×预算'
+                  : stars === 2
+                    ? '还差一颗星：把成本或延迟压到 0.75×预算以内'
+                    : '先做到功能 + 预算内，再追延迟'}
+              </em>
+            </p>
 
-        {brokeRecord && (
-          <p className="record">破纪录！比上次多得 {result.score - (previousScore ?? 0)} 分</p>
+            {brokeRecord && (
+              <p className="record">破纪录！比上次多得 {result.score - (previousScore ?? 0)} 分</p>
+            )}
+            {result.score >= 100 && (
+              <p className="record">已达满分线（0.5×预算）—— 这是行家做法。</p>
+            )}
+          </>
         )}
-        {result.score >= 100 && <p className="record">已达满分线（0.5×预算）—— 这是行家做法。</p>}
 
         <p className="panel-note">
           委托 {level.id} · 交付物【{levelName}】已进组件库

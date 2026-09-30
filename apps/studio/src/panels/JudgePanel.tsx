@@ -75,19 +75,22 @@ export function JudgePanel({
                   {result.overBudget && <span className="bad"> 超支</span>}
                 </td>
               </tr>
-              <tr>
-                <td>延迟</td>
-                <td className="num">
-                  {(result.criticalPathPs / 1000).toFixed(2)} ns
-                  {result.timingBudgetPs !== null && (
-                    <span className={result.timingOk ? 'dim' : 'bad'}>
-                      {' '}
-                      / ≤{(result.timingBudgetPs / 1000).toFixed(2)}
-                    </span>
-                  )}
-                </td>
-              </tr>
-              {result.timing.portDelayPs !== null &&
+              {!level.classroom && (
+                <tr>
+                  <td>延迟</td>
+                  <td className="num">
+                    {(result.criticalPathPs / 1000).toFixed(2)} ns
+                    {result.timingBudgetPs !== null && (
+                      <span className={result.timingOk ? 'dim' : 'bad'}>
+                        {' '}
+                        / ≤{(result.timingBudgetPs / 1000).toFixed(2)}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              )}
+              {!level.classroom &&
+                result.timing.portDelayPs !== null &&
                 Object.keys(result.timing.portDelayPs).length > 0 && (
                   <tr>
                     <td>各输出延迟</td>

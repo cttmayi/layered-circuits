@@ -942,8 +942,8 @@ export function App(): React.JSX.Element {
       Date.now(),
     );
     commit({ ...doc, library: addModule(doc.library, stored) });
-    // 星级：成本与延迟各按预算线四档（0.5/0.75/1 倍），取较差
-    const stars = starsOf(judge);
+    // 星级：成本与延迟各按预算线四档（0.5/0.75/1 倍），取较差；教学关无标准不评星
+    const stars = currentLevel.classroom ? 0 : starsOf(judge);
     setProgress((prev) =>
       recordClear(
         { ...prev, library: addModule(prev.library, stored) },

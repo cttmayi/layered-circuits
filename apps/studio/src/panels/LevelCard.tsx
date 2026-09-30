@@ -32,20 +32,22 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
           {commission.client} —— 「{commission.note}」
         </span>
       </p>
-      <ul className="contract-list">
-        <li>
-          <span className="contract-key">预算</span>
-          <strong className="contract-val">
-            {contract.costCap === null ? '按最省结算' : `≤ ${contract.costCap.toFixed(1)} 元`}
-          </strong>
-        </li>
-        {contract.timingCap !== null && (
+      {!level.classroom && (
+        <ul className="contract-list">
           <li>
-            <span className="contract-key">延迟</span>
-            <strong className="contract-val">≤ {contract.timingCap.toFixed(1)} ns</strong>
+            <span className="contract-key">预算</span>
+            <strong className="contract-val">
+              {contract.costCap === null ? '按最省结算' : `≤ ${contract.costCap.toFixed(1)} 元`}
+            </strong>
           </li>
-        )}
-      </ul>
+          {contract.timingCap !== null && (
+            <li>
+              <span className="contract-key">延迟</span>
+              <strong className="contract-val">≤ {contract.timingCap.toFixed(1)} ns</strong>
+            </li>
+          )}
+        </ul>
+      )}
       {level.requiredUnits.length > 0 && (
         <p className="dim small required-units">
           本单要求：必须用{' '}
@@ -125,7 +127,7 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
         </tbody>
       </table>
 
-      {level.timingBudgetPs !== undefined && (
+      {!level.classroom && level.timingBudgetPs !== undefined && (
         <p className="dim small">
           硬核模式还要求延迟 ≤ {(level.timingBudgetPs / 1000).toFixed(2)} ns
         </p>

@@ -150,7 +150,11 @@ export function WorldMap({
               <span className="node-num">{i + 1}</span>
               <span className="node-title">{view.title}</span>
               <span className="node-stars">
-                {stars > 0 ? `${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}` : STATE_ICON[state]}
+                {level.classroom && state === 'cleared'
+                  ? '✓ 已掌握'
+                  : stars > 0
+                    ? `${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`
+                    : STATE_ICON[state]}
               </span>
             </button>
           );
