@@ -77,20 +77,21 @@ export function npnIntroSeedDoc(): Doc {
     // 实物图标：输入=门磁按钮（按下=开门=1）、输出=警示灯（1=亮）
     sym({ id: 'in-a', kind: 'input', x: 60, y: 230, label: 'a', value: 0, sprite: 'button' }),
     sym({ id: 'out-y', kind: 'output', x: 660, y: 230, label: 'y', sprite: 'lamp' }),
-    sym({ id: 'vcc', kind: 'vcc', x: 500, y: 70, label: 'VCC' }),
-    sym({ id: 'gnd', kind: 'gnd', x: 300, y: 340, label: 'GND' }),
+    // 电源→负载→三极管→地 自上而下竖排，像课本里的共射反相电路，从左往右读
+    sym({ id: 'vcc', kind: 'vcc', x: 300, y: 10, label: 'VCC' }),
+    sym({ id: 'r1', kind: 'unit', unit: 'res', x: 300, y: 150, label: 'R1' }),
     sym({ id: 'q1', kind: 'unit', unit: 'npn', x: 300, y: 230, label: 'Q1' }),
-    sym({ id: 'r1', kind: 'unit', unit: 'res', x: 500, y: 230, rot: 1, label: 'R1' }),
+    sym({ id: 'gnd', kind: 'gnd', x: 300, y: 340, label: 'GND' }),
   ];
   // 场景背景：门磁按钮装在左墙、警示灯挂在右墙，中间是电路
   doc.backdrop = [
     { kind: 'wall', x: 6, y: 90, w: 44, h: 280 },
     { kind: 'wall', x: 668, y: 90, w: 44, h: 280 },
   ];
-  // 上拉电阻 VCC→输出、集电极→输出、发射极→GND 都已接好；只差基极 b→输入 a
+  // 上拉 VCC→R1→Q1 集电极、集电极→输出、发射极→GND 都已接好；只差基极 b→输入 a
   doc.wires = [
     wire('vcc', 'p', 'r1', 'a'),
-    wire('r1', 'b', 'out-y', 'p'),
+    wire('r1', 'b', 'q1', 'c'),
     wire('q1', 'c', 'out-y', 'p'),
     wire('q1', 'e', 'gnd', 'p'),
   ];
