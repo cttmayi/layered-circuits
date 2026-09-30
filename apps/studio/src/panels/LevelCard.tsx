@@ -35,14 +35,14 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
       {!level.classroom && (
         <ul className="contract-list">
           <li>
-            <span className="contract-key">预算</span>
+            <span className="contract-key">元件成本</span>
             <strong className="contract-val">
               {contract.costCap === null ? '按最省结算' : `≤ ${contract.costCap.toFixed(1)} 元`}
             </strong>
           </li>
           {contract.timingCap !== null && (
             <li>
-              <span className="contract-key">延迟</span>
+              <span className="contract-key">传播延迟</span>
               <strong className="contract-val">≤ {contract.timingCap.toFixed(1)} ns</strong>
             </li>
           )}
@@ -129,7 +129,7 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
 
       {!level.classroom && level.timingBudgetPs !== undefined && (
         <p className="dim small">
-          硬核模式还要求延迟 ≤ {(level.timingBudgetPs / 1000).toFixed(2)} ns
+          硬核模式还要求传播延迟 ≤ {(level.timingBudgetPs / 1000).toFixed(2)} ns
         </p>
       )}
     </section>

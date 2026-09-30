@@ -78,11 +78,11 @@ const COMMISSIONS: Record<string, Commission> = {
   },
   's2-dff-cost': {
     client: '研究所 · 采购科',
-    note: '同样的触发器，不限预算，但我们要最省的那一版 —— 一台上千个，省一个元件就是一笔钱。',
+    note: '同样的触发器，不限元件成本，但我们要最省的那一版 —— 一台上千个，省一个元件就是一笔钱。',
   },
   's2-dff-fast': {
     client: '通信站 · 值班台',
-    note: '20 兆时钟，一帧都不能丢。这单是加急：延迟必须压得住，硬核验收，别抱侥幸。',
+    note: '20 兆时钟，一帧都不能丢。这单是加急：传播延迟必须压得住，硬核验收，别抱侥幸。',
   },
 };
 
@@ -95,11 +95,11 @@ export function commissionOf(level: Level): Commission {
   return COMMISSIONS[level.id] ?? { ...FALLBACK, note: level.brief || FALLBACK.note };
 }
 
-/** 合同条款：预算上限 / 延迟上限 —— 全部由关卡现有字段推导，叙事不引入新规则 */
+/** 合同条款：元件成本上限 / 传播延迟上限 —— 全部由关卡现有字段推导，叙事不引入新规则 */
 export interface ContractTerms {
-  /** 成本上限（元）；null = 不限预算 */
+  /** 元件成本上限（元）；null = 不限元件成本 */
   costCap: number | null;
-  /** 延迟上限（ns）；null = 不设时限 */
+  /** 传播延迟上限（ns）；null = 不设时限 */
   timingCap: number | null;
 }
 

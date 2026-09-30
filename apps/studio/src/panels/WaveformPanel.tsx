@@ -1,5 +1,5 @@
 /**
- * 波形面板（M2）：把仿真 trace 画成阶梯图，让「延迟」「毛刺」「空翻」看得见。
+ * 波形面板（M2）：把仿真 trace 画成阶梯图，让「传播延迟」「毛刺」「空翻」看得见。
  *
  * 画法很直白：每个端口一行，横轴是时间（ns），阶梯线表示电平变化；
  * 竖向虚线是判定向量（激励）的时刻 —— 设备一个个打在窗口起点上（内核 setInputAt 保证）。
@@ -42,7 +42,7 @@ export function WaveformPanel({
     return (
       <section className="panel wave">
         <h3>波形</h3>
-        <p className="dim small">先运行一次校验（硬核模式才有延迟与毛刺）。</p>
+        <p className="dim small">先运行一次校验（硬核模式才有传播延迟与毛刺）。</p>
       </section>
     );
   }

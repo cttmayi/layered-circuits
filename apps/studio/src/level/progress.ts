@@ -25,20 +25,19 @@ export interface LevelRecord {
 
 /**
  * 三星目标：把「可选的硬核模式」变成玩家自己想要的追求。
- *  - 功能星：交付成功（必得）
- *  - 成本星：材料费 ≤ 对标成本（等价于拿满 100 分）
- *  - 时序星：有时序预算的关卡看 timingOk，其余关卡要求「用硬核模式交付」
- */
+
 /**
- * 星级（评星契约，用户定稿）：指标 = 成本 与 延迟，各自按「相对预算线」分四档，
+ * 星级（评星契约，用户定稿）：指标 = 成本 与 延迟，各自按「相对成本线/延迟线」分四档，
  * 取两者较差（两个指标都达到才有对应档的星）。
  *
- * 预算线 = 标准答案 × 2，因此：
- *  - ≤ 0.5 × 预算（= 标准答案）        → 3 星
- *  - ≤ 0.75 × 预算（= 1.5 × 标准答案）  → 2 星
- *  - ≤ 1 × 预算（= 2 × 标准答案）       → 1 星
- *  - 超过预算                          → 0 星（仍可交付，只是没星）
- * 无时序预算的关只按成本评星（延迟视为达标）。
+ * 延迟 = 输入开始到输出稳定的时间（传播延迟，游戏里测的是关键路径那条）。
+ *
+ * 成本线 = 标准答案 × 2，因此：
+ *  - ≤ 0.5 × 成本线（= 标准答案）        → 3 星
+ *  - ≤ 0.75 × 成本线（= 1.5 × 标准答案）  → 2 星
+ *  - ≤ 1 × 成本线（= 2 × 标准答案）       → 1 星
+ *  - 超过成本线                          → 0 星（仍可交付，只是没星）
+ * 延迟线同理（延迟线 = 参考解实测 × 2）。无时序预算的关只按成本评星（延迟视为达标）。
  */
 export function starsOf(result: {
   pass: boolean;
@@ -49,12 +48,12 @@ export function starsOf(result: {
 }): number {
   if (!result.pass) return 0;
   const costStars = ratioStars(result.costHalf, result.budgetHalf);
-  const timingStars =
+  const delayStars =
     result.timingBudgetPs !== null ? ratioStars(result.criticalPathPs, result.timingBudgetPs) : 3;
-  return Math.min(costStars, timingStars);
+  return Math.min(costStars, delayStars);
 }
 
-/** 实际值 / 预算线 → 星级档位 */
+/** 实际值 / 成本线 → 星级档位（成本越低越好） */
 function ratioStars(actual: number, budget: number): number {
   const r = actual / budget;
   if (r <= 0.5) return 3;
@@ -75,7 +74,7 @@ export function gradeOf(score: number): Grade {
   return 'C';
 }
 
-/** 这一单的款项（半单位）：成本挑战关没有预算，按对标成本结算 */
+/** 这一单的款项（半单位）：成本挑战关没有成本线，按满分线结算 */
 export function paymentOf(level: Level): number {
   return level.kind === 'cost' ? level.optimalHalf : level.budgetHalf;
 }

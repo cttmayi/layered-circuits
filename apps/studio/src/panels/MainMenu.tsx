@@ -49,11 +49,11 @@ export function MainMenu({
           )}
           <button type="button" className="menu-btn" onClick={onLevelMode}>
             关卡模式
-            <span className="menu-btn-note">23 关委托，逐关解锁 · 预算与素材受限</span>
+            <span className="menu-btn-note">23 关委托，逐关解锁 · 元件成本与素材受限</span>
           </button>
           <button type="button" className="menu-btn" onClick={onFreeMode}>
             自由搭建
-            <span className="menu-btn-note">沙盒：不限预算与素材，练手封装</span>
+            <span className="menu-btn-note">沙盒：不限元件成本与素材，练手封装</span>
           </button>
           <button type="button" className="menu-btn new-game" onClick={onNewGame}>
             新游戏

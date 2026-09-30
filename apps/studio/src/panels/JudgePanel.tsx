@@ -77,7 +77,7 @@ export function JudgePanel({
               </tr>
               {!level.classroom && (
                 <tr>
-                  <td>延迟</td>
+                  <td>传播延迟</td>
                   <td className="num">
                     {(result.criticalPathPs / 1000).toFixed(2)} ns
                     {result.timingBudgetPs !== null && (
@@ -93,7 +93,7 @@ export function JudgePanel({
                 result.timing.portDelayPs !== null &&
                 Object.keys(result.timing.portDelayPs).length > 0 && (
                   <tr>
-                    <td>各输出延迟</td>
+                    <td>各输出传播延迟</td>
                     <td className="num">
                       {Object.entries(result.timing.portDelayPs)
                         .map(([name, ps]) => `${name} ${(ps / 1000).toFixed(2)}ns`)

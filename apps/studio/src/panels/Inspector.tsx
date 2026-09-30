@@ -114,7 +114,7 @@ export function Inspector({
         <>
           <h3>时序</h3>
           <p className="small">
-            延迟 {(timing.criticalPathPs / 1000).toFixed(2)} ns ·{' '}
+            传播延迟 {(timing.criticalPathPs / 1000).toFixed(2)} ns ·{' '}
             {timing.isSequential ? (
               <strong className="warn">时序电路（有记忆）</strong>
             ) : (

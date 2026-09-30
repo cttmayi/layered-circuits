@@ -297,7 +297,7 @@ export function teachingSolutionOf(levelId: string): Design | null {
 }
 
 /**
- * 元件版相对门版有没有「值得给选项」的优势：'cost'（造价更低）或 'delay'（延迟更短）。
+ * 元件版相对门版有没有「值得给选项」的优势：'cost'（造价更低）或 'delay'（传播延迟更短）。
  * 两者都不严格占优 → null（此时不该给元件版选项，一键出答案直接出门版）。
  *
  * 为什么大多数关是 null：模块成本 = 封装时递归加总的底层元件成本，门版与元件版

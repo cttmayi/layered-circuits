@@ -2,7 +2,7 @@
  * 任务墙（关卡地图）：把「13 个下拉选项」变成看得见进度的章节表。
  *
  * 一章 = 一个阶段；每个节点显示：状态（未解锁 / 可接单 / 已交付）、星级（★☆）、
- * 类型（主线 / 预算挑战 / 延迟挑战 / 复古复用）。点节点直接接单。
+ * 类型（主线 / 元件成本挑战 / 传播延迟挑战 / 复古复用）。点节点直接接单。
  */
 
 import { ALL_LEVELS } from '@lc/content';
@@ -19,8 +19,8 @@ export interface LevelMapProps {
 
 const KIND_LABEL: Record<string, string> = {
   main: '',
-  cost: '预算挑战',
-  timing: '延迟挑战',
+  cost: '元件成本挑战',
+  timing: '传播延迟挑战',
   retro: '复古复用',
 };
 

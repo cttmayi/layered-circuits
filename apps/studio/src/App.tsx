@@ -133,7 +133,7 @@ export function App(): React.JSX.Element {
   );
   const [pendingPoint, setPendingPoint] = useState<{ x: number; y: number } | null>(null);
   const [mode, setMode] = useState<'logic' | 'timing'>('logic');
-  /** 时序挑战关（kind = 'timing'）强制硬核：科普模式会把延迟抹平，考不出时序问题 */
+  /** 时序挑战关（kind = 'timing'）强制硬核：科普模式会把传播延迟抹平，考不出时序问题 */
   const forcedHardcore = levelOf(gameMode, levelId)?.kind === 'timing';
   useEffect(() => {
     if (forcedHardcore) setMode('timing');
@@ -942,7 +942,7 @@ export function App(): React.JSX.Element {
       Date.now(),
     );
     commit({ ...doc, library: addModule(doc.library, stored) });
-    // 星级：成本与延迟各按预算线四档（0.5/0.75/1 倍），取较差；教学关无标准不评星
+    // 星级：元件成本与传播延迟各按基准线四档（0.5/0.75/1 倍），取较差；教学关无标准不评星
     const stars = currentLevel.classroom ? 0 : starsOf(judge);
     setProgress((prev) =>
       recordClear(
@@ -1136,7 +1136,7 @@ export function App(): React.JSX.Element {
             className={mode === 'logic' ? 'active' : ''}
             onClick={() => setMode('logic')}
             disabled={forcedHardcore}
-            title={forcedHardcore ? '本关强制硬核工程模式（时序挑战关）' : '忽略延迟，只看逻辑'}
+            title={forcedHardcore ? '本关强制硬核工程模式（时序挑战关）' : '忽略时序，只看逻辑'}
           >
             科普模式
           </button>

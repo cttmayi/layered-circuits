@@ -206,8 +206,8 @@ describe('存档导入导出（M3-E）', () => {
 });
 
 describe('三星目标与称号（P1）', () => {
-  it('星级规则：成本与延迟各按预算线四档（0.5=3星/0.75=2星/1=1星/超=0星），取较差', () => {
-    // 预算线 = 标准答案 × 2：成本档
+  it('星级规则：元件成本与传播延迟各按基准线四档（0.5=3星/0.75=2星/1=1星/超=0星），取较差', () => {
+    // 元件成本线 = 标准答案 × 2：成本档
     const base = {
       pass: true,
       costHalf: 50,
@@ -216,13 +216,13 @@ describe('三星目标与称号（P1）', () => {
       criticalPathPs: 0,
     };
     expect(starsOf({ ...base, pass: false })).toBe(0);
-    expect(starsOf({ ...base, costHalf: 50 })).toBe(3); // 0.5 × 预算 = 标准答案
+    expect(starsOf({ ...base, costHalf: 50 })).toBe(3); // 0.5 × 元件成本线 = 标准答案
     expect(starsOf({ ...base, costHalf: 40 })).toBe(3); // ≤ 0.5 都算 3 星
-    expect(starsOf({ ...base, costHalf: 60 })).toBe(2); // 0.6 × 预算 → 2 星档
-    expect(starsOf({ ...base, costHalf: 75 })).toBe(2); // ≤ 0.75
-    expect(starsOf({ ...base, costHalf: 100 })).toBe(1); // ≤ 1（预算线）
-    expect(starsOf({ ...base, costHalf: 101 })).toBe(0); // 超预算 = 0 星（仍可交付）
-    // 延迟档与成本取较差
+    expect(starsOf({ ...base, costHalf: 60 })).toBe(2); // 0.6 × 元件成本线 → 2 星档
+    expect(starsOf({ ...base, costHalf: 75 })).toBe(2); // ≤ 0.75 × 元件成本线
+    expect(starsOf({ ...base, costHalf: 100 })).toBe(1); // ≤ 1（元件成本线）
+    expect(starsOf({ ...base, costHalf: 101 })).toBe(0); // 超元件成本线 = 0 星（仍可交付）
+    // 传播延迟档与元件成本取较差（传播延迟 = 输入到输出稳定的时间）
     expect(starsOf({ ...base, timingBudgetPs: 1000, criticalPathPs: 500 })).toBe(3); // 0.5 × 延迟预算
     expect(starsOf({ ...base, timingBudgetPs: 1000, criticalPathPs: 750 })).toBe(2); // 0.75 × 延迟预算
     expect(starsOf({ ...base, timingBudgetPs: 1000, criticalPathPs: 1000 })).toBe(1);

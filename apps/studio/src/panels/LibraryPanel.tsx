@@ -4,7 +4,7 @@
  * 这一块是「长线养成」的可见部分：
  *  - 版本：同名模块的每一版都留着（复古复用关只许用早期版本，覆盖掉就回不去了）；
  *  - 溯源：点一个模块就能看到它的血统（用了哪些下层模块、各版本造价）；
- *  - 重挑战榜：每关的历史最低造价与尝试次数，预算挑战关还标出「还能更省」；
+ *  - 重挑战榜：每关的历史最低造价与尝试次数，成本挑战关还标出「还能更省」；
  *  - 存档：整包导出/导入，方便换机器或备份。
  */
 
@@ -219,7 +219,7 @@ export function LibraryPanel({
 function kindLabel(kind: Level['kind']): string {
   switch (kind) {
     case 'cost':
-      return '预算挑战';
+      return '元件成本挑战';
     case 'timing':
       return '时序挑战';
     case 'retro':

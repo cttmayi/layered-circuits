@@ -95,7 +95,7 @@ export function SettlementPanel({
               <td className="num">{walletHalf / 2} 元</td>
             </tr>
             <tr>
-              <td>延迟</td>
+              <td>传播延迟</td>
               <td className="num">
                 {(result.criticalPathPs / 1000).toFixed(2)} ns
                 {result.timingBudgetPs !== null && (
@@ -109,7 +109,7 @@ export function SettlementPanel({
             {result.timing.portDelayPs !== null &&
               Object.keys(result.timing.portDelayPs).length > 0 && (
                 <tr>
-                  <td>各输出延迟</td>
+                  <td>各输出传播延迟</td>
                   <td className="num">
                     {Object.entries(result.timing.portDelayPs)
                       .map(([name, ps]) => `${name} ${(ps / 1000).toFixed(2)}ns`)
@@ -122,7 +122,7 @@ export function SettlementPanel({
 
         {level.classroom ? (
           <p className="teaching-done">
-            ✓ 教学关完成 —— 元件已学会，本单不评星、不设预算与延迟要求
+            ✓ 教学关完成 —— 元件已学会，本单不评星、不设元件成本与传播延迟要求
           </p>
         ) : (
           <>
@@ -131,10 +131,10 @@ export function SettlementPanel({
               {'☆'.repeat(3 - stars)}
               <em>
                 {stars >= 3
-                  ? '三星：成本与延迟都压到 0.5×预算'
+                  ? '三星：元件成本与传播延迟都压到 0.5×线'
                   : stars === 2
-                    ? '还差一颗星：把成本或延迟压到 0.75×预算以内'
-                    : '先做到功能 + 预算内，再追延迟'}
+                    ? '还差一颗星：元件成本或传播延迟压到 0.75×线以内'
+                    : '先做到功能 + 元件成本线内，再压传播延迟'}
               </em>
             </p>
 
@@ -142,14 +142,14 @@ export function SettlementPanel({
               <p className="record">破纪录！比上次多得 {result.score - (previousScore ?? 0)} 分</p>
             )}
             {result.score >= 100 && (
-              <p className="record">已达满分线（0.5×预算）—— 这是行家做法。</p>
+              <p className="record">已达满分线（0.5×元件成本线）—— 这是行家做法。</p>
             )}
           </>
         )}
 
         <p className="panel-note">
           委托 {level.id} · 交付物【{levelName}】已进组件库
-          {level.kind === 'cost' ? ' · 预算挑战关：不限预算，按满分线结算' : ''}
+          {level.kind === 'cost' ? ' · 元件成本挑战关：不限元件成本，按满分线结算' : ''}
         </p>
       </section>
     </Modal>
