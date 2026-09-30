@@ -205,6 +205,13 @@ export function pinOffsets(
         }
       }
     }
+    // 教学关的灯（output + lamp 图标）是「真两脚器件」：p 接输出信号、g 接公共地，
+    // 让高中生直接看到「回路」（半成品会预置一根 g→GND 的地线）。判定只看 p 的电平，
+    // g 是地端、通常接 GND；接不接都不影响判定，但默认布局会接好。
+    if (sym.kind === 'output' && sym.sprite === 'lamp') {
+      const r = rotate(0, 26, sym.rot);
+      out.push({ name: 'g', x: r.x, y: r.y, bit: 0 });
+    }
     return out;
   }
   if (sym.kind !== 'module') {

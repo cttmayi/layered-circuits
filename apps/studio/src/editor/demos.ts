@@ -82,18 +82,22 @@ export function npnIntroSeedDoc(): Doc {
     sym({ id: 'r1', kind: 'unit', unit: 'res', x: 300, y: 150, label: 'R1' }),
     sym({ id: 'q1', kind: 'unit', unit: 'npn', x: 300, y: 230, label: 'Q1' }),
     sym({ id: 'gnd', kind: 'gnd', x: 300, y: 340, label: 'GND' }),
+    // 灯是「真两脚器件」：p 接输出信号、g 接公共地——灯下面那个地是给灯用的回路端
+    sym({ id: 'gnd2', kind: 'gnd', x: 660, y: 340, label: '' }),
   ];
   // 场景背景：门磁按钮装在左墙、警示灯挂在右墙，中间是电路
   doc.backdrop = [
     { kind: 'wall', x: 6, y: 90, w: 44, h: 280 },
     { kind: 'wall', x: 668, y: 90, w: 44, h: 280 },
   ];
-  // 上拉 VCC→R1→Q1 集电极、集电极→输出、发射极→GND 都已接好；只差基极 b→输入 a
+  // 上拉 VCC→R1→Q1 集电极、集电极→输出、发射极→GND、灯的地端→GND 都已接好；
+  // 只差基极 b→输入 a
   doc.wires = [
     wire('vcc', 'p', 'r1', 'a'),
     wire('r1', 'b', 'q1', 'c'),
     wire('q1', 'c', 'out-y', 'p'),
     wire('q1', 'e', 'gnd', 'p'),
+    wire('out-y', 'g', 'gnd2', 'p'),
   ];
   return doc;
 }
@@ -108,18 +112,22 @@ export function dioIntroSeedDoc(): Doc {
     sym({ id: 'out-y', kind: 'output', x: 660, y: 230, label: 'y', sprite: 'lamp' }),
     sym({ id: 'gnd', kind: 'gnd', x: 480, y: 340, label: 'GND' }),
     sym({ id: 'r1', kind: 'unit', unit: 'res', x: 480, y: 230, rot: 1, label: 'R1' }),
+    // 灯的地端：设备灯下面那个地是给灯用的回路端（p 接输出、g 接公共地）
+    sym({ id: 'gnd2', kind: 'gnd', x: 660, y: 340, label: '' }),
   ];
   // 场景背景：两节电池装在左墙电池架、设备灯在右墙
   doc.backdrop = [
     { kind: 'wall', x: 6, y: 90, w: 44, h: 280 },
     { kind: 'wall', x: 668, y: 90, w: 44, h: 280 },
   ];
-  // 两节电池直接并联到输出（信号冲突/倒灌），负载下拉电阻已接；玩家加二极管隔开
+  // 两节电池直接并联到输出（信号冲突/倒灌），负载下拉电阻已接、灯的地端已接地；
+  // 玩家加二极管隔开
   doc.wires = [
     wire('in-a', 'p', 'out-y', 'p'),
     wire('in-b', 'p', 'out-y', 'p'),
     wire('out-y', 'p', 'r1', 'a'),
     wire('r1', 'b', 'gnd', 'p'),
+    wire('out-y', 'g', 'gnd2', 'p'),
   ];
   return doc;
 }
