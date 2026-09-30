@@ -14,6 +14,7 @@ import {
 } from '@lc/compiler';
 import {
   costHalfOf,
+  familySpecOf,
   formatCost,
   InMemoryModuleLibrary,
   type ModuleLibrary,
@@ -81,9 +82,17 @@ export function handleRequest(req: StudioRequest): StudioResponse {
 
     if (req.type === 'judge') {
       const level = parseLevel(req.level);
+      // 按玩家契约算生效规格：元件集 / 满分线 / 预算 / 时序预算 / 强度契约
+      const spec = familySpecOf(level, req.family ?? 'rtl');
       const result = judgeDesign(req.design, level, {
         library,
         hardcore: req.hardcore,
+        family: spec.family,
+        units: spec.units,
+        timingBudgetPs: spec.timingBudgetPs,
+        optimalHalf: spec.optimalHalf,
+        budgetHalf: spec.budgetHalf,
+        bestKnownHalf: spec.bestKnownHalf,
       });
       return { id: req.id, judge: result };
     }

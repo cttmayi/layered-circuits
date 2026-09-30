@@ -4,7 +4,7 @@
  */
 
 import type { JudgeResult } from '@lc/compiler';
-import type { Design, Level } from '@lc/schema';
+import type { Design, Level, LogicFamily } from '@lc/schema';
 import type { Logic, SimMode } from '@lc/sim-core';
 import type { StoredPort } from '../editor/model';
 
@@ -70,6 +70,8 @@ export type StudioRequest =
       level: Level;
       /** 硬核工程模式：额外检查关卡时序预算 */
       hardcore: boolean;
+      /** 玩家契约：判定按契约换可用元件集、满分线/预算/时序预算（缺省 rtl） */
+      family?: LogicFamily;
     };
 
 /** 去掉 id 的请求（Omit 在联合类型上会塌成公共字段，必须分配式处理） */

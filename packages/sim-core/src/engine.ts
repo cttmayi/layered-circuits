@@ -510,7 +510,7 @@ export class Simulator {
           d2 = SIG_WEAK_X;
         } else if (logicValueOf(gate) === V1) {
           // N-MOS 栅极高电平导通：漏源强导通（栅极不取电流，无需限流）
-          const pass = passDrives(
+          const pass = passDrivesMos(
             this.resolveExcluding(p0, e, 0),
             this.resolveExcluding(p2, e, 2),
             S_STRONG,
@@ -529,7 +529,7 @@ export class Simulator {
           d2 = SIG_WEAK_X;
         } else if (logicValueOf(gate) === V0) {
           // P-MOS 栅极低电平导通
-          const pass = passDrives(
+          const pass = passDrivesMos(
             this.resolveExcluding(p0, e, 0),
             this.resolveExcluding(p2, e, 2),
             S_STRONG,
@@ -777,6 +777,32 @@ function passDrives(a: number, b: number, cap: number): { d0: number; d1: number
   if (bStrength > aStrength)
     return { d0: sig(Math.min(bStrength, cap), logicValueOf(b)), d1: SIG_Z };
   if (aStrength > 0) {
+    const strength = Math.min(aStrength, cap);
+    return { d0: sig(strength, logicValueOf(b)), d1: sig(strength, logicValueOf(a)) };
+  }
+  return { d0: SIG_Z, d1: SIG_Z };
+}
+
+/**
+ * MOS 专用传递规则（NMOS/PMOS）：同强度**异值**时两边都不驱动（Z），而不是注入 X。
+ *
+ * 为什么 CMOS 要例外：瞬态里「旧值」可能只是上一状态在浮空节点上的残留
+ * （例如 CMOS 串联堆叠的中间节点被充电后，下一次输入翻转瞬间与电源轨对拉）——
+ * 注入 X 会经 MOS 通路自持成锁死的 X（CMOS 与非门级联的异或门就会这样挂掉）。
+ * 改成 Z 后，电源轨/更强的外部驱动会在下一轮迭代里胜出，瞬态正常收敛；
+ * 真正的稳态冲突仍会在共享节点上被 resolveNode 判成 X（drive-conflict）。
+ * 三极管/二极管/电阻保留旧语义：它们的网络里上拉多为弱电阻，不会出现
+ * 「强-强对拉」的瞬态，且已有电路（DFF 等）依赖旧行为。
+ */
+function passDrivesMos(a: number, b: number, cap: number): { d0: number; d1: number } {
+  const aStrength = strengthOf(a);
+  const bStrength = strengthOf(b);
+  if (aStrength > bStrength)
+    return { d0: SIG_Z, d1: sig(Math.min(aStrength, cap), logicValueOf(a)) };
+  if (bStrength > aStrength)
+    return { d0: sig(Math.min(bStrength, cap), logicValueOf(b)), d1: SIG_Z };
+  if (aStrength > 0) {
+    if (logicValueOf(a) !== logicValueOf(b)) return { d0: SIG_Z, d1: SIG_Z };
     const strength = Math.min(aStrength, cap);
     return { d0: sig(strength, logicValueOf(b)), d1: sig(strength, logicValueOf(a)) };
   }

@@ -39,6 +39,18 @@ import {
   xnorGateRef,
   xorGateRef,
 } from './references.js';
+import {
+  cmosAndRef,
+  cmosNorRef,
+  cmosOrRef,
+  cmosXnorRef,
+  cmosXorRef,
+  ttlAndRef,
+  ttlNandRef,
+  ttlNorRef,
+  ttlNotRef,
+  ttlOrRef,
+} from './references-family.js';
 
 /** 阶段 1 允许的元件：电容是时钟专用，本阶段不开放 */
 const STAGE1_UNITS = ['npn', 'res', 'dio'] as const;
@@ -96,6 +108,8 @@ function gateLevel(input: {
   bannedModules?: readonly string[];
   /** 本关逻辑族契约（默认 rtl）；CMOS 教学关声明 cmos，判定按输出强度硬约束 */
   family?: Level['family'];
+  /** 按契约的差异化参考解/满分线/时序预算（一键出答案按玩家契约给对应工艺解） */
+  familyRefs?: Level['familyRefs'];
   moduleAccess: 'none' | 'all' | 'listed';
   reference: Level['referenceSolution'];
   unlockName: string;
@@ -132,6 +146,7 @@ function gateLevel(input: {
     allowedModules: [...(input.allowedModules ?? [])],
     bannedModules: [...(input.bannedModules ?? [])],
     ...(input.family !== undefined ? { family: input.family } : {}),
+    ...(input.familyRefs !== undefined ? { familyRefs: input.familyRefs } : {}),
     budgetHalf: budgetFromOptimal(input.optimalHalf, MAIN_OVERHEAD),
     ...(input.bestKnownHalf !== undefined ? { bestKnownHalf: input.bestKnownHalf } : {}),
     optimalHalf: input.optimalHalf,
@@ -267,6 +282,10 @@ export const STAGE1_LEVELS: Level[] = [
     moduleAccess: 'none',
     reference: notGateRef('ref-not'),
     unlockName: '非门',
+    familyRefs: {
+      cmos: { reference: cmosInvRef('ref-s1-not-cmos'), optimalHalf: 4 },
+      ttl: { reference: ttlNotRef('ref-s1-not-ttl'), optimalHalf: 16 },
+    },
     freqHz: 100_000,
   }),
   gateLevel({
@@ -282,6 +301,10 @@ export const STAGE1_LEVELS: Level[] = [
     moduleAccess: 'none',
     reference: andGateRef('ref-and'),
     unlockName: '与门',
+    familyRefs: {
+      cmos: { reference: cmosAndRef('ref-s1-and-cmos'), optimalHalf: 12, timingBudgetPs: 2500 },
+      ttl: { reference: ttlAndRef('ref-s1-and-ttl'), optimalHalf: 28, timingBudgetPs: 4500 },
+    },
     freqHz: 100_000,
   }),
   gateLevel({
@@ -297,6 +320,10 @@ export const STAGE1_LEVELS: Level[] = [
     moduleAccess: 'none',
     reference: orGateRef('ref-or'),
     unlockName: '或门',
+    familyRefs: {
+      cmos: { reference: cmosOrRef('ref-s1-or-cmos'), optimalHalf: 12, timingBudgetPs: 3000 },
+      ttl: { reference: ttlOrRef('ref-s1-or-ttl'), optimalHalf: 28, timingBudgetPs: 3500 },
+    },
     freqHz: 100_000,
   }),
   gateLevel({
@@ -313,6 +340,10 @@ export const STAGE1_LEVELS: Level[] = [
     moduleAccess: 'all',
     reference: nandGateRef('ref-nand'),
     unlockName: '与非门',
+    familyRefs: {
+      cmos: { reference: cmosNandRef('ref-s1-nand-cmos'), optimalHalf: 8 },
+      ttl: { reference: ttlNandRef('ref-s1-nand-ttl'), optimalHalf: 20 },
+    },
     freqHz: 100_000,
   }),
   gateLevel({
@@ -332,6 +363,10 @@ export const STAGE1_LEVELS: Level[] = [
     moduleAccess: 'all',
     reference: norFastRef('ref-nor'),
     unlockName: '或非门',
+    familyRefs: {
+      cmos: { reference: cmosNorRef('ref-s1-nor-cmos'), optimalHalf: 8 },
+      ttl: { reference: ttlNorRef('ref-s1-nor-ttl'), optimalHalf: 20 },
+    },
     freqHz: 100_000,
   }),
   gateLevel({
@@ -354,6 +389,9 @@ export const STAGE1_LEVELS: Level[] = [
     allowedModules: ['非门', '与非门'],
     reference: xorGateRef('ref-xor'),
     unlockName: '异或门',
+    familyRefs: {
+      cmos: { reference: cmosXorRef('ref-s1-xor-cmos'), optimalHalf: 32 },
+    },
     freqHz: 100_000,
   }),
   // 复古复用关（GDD 4.4）：只能用早期手段重做异或门 —— 禁止调用后期封装的与非门模块
@@ -379,6 +417,9 @@ export const STAGE1_LEVELS: Level[] = [
     bannedModules: ['与非门'],
     reference: xorGateRef('ref-xor-retro'),
     unlockName: '异或门（复古版）',
+    familyRefs: {
+      cmos: { reference: cmosXorRef('ref-s1-xor-retro-cmos'), optimalHalf: 32 },
+    },
     freqHz: 20_000_000,
   }),
 
@@ -400,6 +441,9 @@ export const STAGE1_LEVELS: Level[] = [
     allowedModules: ['非门', '与非门', '异或门'],
     reference: xnorGateRef('ref-xnor'),
     unlockName: '同或门',
+    familyRefs: {
+      cmos: { reference: cmosXnorRef('ref-s1-xnor-cmos'), optimalHalf: 36 },
+    },
     freqHz: 100_000,
   }),
 

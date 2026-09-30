@@ -8,9 +8,10 @@
  */
 
 import { z } from 'zod';
-import { DesignSchema } from './design.js';
+import { type Design, DesignSchema } from './design.js';
+import { FAMILY_CONTRACTS, type LogicFamily } from './family.js';
 import { ModuleKindSchema, ModulePortSchema } from './module.js';
-import { UNITS } from './units.js';
+import { UNITS, type Unit } from './units.js';
 
 export const LogicValueSchema = z.union([
   z.literal(0),
@@ -48,6 +49,22 @@ export type LevelKind = z.infer<typeof LevelKindSchema>;
 
 export const ModuleAccessSchema = z.enum(['none', 'all', 'listed']);
 export type ModuleAccess = z.infer<typeof ModuleAccessSchema>;
+
+/** 单个逻辑族契约下的差异化关卡规格（referenceSolution 之外的工艺答案） */
+export const FamilyLevelRefSchema = z.object({
+  /** 该契约工艺下的参考解（例：CMOS 契约 = 互补 MOS 门，TTL 契约 = 跟随器推挽输出级） */
+  reference: DesignSchema,
+  /** 该契约下的满分线（半分整数）＝本参考解成本（与全局 optimalHalf 同口径） */
+  optimalHalf: z.number().int().min(0),
+  /** 该契约下的已知最省（半分整数）；缺省 = optimalHalf */
+  bestKnownHalf: z.number().int().min(0).optional(),
+  /** 该契约下的硬核时序预算（ps）；缺省沿用关卡 timingBudgetPs。
+   *  为什么需要：各契约速度标准不同——CMOS 与门/或门是两级门（NAND/NOR + 反相），
+   *  单级预算（如 s1-and 的 2ns）是按二极管与门定的，对 CMOS 太紧。 */
+  timingBudgetPs: z.number().int().positive().optional(),
+});
+
+export type FamilyLevelRef = z.infer<typeof FamilyLevelRefSchema>;
 
 export const LevelSchema = z.object({
   schemaVersion: z.literal(1).default(1),
@@ -119,6 +136,13 @@ export const LevelSchema = z.object({
     .optional(),
   referenceSolution: DesignSchema.optional(),
   /**
+   * 按逻辑族契约的差异化参考解与成本（每个契约一份「本契约工艺下的标准答案」）。
+   * 缺省（没有对应 family 条目）回退 rtl 规格：referenceSolution / optimalHalf / budgetHalf。
+   * 用途：一键出答案按玩家契约给对应工艺解；判定按契约检查元件与输出强度；
+   * 满分线/预算按契约（CMOS 无电阻又便宜，TTL 推挽输出更贵——各契约自己定自己的标准）。
+   */
+  familyRefs: z.record(z.string(), FamilyLevelRefSchema).optional(),
+  /**
    * 教学关「元件课堂」：进关先弹的概念卡（生活类比 + 要点）。
    * 有 classroom 的关 = 教学关，工作台顶部还会显示 guideSteps 引导条。
    */
@@ -165,4 +189,62 @@ export function scoreOf(level: Level, costHalf: number): number {
   const span = level.budgetHalf - level.optimalHalf;
   if (span <= 0) return 0;
   return Math.max(0, Math.min(100, Math.round((100 * (level.budgetHalf - costHalf)) / span)));
+}
+
+/** 玩家契约生效后某关的实际规格：元件集 / 参考解 / 满分线 / 预算 / 契约 */
+export interface FamilyLevelSpec {
+  /** 生效契约（教学关固定为关卡声明，功能关跟随玩家选择） */
+  family: LogicFamily;
+  /** 可用元件集 = 关卡允许 ∪ 契约元件（教学关不加契约元件，保持「教什么用什么」） */
+  units: readonly Unit[];
+  /** 参考解（一键出答案用） */
+  reference: Design;
+  optimalHalf: number;
+  budgetHalf: number;
+  bestKnownHalf: number;
+  timingBudgetPs: number | undefined;
+}
+
+/**
+ * 由「关卡 + 玩家契约」算出生效规格：
+ * - 教学关（有 classroom）：契约 = 关卡声明（教什么用什么），元件/参考解/成本都不变；
+ * - 功能关：玩家契约有 familyRefs 条目 → 用该契约的参考解/满分线/预算，元件集 = 关卡允许 ∪ 契约元件；
+ *   否则回退 rtl 规格（关卡原样）。
+ */
+export function familySpecOf(level: Level, family: LogicFamily): FamilyLevelSpec {
+  const teaching = level.classroom !== undefined;
+  if (teaching) {
+    const f = level.family;
+    return {
+      family: f,
+      units: [...level.allowedUnits],
+      reference: level.referenceSolution!,
+      optimalHalf: level.optimalHalf,
+      budgetHalf: level.budgetHalf,
+      bestKnownHalf: level.bestKnownHalf ?? level.optimalHalf,
+      timingBudgetPs: level.timingBudgetPs,
+    };
+  }
+  const ref = level.familyRefs?.[family];
+  if (ref) {
+    const units = new Set<Unit>([...level.allowedUnits, ...FAMILY_CONTRACTS[family].units]);
+    return {
+      family,
+      units: [...units],
+      reference: ref.reference,
+      optimalHalf: ref.optimalHalf,
+      budgetHalf: budgetFromOptimal(ref.optimalHalf, 0.2),
+      bestKnownHalf: ref.bestKnownHalf ?? ref.optimalHalf,
+      timingBudgetPs: ref.timingBudgetPs ?? level.timingBudgetPs,
+    };
+  }
+  return {
+    family: 'rtl',
+    units: [...level.allowedUnits],
+    reference: level.referenceSolution!,
+    optimalHalf: level.optimalHalf,
+    budgetHalf: level.budgetHalf,
+    bestKnownHalf: level.bestKnownHalf ?? level.optimalHalf,
+    timingBudgetPs: level.timingBudgetPs,
+  };
 }

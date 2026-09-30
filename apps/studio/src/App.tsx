@@ -6,7 +6,7 @@ import {
   TEACHING_MODULES,
   teachingSolutionOf,
 } from '@lc/content';
-import type { LogicFamily } from '@lc/schema';
+import { FAMILY_CONTRACTS, familySpecOf, type LogicFamily } from '@lc/schema';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emptyDoc, notGateDemo } from './editor/demos';
 import {
@@ -758,8 +758,9 @@ export function App(): React.JSX.Element {
    *  只有一种版本就直接搭，不弹对话框。 */
   const applyAnswer = (kind: 'element' | 'gate'): void => {
     if (!currentLevel) return;
-    const ref =
-      kind === 'gate' ? teachingSolutionOf(currentLevel.id) : currentLevel.referenceSolution;
+    // 元件版 = 按玩家契约的参考解（每个契约自己的工艺答案；缺省 rtl = 关卡参考解）
+    const spec = familySpecOf(currentLevel, progress.family);
+    const ref = kind === 'gate' ? teachingSolutionOf(currentLevel.id) : spec.reference;
     if (!ref) {
       setToast(kind === 'gate' ? '本关没有逻辑门版参考解' : '本关没有参考解，无法一键出答案');
       return;
@@ -781,15 +782,17 @@ export function App(): React.JSX.Element {
       setToast('调试模式的「一键出答案」只在关卡模式有效');
       return;
     }
-    const ref = currentLevel.referenceSolution;
+    const spec = familySpecOf(currentLevel, progress.family);
     const teach = teachingSolutionOf(currentLevel.id);
     const candidates: { kind: 'element' | 'gate'; note?: string }[] = [];
-    if (teach) candidates.push({ kind: 'gate' });
-    if (ref) {
+    // 门版 = RTL 晶体管积木，输出弱 1：强输出契约（TTL/CMOS）下会挂强度检查 → 只给契约元件版
+    const strongContract = FAMILY_CONTRACTS[progress.family].output === 'strong';
+    if (teach && !strongContract) candidates.push({ kind: 'gate' });
+    if (spec.reference) {
       const edge = elementEdgeOf(currentLevel);
       if (edge)
         candidates.unshift({ kind: 'element', note: edge === 'cost' ? '成本更低' : '延迟更短' });
-      else if (!teach) candidates.push({ kind: 'element' });
+      else if (!teach || strongContract) candidates.push({ kind: 'element' });
     }
     if (candidates.length === 0) {
       setToast('本关没有参考解，无法一键出答案');
@@ -890,6 +893,7 @@ export function App(): React.JSX.Element {
         library: doc.library.map((m) => m.template),
         level: judgedLevel,
         hardcore: forcedHardcore || mode === 'timing',
+        family: progress.family,
       });
       if (response.error || !response.judge) {
         setToast(`校验失败：${response.error ?? '未知错误'}`);
@@ -1230,7 +1234,14 @@ export function App(): React.JSX.Element {
             placing={placing}
             onPick={setPlacing}
             library={doc.library}
-            level={currentLevel}
+            level={
+              currentLevel
+                ? {
+                    ...currentLevel,
+                    allowedUnits: [...familySpecOf(currentLevel, progress.family).units],
+                  }
+                : null
+            }
           />
         )}
         <div className={`edge-strip left${leftOpen ? '' : ' closed'}`}>

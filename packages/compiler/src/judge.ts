@@ -8,7 +8,7 @@
  * 所以「面板上看到的现象」就是「判定的依据」，不会出现两套真相。
  */
 
-import type { Design, Level, LevelVector, ModuleLibrary } from '@lc/schema';
+import type { Design, Level, LevelVector, ModuleLibrary, Unit } from '@lc/schema';
 import { costHalfOf, FAMILY_CONTRACTS, type LogicFamily, scoreOf } from '@lc/schema';
 import {
   type Logic,
@@ -32,6 +32,16 @@ export interface JudgeOptions {
   hardcore?: boolean;
   /** 逻辑族契约；缺省用关卡声明的 family（再缺省 rtl） */
   family?: LogicFamily;
+  /** 生效可用元件集（契约感知时由 familySpecOf 算出）；缺省 = level.allowedUnits */
+  units?: readonly Unit[];
+  /** 生效硬核时序预算（ps）；契约感知时由 familySpecOf 算出；缺省 = level.timingBudgetPs */
+  timingBudgetPs?: number;
+  /** 生效满分线（半分）；契约感知时由 familySpecOf 算出；缺省 = level.optimalHalf */
+  optimalHalf?: number;
+  /** 生效预算（半分）；契约感知时由 familySpecOf 算出；缺省 = level.budgetHalf */
+  budgetHalf?: number;
+  /** 生效已知最省（半分）；契约感知时由 familySpecOf 算出；缺省 = level.bestKnownHalf */
+  bestKnownHalf?: number;
 }
 
 export interface JudgeRow {
@@ -211,10 +221,20 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
   const mode: SimMode = options.mode ?? level.mode;
   const errors: string[] = [];
   const warnings: string[] = [];
+  /** 生效可用元件：契约感知时由 familySpecOf 算出的并集；缺省 = 关卡声明 */
+  const allowedUnits: readonly Unit[] = options.units ?? level.allowedUnits;
 
   const { net, diagnostics: compileDiagnostics } = compileDesign(design, {
     library: options.library,
   });
+  /** 生效硬核时序预算：契约感知时可能放宽（各契约速度标准不同） */
+  const effectiveTimingBudgetPs: number | undefined =
+    options.timingBudgetPs !== undefined ? options.timingBudgetPs : level.timingBudgetPs;
+  /** 生效满分线/预算/已知最省：契约感知时由 familySpecOf 算出（各契约自己定自己的标准） */
+  const effectiveOptimalHalf = options.optimalHalf ?? level.optimalHalf;
+  const effectiveBudgetHalf = options.budgetHalf ?? level.budgetHalf;
+  const effectiveBestKnownHalf =
+    options.bestKnownHalf ?? level.bestKnownHalf ?? effectiveOptimalHalf;
   const { counts } = computeCosts(design, options.library);
   const costHalf = costHalfOf(counts);
 
@@ -250,9 +270,9 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
   for (const instance of design.instances) {
     if (instance.kind !== 'unit') continue;
     usedUnits.add(instance.unit);
-    if (!level.allowedUnits.includes(instance.unit)) {
+    if (!allowedUnits.includes(instance.unit)) {
       errors.push(
-        `本关不提供【${UNIT_LABELS[instance.unit] ?? instance.unit}】，请只用：${level.allowedUnits.join('、')}`,
+        `本关不提供【${UNIT_LABELS[instance.unit] ?? instance.unit}】，请只用：${allowedUnits.join('、')}`,
       );
     }
   }
@@ -376,9 +396,9 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
 
   // 3) 成本预算：成本挑战关（GDD 4.2）不设上限，只比谁更省 → 不算「超预算」
   const budgetEnforced = level.kind !== 'cost';
-  const overBudget = budgetEnforced && costHalf > level.budgetHalf;
+  const overBudget = budgetEnforced && costHalf > effectiveBudgetHalf;
   if (overBudget) {
-    errors.push(`成本超预算：${costHalf / 2} > ${level.budgetHalf / 2}`);
+    errors.push(`成本超预算：${costHalf / 2} > ${effectiveBudgetHalf / 2}`);
   }
 
   // 4) 结构与时序检查
@@ -387,7 +407,7 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
   const needAnalysis =
     wantsCombinational ||
     (level.unlock?.kind ?? 'logic') === 'seq' ||
-    level.timingBudgetPs !== undefined ||
+    effectiveTimingBudgetPs !== undefined ||
     level.kind === 'timing' ||
     checks.clockPort !== undefined ||
     checks.maxGlitches !== undefined;
@@ -407,18 +427,18 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     if (analysis.uncertain && wantsCombinational)
       warnings.push('时序分析存在不确定项（X / 振荡），结果仅供参考');
   }
-  if (level.timingBudgetPs !== undefined && criticalPathPs > level.timingBudgetPs) {
+  if (effectiveTimingBudgetPs !== undefined && criticalPathPs > effectiveTimingBudgetPs) {
     warnings.push(
-      `关键路径 ${(criticalPathPs / 1000).toFixed(2)}ns 超过硬核要求 ${(level.timingBudgetPs / 1000).toFixed(2)}ns（科普模式仍可通过）`,
+      `关键路径 ${(criticalPathPs / 1000).toFixed(2)}ns 超过硬核要求 ${(effectiveTimingBudgetPs / 1000).toFixed(2)}ns（科普模式仍可通过）`,
     );
   }
   const timingOk =
     !options.hardcore ||
-    level.timingBudgetPs === undefined ||
-    criticalPathPs <= level.timingBudgetPs;
+    effectiveTimingBudgetPs === undefined ||
+    criticalPathPs <= effectiveTimingBudgetPs;
   if (!timingOk) {
     errors.push(
-      `硬核模式时序不达标：${(criticalPathPs / 1000).toFixed(2)}ns > ${((level.timingBudgetPs ?? 0) / 1000).toFixed(2)}ns`,
+      `硬核模式时序不达标：${(criticalPathPs / 1000).toFixed(2)}ns > ${((effectiveTimingBudgetPs ?? 0) / 1000).toFixed(2)}ns`,
     );
   }
 
@@ -490,7 +510,7 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     }
   }
 
-  const bestKnown = level.bestKnownHalf ?? level.optimalHalf;
+  const bestKnown = effectiveBestKnownHalf;
   if (level.kind === 'cost' && costHalf > bestKnown) {
     warnings.push(
       `成本挑战关：还能更省 —— 目前 ${costHalf / 2}，已知最省 ${bestKnown / 2}（成绩会记进重挑战榜）`,
@@ -503,8 +523,8 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     rows,
     failedRows,
     costHalf,
-    budgetHalf: level.budgetHalf,
-    optimalHalf: level.optimalHalf,
+    budgetHalf: effectiveBudgetHalf,
+    optimalHalf: effectiveOptimalHalf,
     overBudget,
     timingOk,
     criticalPathPs,
@@ -528,7 +548,18 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
       isSequential,
       notes,
     },
-    score: pass ? scoreOf(level, costHalf) : Math.max(0, scoreOf(level, costHalf)),
+    score: pass
+      ? scoreOf(
+          { ...level, optimalHalf: effectiveOptimalHalf, budgetHalf: effectiveBudgetHalf },
+          costHalf,
+        )
+      : Math.max(
+          0,
+          scoreOf(
+            { ...level, optimalHalf: effectiveOptimalHalf, budgetHalf: effectiveBudgetHalf },
+            costHalf,
+          ),
+        ),
     portCheck: { missingInputs, missingOutputs, extraPorts },
     errors,
     warnings,
