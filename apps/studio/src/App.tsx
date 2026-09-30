@@ -1217,22 +1217,6 @@ export function App(): React.JSX.Element {
             onPick={setPlacing}
             library={doc.library}
             level={currentLevel}
-            header={
-              currentLevel && (
-                <LevelCard
-                  level={currentLevel}
-                  costHalf={snapshot?.cost.half ?? 0}
-                  reconDone={Boolean(progress.recon[currentLevel.id])}
-                  sideJob={sideJobKey}
-                  doneSideJobs={Object.keys(progress.sideJobs)
-                    .filter((id) => id.startsWith(`${currentLevel.id}:`))
-                    .map((id) => id.slice(currentLevel.id.length + 1))}
-                  onPickSideJob={setSideJobKey}
-                  onShowHint={() => setToast(currentLevel.hint)}
-                  onOpenRecon={() => setReconOpen(true)}
-                />
-              )
-            }
           />
         )}
         <div className={`edge-strip left${leftOpen ? '' : ' closed'}`}>
@@ -1359,6 +1343,20 @@ export function App(): React.JSX.Element {
 
         {rightOpen && (
           <div className="side">
+            {currentLevel && (
+              <LevelCard
+                level={currentLevel}
+                costHalf={snapshot?.cost.half ?? 0}
+                reconDone={Boolean(progress.recon[currentLevel.id])}
+                sideJob={sideJobKey}
+                doneSideJobs={Object.keys(progress.sideJobs)
+                  .filter((id) => id.startsWith(`${currentLevel.id}:`))
+                  .map((id) => id.slice(currentLevel.id.length + 1))}
+                onPickSideJob={setSideJobKey}
+                onShowHint={() => setToast(currentLevel.hint)}
+                onOpenRecon={() => setReconOpen(true)}
+              />
+            )}
             {currentLevel && (
               <JudgePanel
                 level={judgedLevel ?? currentLevel}
