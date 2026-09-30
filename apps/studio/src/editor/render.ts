@@ -1047,15 +1047,17 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
   ctx.translate(p.x, p.y);
   ctx.font = `${Math.max(9, 11 * camera.scale)}px ui-sans-serif, system-ui, sans-serif`;
   ctx.textAlign = 'center';
+
   const f = footprintOf(sym, doc.library);
   const labelY = sym.rot % 2 === 1 ? f.h / 2 + 14 * camera.scale : f.h / 2 + 13 * camera.scale;
 
   if (key === 'input' || key === 'output') {
     if (sym.sprite) {
-      // 实物图标端口：状态由图形表达，下方只标端口名
+      // 实物图标端口：状态由图形表达，下方只标端口名（务必 restore，否则变换泄漏导致后续元件画到画布外）
       ctx.font = `${Math.max(9, 11 * camera.scale)}px ui-sans-serif, system-ui, sans-serif`;
       ctx.fillStyle = PALETTE.textDim;
       ctx.fillText(sym.label, 0, labelY + 10);
+      ctx.restore();
       return;
     }
     const width = sym.width ?? 1;
