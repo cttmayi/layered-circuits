@@ -85,6 +85,18 @@ body,
   color: #d6f5c0;
 }
 
+/* 调试模式（开发辅助）：醒目标记，避免误当正式玩法 */
+.toolbar .debug-group button.active {
+  border-color: #d98b3a;
+  color: #ffb454;
+}
+
+.toolbar .debug-group button.primary {
+  background: #4a3420;
+  border-color: #8a5a22;
+  color: #ffe6bf;
+}
+
 .toolbar button:disabled {
   opacity: 0.4;
   cursor: default;

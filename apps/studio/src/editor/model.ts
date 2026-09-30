@@ -463,3 +463,174 @@ export function inputValues(doc: Doc): Record<string, 0 | 1 | 2 | 3> {
   }
   return out;
 }
+
+/** 元件的「输入引脚」名单（用于信号流分层；模块按模板端口，模板缺失时当作全输入） */
+const UNIT_INPUT_PINS: Record<string, string[]> = {
+  npn: ['b'],
+  res: ['a'],
+  dio: ['a'],
+  cap: ['a'],
+};
+
+/**
+ * 把 Design（网表）还原成画布 Doc ——「一键出答案」等调试功能用。
+ *
+ * - 端口沿用 baseDoc（docForLevel）里预置的 input/output（含位宽与锁定），按端口名匹配；
+ * - 元件按「信号流深度」自动分列排布（输入在左、输出在右），VCC 摆顶行、GND 摆底行；
+ * - 每个 Net 的多个引脚按链式两两连线（与 toDesign 的并查集合并互为逆操作）。
+ *
+ * 注意 syms 的**顺序**：必须端口按 design.ports 序、实例按 design.instances 原序
+ * （只影响画布位置，不影响导出）。因为 flatten 的节点编号跟着「端口序 + 实例序」走，
+ * 反馈电路（锁存器）的收敛结果对评估顺序敏感 —— 顺序乱了，同一个电路会判成另一个状态。
+ */
+export function fromDesign(design: Design, baseDoc: Doc): Doc {
+  // 1) 端口：保留 baseDoc 的 input/output sym（按 label 匹配设计端口），去掉 rail（参考解自带电源实例）
+  const portByLabel = new Map<string, Sym>();
+  for (const s of baseDoc.syms) {
+    if (s.kind === 'input' || s.kind === 'output') portByLabel.set(s.label, s);
+  }
+
+  const netById = new Map(design.nets.map((n) => [n.id, n]));
+
+  // 2) 信号流深度：端口与电源（depth 0）出发松弛；含反馈环的电路最多迭代 128 轮
+  const depthOf = new Map<string, number>();
+  for (const inst of design.instances) {
+    if (inst.kind === 'vcc' || inst.kind === 'gnd') depthOf.set(inst.id, 0);
+  }
+  const portFedNets = new Set<string>(design.ports.flatMap((p) => p.nets));
+  const inputNetsOf = (inst: Instance): string[] => {
+    const inputPins = new Set<string>(
+      inst.kind === 'module'
+        ? (baseDoc.library
+            .find((m) => m.hash === inst.module)
+            ?.ports.filter((p) => p.dir === 'in')
+            .map((p) => p.name) ?? [])
+        : (UNIT_INPUT_PINS[inst.kind === 'unit' ? inst.unit : ''] ?? []),
+    );
+    const out: string[] = [];
+    for (const net of design.nets) {
+      if (net.pins.some((pin) => pin.inst === inst.id && inputPins.has(pin.pin))) out.push(net.id);
+    }
+    return out;
+  };
+  for (let pass = 0; pass < 128; pass++) {
+    let changed = false;
+    for (const inst of design.instances) {
+      if (inst.kind === 'vcc' || inst.kind === 'gnd') continue;
+      let d = depthOf.get(inst.id) ?? 1;
+      for (const netId of inputNetsOf(inst)) {
+        if (portFedNets.has(netId)) {
+          if (d < 1) d = 1; // 端口直连：深度至少 1
+          continue;
+        }
+        const net = netById.get(netId);
+        if (!net) continue;
+        for (const pin of net.pins) {
+          if (pin.inst === inst.id) continue;
+          const other = depthOf.get(pin.inst);
+          if (other !== undefined && other + 1 > d) d = other + 1;
+        }
+      }
+      if (d !== (depthOf.get(inst.id) ?? 1)) {
+        depthOf.set(inst.id, d);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  // 3) 布局（只算坐标，syms 顺序另行决定）：按深度分列，列内按 id 蛇形排
+  const rowsAt = new Map<number, number>();
+  let bottomY = 0;
+  const posOf = new Map<string, { x: number; y: number }>();
+  const sorted = [...design.instances].sort((a, b) => {
+    const da = depthOf.get(a.id) ?? 0;
+    const db = depthOf.get(b.id) ?? 0;
+    return da !== db ? da - db : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+  for (const inst of sorted) {
+    if (inst.kind === 'vcc' || inst.kind === 'gnd') continue; // 电源单独排
+    const depth = depthOf.get(inst.id) ?? 0;
+    const row = rowsAt.get(depth) ?? 0;
+    rowsAt.set(depth, row + 1);
+    const y = 90 + row * 92;
+    bottomY = Math.max(bottomY, y);
+    posOf.set(inst.id, { x: 120 + depth * 130, y });
+  }
+  const rails = sorted.filter((i) => i.kind === 'vcc' || i.kind === 'gnd');
+  let vccI = 0;
+  let gndI = 0;
+  for (const inst of rails) {
+    posOf.set(inst.id, {
+      x: 120 + (inst.kind === 'vcc' ? vccI++ : gndI++) * 130,
+      y: inst.kind === 'vcc' ? 30 : bottomY + 80,
+    });
+  }
+
+  // 4) syms：先端口（按 design.ports 序），再实例（按 design.instances 原序）——
+  //    顺序决定 flatten 的节点编号，反馈电路必须保持原序才能复现参考解的行为。
+  const syms: Sym[] = [];
+  const matchedPorts = new Set<string>();
+  for (const p of design.ports) {
+    const sym = portByLabel.get(p.name);
+    if (sym) {
+      syms.push(sym);
+      matchedPorts.add(p.name);
+    }
+  }
+  // 参考解没有的端口（如空设计）回退保留关卡预置端口，画布不至于空掉
+  for (const [name, sym] of portByLabel) {
+    if (!matchedPorts.has(name)) syms.push(sym);
+  }
+  for (const inst of design.instances) {
+    const pos = posOf.get(inst.id) ?? { x: 120, y: 90 };
+    const sym: Sym = {
+      id: inst.id,
+      kind: inst.kind,
+      x: pos.x,
+      y: pos.y,
+      rot: 0,
+      label: inst.label ?? '',
+    };
+    if (inst.kind === 'unit') {
+      sym.unit = inst.unit;
+      sym.label = sym.label || UNIT_LABEL[inst.unit];
+    } else if (inst.kind === 'module') {
+      sym.module = inst.module;
+      const stored = baseDoc.library.find((m) => m.hash === inst.module);
+      sym.label = sym.label || stored?.name || '模块';
+    } else {
+      sym.label = inst.kind === 'vcc' ? 'VCC' : 'GND';
+    }
+    syms.push(sym);
+  }
+
+  // 4) Net → 链式导线（端口引脚引用端口 sym id；未知实例的引脚跳过）
+  //    Design 里端口靠 port.nets 按名挂网络（网络 pins 不含端口），
+  //    画布上端口必须有一条导线接入，否则 toDesign 会把端口导出成孤立网络。
+  const portPinByNet = new Map<string, PinRef[]>();
+  for (const p of design.ports) {
+    const sym = portByLabel.get(p.name);
+    if (!sym) continue;
+    p.nets.forEach((netId, bit) => {
+      const list = portPinByNet.get(netId) ?? [];
+      list.push({ inst: sym.id, pin: 'p', bit });
+      portPinByNet.set(netId, list);
+    });
+  }
+  const wires: Wire[] = [];
+  let wireN = 0;
+  for (const net of design.nets) {
+    const pins: PinRef[] = [
+      ...(portPinByNet.get(net.id) ?? []),
+      ...net.pins
+        .map((p) => ({ inst: p.inst, pin: p.pin, bit: p.bit ?? 0 }))
+        .filter((p) => syms.some((s) => s.id === p.inst)),
+    ];
+    for (let i = 0; i + 1 < pins.length; i++) {
+      wires.push({ id: `w${++wireN}`, a: pins[i] as PinRef, b: pins[i + 1] as PinRef });
+    }
+  }
+
+  return { ...baseDoc, syms, wires };
+}

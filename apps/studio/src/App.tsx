@@ -6,6 +6,7 @@ import {
   createSym,
   type Doc,
   findSym,
+  fromDesign,
   type InputDrive,
   inputValues,
   moduleBox,
@@ -131,6 +132,8 @@ export function App(): React.JSX.Element {
   /** 左右侧面板整体收起/展开（体验：布线时把侧栏收起来腾画布），选择记忆在 localStorage */
   const [leftOpen, setLeftOpen] = usePersistentBool('lc-ui-left-open', true);
   const [rightOpen, setRightOpen] = usePersistentBool('lc-ui-right-open', true);
+  /** 调试模式：解锁「一键出答案」等开发辅助（不参与正式玩法） */
+  const [debugMode, setDebugMode] = usePersistentBool('lc-ui-debug', false);
   /** 低频面板弹窗：任务墙 / 工具铺 / 组件库 / 波形（点击启动，不用时不留侧栏） */
   const [panelOpen, setPanelOpen] = useState<null | 'map' | 'shop' | 'library' | 'wave'>(null);
   /** 画布探针：买下探针后可点连线钉读数 */
@@ -714,6 +717,23 @@ export function App(): React.JSX.Element {
     setSelectedWires([]);
   };
 
+  /** 调试模式：一键把本关参考解搭到画布上（可改、可直接验收） */
+  const solveOneKey = (): void => {
+    if (!currentLevel) {
+      setToast('调试模式的「一键出答案」只在关卡模式有效');
+      return;
+    }
+    const ref = currentLevel.referenceSolution;
+    if (!ref) {
+      setToast('本关没有参考解，无法一键出答案');
+      return;
+    }
+    const base = docForLevel(currentLevel, doc.library);
+    const next = fromDesign(ref, base);
+    loadDoc({ ...next, library: doc.library });
+    setToast('参考解已搭好（调试模式）—— 可以直接交付验收');
+  };
+
   // ---- 关卡 / 模式入口（模式只在主菜单选，进关后不可改） ----
   const currentLevel = levelOf(gameMode, levelId);
 
@@ -976,6 +996,26 @@ export function App(): React.JSX.Element {
         <button type="button" onClick={copyCircuit} title="复制当前电路 JSON（贴给我检查布线）">
           复制电路
         </button>
+        <div className="group debug-group">
+          <button
+            type="button"
+            className={debugMode ? 'active' : ''}
+            onClick={() => setDebugMode(!debugMode)}
+            title="调试模式：解锁「一键出答案」等开发辅助，不影响正常玩法"
+          >
+            调试模式
+          </button>
+          {debugMode && (
+            <button
+              type="button"
+              className="primary"
+              onClick={solveOneKey}
+              title="把本关参考解电路直接搭到画布上（调试用），可继续修改或直接验收"
+            >
+              一键出答案
+            </button>
+          )}
+        </div>
         {gameMode === 'level' && (
           <div className="group">
             <button
