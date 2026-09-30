@@ -74,7 +74,7 @@ export function SettlementPanel({
         <table className="kv">
           <tbody>
             <tr>
-              <td>客户付款</td>
+              <td>款项</td>
               <td className="num">{payment / 2} 元</td>
             </tr>
             <tr>
