@@ -492,10 +492,15 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
 
   const netById = new Map(design.nets.map((n) => [n.id, n]));
 
-  // 2) 信号流深度：端口与电源（depth 0）出发松弛；含反馈环的电路最多迭代 128 轮
+  // 2) 信号流深度：端口与电源（depth 0）出发松弛；含反馈环的电路最多迭代 128 轮。
+  //    关键约束：**深度必须封顶**（MAX_DEPTH）——carry 链这类共享网/回环会让"最长路径"
+  //    在 128 轮内链式暴涨到几千层，画布会拉成一条横向长龙。封顶后它只是一个布局分组依据，
+  //    不追求精确最长路径。用上一轮快照（雅可比）推进，避免同轮内链式暴涨。
+  const MAX_DEPTH = 16;
   const depthOf = new Map<string, number>();
   for (const inst of design.instances) {
-    if (inst.kind === 'vcc' || inst.kind === 'gnd') depthOf.set(inst.id, 0);
+    // 显式初始化：电源 0、其余 1 ——「真实深度 1」不能和「未知」混为一个值
+    depthOf.set(inst.id, inst.kind === 'vcc' || inst.kind === 'gnd' ? 0 : 1);
   }
   const portFedNets = new Set<string>(design.ports.flatMap((p) => p.nets));
   const inputNetsOf = (inst: Instance): string[] => {
@@ -513,11 +518,12 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
     }
     return out;
   };
+  let prev = new Map(depthOf);
   for (let pass = 0; pass < 128; pass++) {
     let changed = false;
     for (const inst of design.instances) {
       if (inst.kind === 'vcc' || inst.kind === 'gnd') continue;
-      let d = depthOf.get(inst.id) ?? 1;
+      let d = prev.get(inst.id) ?? 1;
       for (const netId of inputNetsOf(inst)) {
         if (portFedNets.has(netId)) {
           if (d < 1) d = 1; // 端口直连：深度至少 1
@@ -527,20 +533,25 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
         if (!net) continue;
         for (const pin of net.pins) {
           if (pin.inst === inst.id) continue;
-          const other = depthOf.get(pin.inst);
-          if (other !== undefined && other + 1 > d) d = other + 1;
+          const other = prev.get(pin.inst);
+          if (other !== undefined) d = Math.max(d, Math.min(other + 1, MAX_DEPTH));
         }
       }
-      if (d !== (depthOf.get(inst.id) ?? 1)) {
+      if (d !== prev.get(inst.id)) {
         depthOf.set(inst.id, d);
         changed = true;
       }
     }
+    prev = new Map(depthOf);
     if (!changed) break;
   }
 
-  // 3) 布局（只算坐标，syms 顺序另行决定）：按深度分列，列内按 id 蛇形排
-  const rowsAt = new Map<number, number>();
+  // 3) 布局（只算坐标，syms 顺序另行决定）：按深度排序后**顺序切块**——
+  //    每列固定 MAX_ROWS 个，列 = 块，整体从左到右 = 从浅到深（输入在左输出在右）。
+  //    用「切块」而不是「每深度一列」：深度分布往往极不均匀（大电路 80% 元件挤在封顶层），
+  //    按深度分列会让某一列排几百个；切块则每列恰好 MAX_ROWS，天然均匀紧凑。
+  const MAX_ROWS = 10;
+  let slot = 0;
   let bottomY = 0;
   const posOf = new Map<string, { x: number; y: number }>();
   const sorted = [...design.instances].sort((a, b) => {
@@ -550,20 +561,25 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
   });
   for (const inst of sorted) {
     if (inst.kind === 'vcc' || inst.kind === 'gnd') continue; // 电源单独排
-    const depth = depthOf.get(inst.id) ?? 0;
-    const row = rowsAt.get(depth) ?? 0;
-    rowsAt.set(depth, row + 1);
+    const block = Math.floor(slot / MAX_ROWS);
+    const row = slot % MAX_ROWS;
+    slot++;
     const y = 90 + row * 92;
     bottomY = Math.max(bottomY, y);
-    posOf.set(inst.id, { x: 120 + depth * 130, y });
+    posOf.set(inst.id, { x: 120 + block * 130, y });
   }
+  // 电源轨：VCC 顶行、GND 底行，横排；多了就分行（每行 MAX_RAIL 个）
+  const MAX_RAIL = 10;
   const rails = sorted.filter((i) => i.kind === 'vcc' || i.kind === 'gnd');
   let vccI = 0;
   let gndI = 0;
   for (const inst of rails) {
+    const idx = inst.kind === 'vcc' ? vccI++ : gndI++;
+    const row = Math.floor(idx / MAX_RAIL);
+    const col = idx % MAX_RAIL;
     posOf.set(inst.id, {
-      x: 120 + (inst.kind === 'vcc' ? vccI++ : gndI++) * 130,
-      y: inst.kind === 'vcc' ? 30 : bottomY + 80,
+      x: 120 + col * 130,
+      y: inst.kind === 'vcc' ? 30 + row * 60 : bottomY + 80 + row * 60,
     });
   }
 

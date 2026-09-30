@@ -112,3 +112,33 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
     expect(checked).toBe(12);
   });
 });
+
+describe('元件版布局：紧凑网格（不许回退成单列长条）', () => {
+  it('每列最多 10 个元件，按深度排序后从左到右切块', () => {
+    for (const level of ALL_LEVELS) {
+      const ref = level.referenceSolution;
+      if (!ref) continue;
+      const doc = fromDesign(ref, docForLevel(level, []));
+      const units = doc.syms.filter((s) => s.kind === 'unit' || s.kind === 'module');
+      if (units.length === 0) continue;
+      const perCol = new Map<number, number>();
+      for (const s of units) perCol.set(s.x, (perCol.get(s.x) ?? 0) + 1);
+      const maxPerCol = Math.max(...perCol.values());
+      // 布局不允许单列超过 10 个（否则就是当初「一列长条」的回归）
+      expect(maxPerCol, `${level.id} 单列元件数应 ≤ 10（现在是 ${maxPerCol}）`).toBeLessThanOrEqual(
+        10,
+      );
+      // 超过 10 个元件就应当有多列
+      if (units.length > 10) {
+        expect(perCol.size, `${level.id} 大电路应切成多列`).toBeGreaterThan(1);
+      }
+      // 列之间无重叠：同一 x 的元件 y 各不同
+      const seen = new Set<string>();
+      for (const s of units) {
+        const key = `${s.x},${s.y}`;
+        expect(seen.has(key), `${level.id} 元件 ${s.id} 与其它元件重叠`).toBe(false);
+        seen.add(key);
+      }
+    }
+  });
+});
