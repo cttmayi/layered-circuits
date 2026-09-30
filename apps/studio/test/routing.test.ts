@@ -45,6 +45,39 @@ describe('避障布线', () => {
       ],
     ]);
   });
+
+  it('出线段不得朝器件内部拐（连线不穿入器件本体）', () => {
+    // Q1 是 npn：足迹半宽 22、引脚 b 在 (-26,0)。从 b 出发水平往右（朝器件内部）
+    // 的候选拐点会落在足迹矩形内 → 被淘汰，自动改走垂直绕行。
+    const segs = routeSegments({ x: -26, y: 0 }, { x: 120, y: 0 }, 0, [NPN], 'q1', 'b');
+    // 第一段的拐点（第一个折弯）不能落在 Q1 矩形内
+    const firstTurn = segs[0][1];
+    const inside =
+      firstTurn.x >= NPN.x &&
+      firstTurn.x <= NPN.x + NPN.w &&
+      firstTurn.y >= NPN.y &&
+      firstTurn.y <= NPN.y + NPN.h;
+    expect(inside).toBe(false);
+    // 且整条线不穿过 Q1（除引脚起点外）
+    expect(hitsAny(segs, [NPN])).toBe(false);
+  });
+
+  it('垂直出线段从底部引脚朝上拐也会被剔除', () => {
+    // res 的 b 引脚在 (0,22)，足迹半高 20。垂直向上拐（my < 22）的拐点在矩形内
+    // → 淘汰；水平出线（在器件下方）保留。
+    const RES: RouteObstacle = { id: 'r1', x: -10, y: -20, w: 20, h: 40 };
+    const segs = routeSegments({ x: 0, y: 22 }, { x: 120, y: 120 }, 0, [RES], 'r1', 'b');
+    const firstTurn = segs[0][1];
+    expect(firstTurn.y).toBeGreaterThanOrEqual(RES.y + RES.h); // 拐点在器件下方
+    expect(hitsAny(segs, [RES])).toBe(false);
+  });
+
+  it('二极管引脚（±22）露在足迹外，直连不被误杀', () => {
+    const DIO: RouteObstacle = { id: 'd1', x: -17, y: -12, w: 34, h: 24 };
+    // 从 a 引脚 (-22,0) 水平朝左出线：拐点 (-70,0) 在足迹外 → 折线保留
+    const segs = routeSegments({ x: -22, y: 0 }, { x: -80, y: 0 }, 0, [DIO], 'd1', 'b');
+    expect(hitsAny(segs, [DIO])).toBe(false);
+  });
 });
 
 describe('signalText（端口强度标注）', () => {

@@ -136,8 +136,10 @@ function footprintOf(
   const sizes: Record<string, { w: number; h: number }> = {
     npn: { w: 44, h: 44 },
     res: { w: 20, h: 40 },
-    dio: { w: 46, h: 24 },
-    cap: { w: 30, h: 26 },
+    // 二极管/电容的引脚（±22 / ±14）必须露在足迹外，否则连线从引脚出发
+    // 朝内拐时会整段穿过"器件矩形"，看着就像电线穿进元件里。
+    dio: { w: 34, h: 24 },
+    cap: { w: 22, h: 26 },
     vcc: { w: 28, h: 22 },
     gnd: { w: 34, h: 22 },
     input: { w: 44, h: 26 },
@@ -219,6 +221,11 @@ export function routeObstacles(doc: Doc): RouteObstacle[] {
       return { id: sym.id, x: f.x - m, y: f.y - m, w: f.w + m * 2, h: f.h + m * 2 };
     })
     .filter((o) => o.w > 0 && o.h > 0);
+}
+
+/** 点是否落在障碍矩形内（含边界）。用于剔除「朝器件内部拐」的走线候选 */
+export function pointInBox(p: { x: number; y: number }, r: RouteObstacle): boolean {
+  return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 }
 
 export function segHitsRect(
@@ -341,6 +348,18 @@ export function routeSegments(
     for (const d of [48, -48, 96, -96, 144, -144]) pick(mx0 + d, my0 + d);
   }
   for (const cand of candidates) {
+    // 出线段不得「朝器件内部拐」：第一段的拐点若落在起点元件矩形内、或
+    // 最后一段的拐点落在终点元件矩形内，说明折线从引脚往器件里穿进去了
+    // （视觉上电线穿过元件）。这种候选直接淘汰，让避障换一个方向绕。
+    if (skipA) {
+      const ba = obstacles.find((o) => o.id === skipA);
+      if (ba && cand[0] && pointInBox(cand[0][1], ba)) continue;
+    }
+    if (skipB) {
+      const bb = obstacles.find((o) => o.id === skipB);
+      const last = cand[cand.length - 1];
+      if (bb && last && pointInBox(last[0], bb)) continue;
+    }
     if (!obstacles.length || routeClear(cand, obstacles, skipA, skipB)) return cand;
   }
   // 兜底：默认中点折线（旧行为），保证永远画得出线
