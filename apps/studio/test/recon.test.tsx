@@ -2,9 +2,8 @@
 /**
  * 黑盒侦察：图纸输出列先遮住，玩家用测试仪测 + 自己填，核对通过才算「自主测绘」。
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { App } from '../src/App';
 import { PROGRESS_KEY } from '../src/level/progress';
 import { renderApp, startJob } from './helpers';
 

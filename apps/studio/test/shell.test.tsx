@@ -87,21 +87,27 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
   });
 
-  it('主菜单「新游戏」：确认后清空存档、回到全新主菜单', () => {
-    // 先有进度：通关第 1 关 + 钱包余额
+  it('主菜单「新游戏」：确认后先选工艺契约，选定后清空存档、回到全新主菜单', () => {
+    // 先有进度：renderApp 预置三个教学关通关 + 进关即开工
     const first = renderApp();
     goToLevel('非门');
     first.unmount();
     const before = JSON.parse(localStorage.getItem('lc-studio-progress-v1') ?? '{}');
+    expect(Object.keys(before.cleared ?? {}).length).toBe(3); // 三个教学关
     expect(before.cleared?.['s1-not'] ?? false).toBe(false); // 还没通关非门
     expect(before.started?.['s1-not']).toBe(true); // 进关即开工已持久化
     // 有存档 → 主菜单出现「继续上次」
     render(<App />);
     expect(screen.getByText(/继续上次/)).toBeTruthy();
-    // 点「新游戏」并确认
+    // 点「新游戏」并确认 → 进入工艺契约选择（决策 2：这一步还没清档）
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(screen.getByText('新游戏'));
     expect(window.confirm).toHaveBeenCalled();
+    expect(screen.getByText('选择工艺契约')).toBeTruthy();
+    const mid = JSON.parse(localStorage.getItem('lc-studio-progress-v1') ?? '{}');
+    expect(Object.keys(mid.cleared ?? {}).length).toBe(3); // 契约选定后才动手清档
+    // 选定契约（默认 CMOS）→ 清空存档、回到全新主菜单
+    fireEvent.click(screen.getByRole('button', { name: /用 .* 开始/ }));
     expect(screen.queryByText(/继续上次/)).toBeNull();
     // 存档已清空为全新进度（自动保存 effect 会把空进度写回，内容不含任何记录）
     const after = JSON.parse(localStorage.getItem('lc-studio-progress-v1') ?? '{}');

@@ -74,7 +74,7 @@ describe('关卡内容与进度', () => {
     const stored = {
       hash: 'abc123',
       name: '与非门',
-      costHalf: 14,
+      costHalf: 20,
       isSequential: false,
       ports: [
         { id: 'a', name: 'a', dir: 'in' as const, width: 1 },
@@ -93,8 +93,8 @@ describe('关卡内容与进度', () => {
           { id: 'b', name: 'b', dir: 'in' as const, width: 1 },
           { id: 'y', name: 'y', dir: 'out' as const, width: 1 },
         ],
-        counts: { npn: 2, res: 3, dio: 0, cap: 0 },
-        costHalf: 14,
+        counts: { npn: 2, res: 3, dio: 0, cap: 0, nmos: 0, pmos: 0 },
+        costHalf: 20,
         delayPs: 2500,
         criticalPathPs: 2500,
         isSequential: false,
@@ -146,7 +146,7 @@ describe('关卡内容与进度', () => {
   });
 });
 
-describe('关卡判定：第 1 关标准解（单管反相器，成本 4）', () => {
+describe('关卡判定：第 1 关标准解（单管反相器，成本 6）', () => {
   const doc: Doc = {
     id: 'level-s1-not',
     name: '非门',
@@ -170,7 +170,7 @@ describe('关卡判定：第 1 关标准解（单管反相器，成本 4）', ()
     ],
   };
 
-  it('能通过校验：成本正好等于最优 4，满分，硬核时序也达标', () => {
+  it('能通过校验：成本正好等于最优 6，满分，硬核时序也达标', () => {
     const level = findLevel('s1-not')!;
     const design = toDesign(doc, { id: 'level-s1-not', name: '非门' });
     const response = handleRequest({
@@ -229,10 +229,10 @@ describe('关卡界面', () => {
     expect(capButton.disabled).toBe(true);
     expect(capButton.getAttribute('title')).toContain('时钟专用');
 
-    // 用料进度：材料费 0 / 款项 5 元（第 1 关对标成本 4）
+    // 用料进度：材料费 0 / 款项 7.5 元（第 1 关对标成本 6）
     const budgetText = document.querySelector('.budget-text')?.textContent ?? '';
     expect(budgetText).toContain('款项');
-    expect(budgetText).toContain('5');
+    expect(budgetText).toContain('7.5');
     expect(screen.getByText(new RegExp(`已通关 3/${LEVEL_TOTAL}`))).toBeTruthy();
 
     // 关卡地图：非门是进行中（已开工可继续），与门是锁定的灰态（不能点）

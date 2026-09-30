@@ -180,11 +180,11 @@ describe('阶段 2 关卡内容', () => {
     const result = judgeDesign(b.build(), level('s2-sr-latch'), { library, hardcore: true });
     expect(result.errors).toEqual([]);
     expect(result.pass).toBe(true);
-    // 模块复用与手搭成本完全一致（都是两个与非门）
-    expect(result.costHalf).toBe(28);
+    // 模块复用与手搭成本完全一致（都是两个与非门，每个 = 2 三极管 + 3 电阻 = 20 半分）
+    expect(result.costHalf).toBe(40);
   });
 
-  it('D 触发器由两个 D 锁存器 + 一个反相器拼成，成本 68（半单位 136）', () => {
+  it('D 触发器由两个 D 锁存器 + 一个反相器拼成，成本 98（半单位 196）', () => {
     const design = dffRef();
     const { net } = compileDesign(design, { library: new InMemoryModuleLibrary() });
     let npn = 0;
@@ -196,6 +196,6 @@ describe('阶段 2 关卡内容', () => {
     }
     expect(npn).toBe(19);
     expect(res).toBe(30);
-    expect(npn * 4 + res * 2).toBe(136);
+    expect(npn * 4 + res * 4).toBe(196);
   });
 });

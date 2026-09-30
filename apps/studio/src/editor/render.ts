@@ -135,6 +135,8 @@ function footprintOf(
   }
   const sizes: Record<string, { w: number; h: number }> = {
     npn: { w: 44, h: 44 },
+    nmos: { w: 44, h: 44 },
+    pmos: { w: 44, h: 44 },
     res: { w: 20, h: 40 },
     // 二极管/电容的引脚（±22 / ±14）必须露在足迹外，否则连线从引脚出发
     // 朝内拐时会整段穿过"器件矩形"，看着就像电线穿进元件里。
@@ -928,6 +930,43 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
       ctx.fill();
       break;
     }
+    case 'nmos':
+    case 'pmos': {
+      // MOS 符号：圆内一条栅极竖条，漏极在上、源极在下；P-MOS 栅极引线上带小圆圈
+      ctx.beginPath();
+      ctx.arc(0, 0, 19, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-9, -11);
+      ctx.lineTo(-9, 11);
+      ctx.lineWidth = 3 / camera.scale;
+      ctx.stroke();
+      ctx.lineWidth = 2 / camera.scale;
+      // 栅极引线：从圆左缘接到栅极条
+      ctx.beginPath();
+      ctx.moveTo(-19, 0);
+      ctx.lineTo(-9, 0);
+      ctx.stroke();
+      ctx.lineWidth = 2 / camera.scale;
+      // 漏极
+      ctx.beginPath();
+      ctx.moveTo(-9, -7);
+      ctx.lineTo(0, -17);
+      ctx.lineTo(0, -22);
+      ctx.stroke();
+      // 源极
+      ctx.beginPath();
+      ctx.moveTo(-9, 7);
+      ctx.lineTo(0, 17);
+      ctx.lineTo(0, 22);
+      ctx.stroke();
+      if (key === 'pmos') {
+        ctx.beginPath();
+        ctx.arc(-14, 0, 3.2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      break;
+    }
     case 'res': {
       ctx.beginPath();
       ctx.moveTo(0, -22);
@@ -1188,6 +1227,34 @@ export function drawIcon(kind: string, ctx: CanvasRenderingContext2D, size: numb
       ctx.closePath();
       ctx.fillStyle = PALETTE.body;
       ctx.fill();
+      break;
+    }
+    case 'nmos':
+    case 'pmos': {
+      ctx.beginPath();
+      ctx.arc(0, 0, 19, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(-9, -11);
+      ctx.lineTo(-9, 11);
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-19, 0);
+      ctx.lineTo(-9, 0);
+      ctx.moveTo(-9, -7);
+      ctx.lineTo(0, -17);
+      ctx.lineTo(0, -26);
+      ctx.moveTo(-9, 7);
+      ctx.lineTo(0, 17);
+      ctx.lineTo(0, 26);
+      ctx.stroke();
+      if (kind === 'pmos') {
+        ctx.beginPath();
+        ctx.arc(-14, 0, 3.2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       break;
     }
     case 'res': {

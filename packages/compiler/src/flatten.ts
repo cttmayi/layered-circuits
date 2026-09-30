@@ -50,6 +50,8 @@ const UNIT_ELEMENT_KIND: Record<Unit, number> = {
   res: ElementKind.RES,
   dio: ElementKind.DIO,
   cap: ElementKind.CAP,
+  nmos: ElementKind.NMOS,
+  pmos: ElementKind.PMOS,
 };
 
 function pinKey(inst: string, pin: string, bit: number): string {

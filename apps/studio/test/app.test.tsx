@@ -4,9 +4,8 @@
  * 这条链路把 M0 的验收判据（2 三极管 + 3 电阻搭出的非门真值表正确）在 UI 层面锁死。
  */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { App } from '../src/App';
 import { notGateDemo } from '../src/editor/demos';
 import { toDesign } from '../src/editor/model';
 import { handleRequest } from '../src/sim/handle';
@@ -58,7 +57,7 @@ describe('编辑器模型', () => {
 });
 
 describe('仿真通道（Worker 与主线程共用 handleRequest）', () => {
-  it('非门：成本 7、真值表 in=0→out=1、in=1→out=0', () => {
+  it('非门：成本 10、真值表 in=0→out=1、in=1→out=0', () => {
     const design = toDesign(notGateDemo());
     const off = handleRequest({
       id: 1,
@@ -68,8 +67,8 @@ describe('仿真通道（Worker 与主线程共用 handleRequest）', () => {
       mode: 'logic',
       inputs: { in: 0 },
     });
-    expect(off.snapshot?.cost.half).toBe(14);
-    expect(off.snapshot?.cost.half / 2).toBe(7);
+    expect(off.snapshot?.cost.half).toBe(20);
+    expect(off.snapshot?.cost.half / 2).toBe(10);
     expect(off.snapshot?.portValues.out).toBe(1);
 
     const on = handleRequest({
@@ -133,7 +132,7 @@ describe('仿真通道（Worker 与主线程共用 handleRequest）', () => {
       stage: 1,
     });
     const template = wrapped.wrapped?.template;
-    expect(wrapped.wrapped?.costHalf).toBe(14);
+    expect(wrapped.wrapped?.costHalf).toBe(20);
     expect(wrapped.wrapped?.hash).toMatch(/^[0-9a-f]{64}$/);
 
     // 用封装好的非门搭一个「两个非门串联」的电路：复用 2 次 → 成本翻倍
@@ -160,8 +159,8 @@ describe('仿真通道（Worker 与主线程共用 handleRequest）', () => {
       mode: 'logic',
       inputs: {},
     });
-    expect(result.snapshot?.cost.half).toBe(28);
-    expect(result.snapshot?.cost.half / 2).toBe(14);
+    expect(result.snapshot?.cost.half).toBe(40);
+    expect(result.snapshot?.cost.half / 2).toBe(20);
   });
 });
 
@@ -188,8 +187,8 @@ describe('工作台界面', () => {
       ['1', '0'],
     ]);
 
-    // 成本面板显示合计 7
+    // 成本面板显示合计 10
     const costRows = [...document.querySelectorAll('.kv tr')].map((tr) => tr.textContent ?? '');
-    expect(costRows.some((row) => row.includes('合计') && row.includes('7'))).toBe(true);
+    expect(costRows.some((row) => row.includes('合计') && row.includes('10'))).toBe(true);
   });
 });

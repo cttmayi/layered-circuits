@@ -175,14 +175,91 @@ export const andRtlSeries: Fragment = {
   },
 };
 
+/** 串联堆叠与非门：2 NPN 串联 + 1 上拉电阻（成本 12）。真实可搭、判定放行
+ *  （输入端口是弱信号源，直接接基极不触发过流检查），比标准 2NPN+3R 与非门省。 */
+export const nandSeries: Fragment = {
+  id: 'nand-series',
+  units: ['npn', 'res'],
+  name: '串联堆叠与非门',
+  arity: 2,
+  build(b, ctx) {
+    const [a, c] = ctx.inputs as [string, string];
+    b.unit('res', { a: 'vcc', b: ctx.out }, `${ctx.prefix}R1`);
+    b.unit('npn', { c: ctx.out, b: a, e: internal(ctx, 'm') }, `${ctx.prefix}Q1`);
+    b.unit('npn', { c: internal(ctx, 'm'), b: c, e: 'gnd' }, `${ctx.prefix}Q2`);
+  },
+};
+
+/** 并联下拉或非门：2 NPN 并联 + 1 上拉电阻（成本 12），比标准 2NPN+3R 或非门省。 */
+export const norParallel: Fragment = {
+  id: 'nor-parallel',
+  units: ['npn', 'res'],
+  name: '并联下拉或非门',
+  arity: 2,
+  build(b, ctx) {
+    const [a, c] = ctx.inputs as [string, string];
+    b.unit('res', { a: 'vcc', b: ctx.out }, `${ctx.prefix}R1`);
+    b.unit('npn', { c: ctx.out, b: a, e: 'gnd' }, `${ctx.prefix}Q1`);
+    b.unit('npn', { c: ctx.out, b: c, e: 'gnd' }, `${ctx.prefix}Q2`);
+  },
+};
+
+/** CMOS 反相器：上 pMOS 下 nMOS 互补对，无电阻、轨到轨强输出（成本 4 半分） */
+export const notCmos: Fragment = {
+  id: 'not-cmos',
+  units: ['nmos', 'pmos'],
+  name: 'CMOS 反相器',
+  arity: 1,
+  build(b, ctx) {
+    const [a] = ctx.inputs as [string];
+    b.unit('pmos', { d: ctx.out, g: a, s: 'vcc' }, `${ctx.prefix}P1`);
+    b.unit('nmos', { d: ctx.out, g: a, s: 'gnd' }, `${ctx.prefix}N1`);
+  },
+};
+
+/** CMOS 与非门：上 pMOS 并联、下 nMOS 串联（成本 8 半分） */
+export const nandCmos: Fragment = {
+  id: 'nand-cmos',
+  units: ['nmos', 'pmos'],
+  name: 'CMOS 与非门',
+  arity: 2,
+  build(b, ctx) {
+    const [a, c] = ctx.inputs as [string, string];
+    b.unit('pmos', { d: ctx.out, g: a, s: 'vcc' }, `${ctx.prefix}P1`);
+    b.unit('pmos', { d: ctx.out, g: c, s: 'vcc' }, `${ctx.prefix}P2`);
+    b.unit('nmos', { d: internal(ctx, 'm'), g: a, s: 'gnd' }, `${ctx.prefix}N1`);
+    b.unit('nmos', { d: ctx.out, g: c, s: internal(ctx, 'm') }, `${ctx.prefix}N2`);
+  },
+};
+
+/** CMOS 或非门：上 pMOS 串联、下 nMOS 并联（成本 8 半分） */
+export const norCmos: Fragment = {
+  id: 'nor-cmos',
+  units: ['nmos', 'pmos'],
+  name: 'CMOS 或非门',
+  arity: 2,
+  build(b, ctx) {
+    const [a, c] = ctx.inputs as [string, string];
+    b.unit('pmos', { d: internal(ctx, 'm'), g: a, s: 'vcc' }, `${ctx.prefix}P1`);
+    b.unit('pmos', { d: ctx.out, g: c, s: internal(ctx, 'm') }, `${ctx.prefix}P2`);
+    b.unit('nmos', { d: ctx.out, g: a, s: 'gnd' }, `${ctx.prefix}N1`);
+    b.unit('nmos', { d: ctx.out, g: c, s: 'gnd' }, `${ctx.prefix}N2`);
+  },
+};
+
 export const BASE_FRAGMENTS: readonly Fragment[] = [
   notCommonEmitter,
   notNoBaseResistor,
   notFollower,
+  notCmos,
   andDiode,
   orDiode,
   nandRtl,
+  nandSeries,
+  nandCmos,
   norRtlParallel,
+  norParallel,
+  norCmos,
   norDiodeCommonEmitter,
   andRtlSeries,
 ];

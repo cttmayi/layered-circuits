@@ -7,7 +7,14 @@
  * 并且每个版本都记住自己用了哪些下层模块（溯源树），成本与依赖都能一路查下去。
  */
 
+import type { LogicFamily } from '@lc/schema';
 import type { StoredModule } from '../editor/model';
+
+/** 模块的契约标注：封装时写进模板（wrapModule 按内部元件推导），这里读出来打标签 */
+export function familyOfModule(mod: StoredModule): LogicFamily {
+  const t = mod.template as { family?: LogicFamily } | null | undefined;
+  return t?.family ?? 'rtl';
+}
 
 /** 版本号比较：'1.10' > '1.2'（按数值比，不按字符串比） */
 export function compareVersions(a: string, b: string): number {

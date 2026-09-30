@@ -9,8 +9,16 @@
  */
 
 import type { Design, Level, LevelVector, ModuleLibrary } from '@lc/schema';
-import { costHalfOf, scoreOf } from '@lc/schema';
-import { type Logic, runVectors, type SimMode, transitionsIn, type Waveform } from '@lc/sim-core';
+import { costHalfOf, FAMILY_CONTRACTS, type LogicFamily, scoreOf } from '@lc/schema';
+import {
+  type Logic,
+  runVectors,
+  S_STRONG,
+  type SimMode,
+  Simulator,
+  transitionsIn,
+  type Waveform,
+} from '@lc/sim-core';
 import { computeCosts } from './cost.js';
 import { compileDesign } from './flatten.js';
 import { measureSetupHold } from './setup-hold.js';
@@ -22,6 +30,8 @@ export interface JudgeOptions {
   mode?: SimMode;
   /** 硬核工程模式：额外检查时序预算 */
   hardcore?: boolean;
+  /** 逻辑族契约；缺省用关卡声明的 family（再缺省 rtl） */
+  family?: LogicFamily;
 }
 
 export interface JudgeRow {
@@ -93,6 +103,8 @@ const UNIT_LABELS: Record<string, string> = {
   res: '电阻',
   dio: '二极管',
   cap: '电容',
+  nmos: 'N-MOS',
+  pmos: 'P-MOS',
 };
 
 /**
@@ -328,6 +340,38 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     failedRows = rows.filter((r) => !r.ok).length;
     if (failedRows > 0) errors.push(`${failedRows} 组输入的功能不符合要求（看真值表对比）`);
     if (run.unstable) errors.push('电路没有稳定下来（组合环/振荡），判定不可信');
+
+    // 2.1) 逻辑族契约：输出强度硬约束（决策 3 的「关卡严格保证」）。
+    //      推挽族（TTL/CMOS）的输出保证 = 高电平强 1（轨到轨）；用弱上拉电阻凑出的
+    //      弱 1 在族内自洽但跨族级联会压不过二极管门输入 → 契约打回，并给出可操作的报错。
+    const family = options.family ?? level.family;
+    const contract = FAMILY_CONTRACTS[family];
+    if (contract.output === 'strong') {
+      // 强度审计只看直流电平，永远用 logic 模式（timing 模式没有 settle()）
+      const sim = new Simulator(net, { mode: 'logic' });
+      // 总线（位宽 > 1）按位展开成独立 FlatPort（bit 序号），只查第 0 位即可代表
+      const outNodes = new Map<string, number>();
+      for (const p of net.ports) {
+        if (p.dir === 'out' && p.bit === 0 && !outNodes.has(p.name)) outNodes.set(p.name, p.node);
+      }
+      if (outNodes.size > 0) {
+        for (const vector of expandVectors(level.vectors, widthOf)) {
+          for (const [name, value] of Object.entries(vector.inputs)) sim.setInput(name, value);
+          sim.settle();
+          for (const [name, node] of outNodes) {
+            const expect = vector.expect?.[name];
+            if (expect !== 1) continue;
+            const strength = sim.signalOf(node) >> 2;
+            if (strength < S_STRONG) {
+              errors.push(
+                `${FAMILY_CONTRACTS[family].name} 契约要求推挽输出：${name} 在输入 ${JSON.stringify(vector.inputs)} 时应为强 1，实际是弱 1（多半靠上拉电阻凑的）。弱 1 压不过二极管门输入，级联会打架——改成互补对（CMOS）或射极跟随器输出级（TTL）。`,
+              );
+              break;
+            }
+          }
+        }
+      }
+    }
   }
 
   // 3) 成本预算：成本挑战关（GDD 4.2）不设上限，只比谁更省 → 不算「超预算」

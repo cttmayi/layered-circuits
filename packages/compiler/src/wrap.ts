@@ -12,6 +12,7 @@
 import {
   costHalfOf,
   type Design,
+  type LogicFamily,
   type ModuleKind,
   type ModuleLibrary,
   type ModulePort,
@@ -117,6 +118,7 @@ export function wrapModule(input: WrapModuleInput, library: ModuleLibrary): Wrap
     version: input.version ?? '1.0',
     stage: input.stage,
     kind: input.kind,
+    family: inferFamily(counts),
     ports,
     body: input.body,
     costs: counts,
@@ -141,4 +143,19 @@ export function wrapModule(input: WrapModuleInput, library: ModuleLibrary): Wrap
 /** 校验模板内容未被篡改（存档载入时使用） */
 export function verifyTemplate(template: ModuleTemplate): boolean {
   return hashModule(template.ports, template.body) === template.hash;
+}
+
+/** 从底层元件构成推导逻辑族契约（内容寻址：同样的电路 → 同样的族） */
+export function inferFamily(counts: {
+  npn: number;
+  res: number;
+  dio: number;
+  cap: number;
+  nmos: number;
+  pmos: number;
+}): LogicFamily {
+  if (counts.nmos > 0 || counts.pmos > 0) return 'cmos';
+  if (counts.dio > 0 && counts.npn > 0) return 'ttl'; // 二极管 + 三极管：DTL/RTL 混合，按推挽族处理
+  if (counts.dio > 0) return 'dtl';
+  return 'rtl';
 }

@@ -9,9 +9,21 @@
  */
 
 import type { Level } from '@lc/schema';
+import { FAMILY_CONTRACTS, type LogicFamily } from '@lc/schema';
 import { type ChangeEvent, useMemo, useRef, useState } from 'react';
 import type { StoredModule } from '../editor/model';
-import { compareVersions, type TraceNode, traceOf, versionsOfName } from '../level/library';
+import {
+  compareVersions,
+  familyOfModule,
+  type TraceNode,
+  traceOf,
+  versionsOfName,
+} from '../level/library';
+
+function familyTag(family: LogicFamily): string {
+  return FAMILY_CONTRACTS[family].name.split(' ')[0] as string;
+}
+
 import type { LeaderboardRow } from '../level/progress';
 
 export interface LibraryPanelProps {
@@ -85,7 +97,12 @@ export function LibraryPanel({
               className="library-row"
               onClick={() => setExpanded(open ? null : name)}
             >
-              <span className="library-name">{name}</span>
+              <span className="library-name">
+                {name}
+                <span className="library-family family-{familyTag(familyOfModule(newest))}">
+                  {familyTag(familyOfModule(newest))}
+                </span>
+              </span>
               <span className="library-meta">
                 {versions.length} 个版本 · 最新 v{newest.version} · 成本 {newest.costHalf / 2}
                 {newest.isSequential ? ' · 时序' : ''}

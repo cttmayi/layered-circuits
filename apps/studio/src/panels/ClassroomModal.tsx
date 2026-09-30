@@ -29,9 +29,9 @@ function unitArt(level: Level): string {
   return ['  VCC ──(电阻)── y(输出)', '  没人驱动时默认 1'].join('\n');
 }
 
-export function ClassroomModal({ level, onStart }: ClassroomModalProps): React.JSX.Element {
+export function ClassroomModal({ level, onStart }: ClassroomModalProps): React.JSX.Element | null {
   const room = level.classroom;
-  if (!room) return <></>;
+  if (!room) return null;
   return (
     <div className="modal-backdrop" role="dialog" aria-label="元件课堂">
       <div className="modal-box classroom-box">

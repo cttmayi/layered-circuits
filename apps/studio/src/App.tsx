@@ -6,6 +6,7 @@ import {
   TEACHING_MODULES,
   teachingSolutionOf,
 } from '@lc/content';
+import type { LogicFamily } from '@lc/schema';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emptyDoc, notGateDemo } from './editor/demos';
 import {
@@ -67,6 +68,7 @@ import {
 } from './level/session';
 import { applySideJob, findSideJob } from './level/sideJobs';
 import { ClassroomModal } from './panels/ClassroomModal';
+import { FamilyPicker } from './panels/FamilyPicker';
 import { Inspector } from './panels/Inspector';
 import { JudgePanel } from './panels/JudgePanel';
 import { LevelCard } from './panels/LevelCard';
@@ -121,6 +123,7 @@ export function App(): React.JSX.Element {
   const [levelId, setLevelId] = useState<string>(() => session.levelId);
   /** 画面：主菜单 / 关卡地图 / 工作台 —— 模式只在主菜单里选，进关后不能改 */
   const [screen, setScreen] = useState<'menu' | 'map' | 'bench'>('menu');
+  const [pickingFamily, setPickingFamily] = useState(false);
   const [judgeResult, setJudgeResult] = useState<JudgeResult | null>(null);
   const [judging, setJudging] = useState(false);
   const [undoStack, setUndoStack] = useState<Doc[]>([]);
@@ -849,18 +852,24 @@ export function App(): React.JSX.Element {
   /** 回关卡地图 */
   const goToMap = (): void => setScreen('map');
 
-  /** 新游戏：清掉全部本地存档（进度 / 各关画布 / 自由沙盒），重头开始 */
+  /** 新游戏第一步：确认后进入「逻辑族契约选择」（决策 2：新游戏固定契约） */
   const startNewGame = (): void => {
     if (!window.confirm('确定重头开始？当前进度、钱包与组件库都会被清空。')) return;
+    setPickingFamily(true);
+  };
+
+  /** 新游戏第二步：选定逻辑族契约后清档，整个存档固定该契约 */
+  const confirmNewGame = (family: LogicFamily): void => {
     localStorage.removeItem(PROGRESS_KEY);
     localStorage.removeItem(FREE_STORAGE_KEY);
     for (const lvl of ALL_LEVELS) localStorage.removeItem(storageKeyFor('level', lvl.id));
-    setProgress(emptyProgress());
+    setProgress(emptyProgress(family));
     setSideJobKey(null);
     setSettlement(null);
     setSettlementStars(0);
     setChipDrop(null);
     clearTransient();
+    setPickingFamily(false);
     setScreen('menu');
   };
 
@@ -1014,6 +1023,8 @@ export function App(): React.JSX.Element {
         ['res', snapshot.cost.counts.res ?? 0],
         ['dio', snapshot.cost.counts.dio ?? 0],
         ['cap', snapshot.cost.counts.cap ?? 0],
+        ['nmos', snapshot.cost.counts.nmos ?? 0],
+        ['pmos', snapshot.cost.counts.pmos ?? 0],
       ] as Array<[UnitKind, number]>)
     : [];
 
@@ -1027,6 +1038,9 @@ export function App(): React.JSX.Element {
       session.mode === 'level' &&
       Boolean(resumeLevel) &&
       (Boolean(progress.started?.[session.levelId]) || isCleared(progress, session.levelId));
+    if (pickingFamily) {
+      return <FamilyPicker onSelect={confirmNewGame} onCancel={() => setPickingFamily(false)} />;
+    }
     return (
       <MainMenu
         progress={progress}

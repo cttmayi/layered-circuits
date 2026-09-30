@@ -11,18 +11,18 @@ describe('工具铺', () => {
   });
 
   it('购买会扣可用余额，不能重复买，钱不够会被拒绝', () => {
-    // 挣到 6 元（12 半）：一次通关 + 一次支线
+    // 挣到 5.5 元（11 半）：一次通关 + 一次支线
     let progress = emptyProgress();
-    progress = recordClear(progress, 's1-not', 100, 8, 3); // 利润 2 半
+    progress = recordClear(progress, 's1-not', 100, 8, 3); // 利润 7 半（款项 15 − 材料费 8）
     progress = recordSideJob(progress, 's1-not', 'rush', 4);
-    expect(spendableHalf(progress)).toBe(6);
+    expect(spendableHalf(progress)).toBe(11);
 
     // 探针 12 元买不起 → 拒绝
     const denied = buyEquipment(progress, 'probe');
     expect(denied.error).toContain('钱不够');
     expect(progress.equipment).toEqual([]);
 
-    // 再挣够钱（同或门一单利润大：款项 77 半 − 材料 32 半）
+    // 再挣够钱（同或门一单利润大：款项 111 半 − 材料 32 半）
     progress = recordClear(progress, 's1-and', 100, 8, 3);
     progress = recordClear(progress, 's1-or', 100, 8, 3);
     progress = recordClear(progress, 's1-xnor', 100, 32, 3);

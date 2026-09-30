@@ -43,7 +43,9 @@ export const LevelSpecSchema = z.object({
     )
     .default([]),
   mode: z.enum(['logic', 'timing']).default('logic'),
-  allowedUnits: z.array(z.enum(['npn', 'res', 'dio', 'cap'])).default(['npn', 'res', 'dio']),
+  allowedUnits: z
+    .array(z.enum(['npn', 'res', 'dio', 'cap', 'nmos', 'pmos']))
+    .default(['npn', 'res', 'dio']),
   moduleAccess: z.enum(['none', 'all', 'listed']).default('all'),
   allowedModules: z.array(z.string()).default([]),
   bannedModules: z.array(z.string()).default([]),

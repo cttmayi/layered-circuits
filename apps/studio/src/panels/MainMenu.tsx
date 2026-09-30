@@ -6,6 +6,7 @@
  */
 
 import { ALL_LEVELS } from '@lc/content';
+import { FAMILY_CONTRACTS } from '@lc/schema';
 import type { Progress } from '../level/progress';
 import { clearedCount, rankOf, reconCount, sideJobCount } from '../level/progress';
 
@@ -48,7 +49,7 @@ export function MainMenu({
           )}
           <button type="button" className="menu-btn" onClick={onLevelMode}>
             关卡模式
-            <span className="menu-btn-note">21 关委托，逐关解锁 · 预算与素材受限</span>
+            <span className="menu-btn-note">22 关委托，逐关解锁 · 预算与素材受限</span>
           </button>
           <button type="button" className="menu-btn" onClick={onFreeMode}>
             自由搭建
@@ -60,6 +61,9 @@ export function MainMenu({
           </button>
         </div>
         <div className="menu-stats">
+          <span className="menu-family-stat">
+            工艺契约 · {FAMILY_CONTRACTS[progress.family].name}
+          </span>
           <span>
             已通关 {cleared}/{total}
           </span>

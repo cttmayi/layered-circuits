@@ -265,3 +265,31 @@ export function xnorGateRef(id = 'ref-xnor'): Design {
   b.port('y', 'out', 'y');
   return b.build();
 }
+
+/** CMOS 反相器：上 pMOS 下 nMOS，栅并接输入，无电阻、轨到轨强输出（成本 4 半分 = 显示 2） */
+export function cmosInvRef(id = 'ref-cmos-inv'): Design {
+  const b = new DesignBuilder(id, 'CMOS 反相器');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('pmos', { d: 'y', g: 'a', s: 'vcc' }, 'P1'); // 栅低导通：a=0 → y 被拉到 VCC（强 1）
+  b.unit('nmos', { d: 'y', g: 'a', s: 'gnd' }, 'N1'); // 栅高导通：a=1 → y 被拉到 GND（强 0）
+  b.port('a', 'in', 'a');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/**
+ * 教学关·CMOS 反相器的半成品：pMOS 上管（源→VCC、漏→y）与 nMOS 下管（漏→y、
+ * 源→GND）都放好了，**两个栅极都悬空、输入 a 也没接**——玩家把 a 同时接到
+ * 两个栅极（P1.g、N1.g），亲眼看到「互补对：一个导通另一个必截止」。
+ */
+export function cmosInvSeed(id = 'seed-cmos-inv'): Design {
+  const b = new DesignBuilder(id, 'CMOS 反相器 · 半成品');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('pmos', { d: 'y', g: 'g_dangling', s: 'vcc' }, 'P1');
+  b.unit('nmos', { d: 'y', g: 'g_dangling', s: 'gnd' }, 'N1');
+  b.port('a', 'in', 'a_dangling');
+  b.port('y', 'out', 'y');
+  return b.build();
+}

@@ -22,6 +22,8 @@ import { STAGE3_LEVELS } from './levels-ari.js';
 import { STAGE2_LEVELS } from './levels-seq.js';
 import {
   andGateRef,
+  cmosInvRef,
+  cmosInvSeed,
   dioIntroRef,
   dioIntroSeed,
   floatIntroRef,
@@ -90,6 +92,8 @@ function gateLevel(input: {
   allowedModules?: readonly string[];
   /** 复古复用关禁用的模块名 */
   bannedModules?: readonly string[];
+  /** 本关逻辑族契约（默认 rtl）；CMOS 教学关声明 cmos，判定按输出强度硬约束 */
+  family?: Level['family'];
   moduleAccess: 'none' | 'all' | 'listed';
   reference: Level['referenceSolution'];
   unlockName: string;
@@ -125,6 +129,7 @@ function gateLevel(input: {
     moduleAccess: input.moduleAccess,
     allowedModules: [...(input.allowedModules ?? [])],
     bannedModules: [...(input.bannedModules ?? [])],
+    ...(input.family !== undefined ? { family: input.family } : {}),
     budgetHalf: budgetFromOptimal(input.optimalHalf, MAIN_OVERHEAD),
     ...(input.bestKnownHalf !== undefined ? { bestKnownHalf: input.bestKnownHalf } : {}),
     optimalHalf: input.optimalHalf,
@@ -147,7 +152,7 @@ export const STAGE1_LEVELS: Level[] = [
     hint: '基极接输入 a；集电极接输出 y；发射极接 GND；输出再经一个上拉电阻接到 VCC。',
     inputs: 1,
     fn: (a) => (a ? 0 : 1),
-    optimalHalf: 6,
+    optimalHalf: 8,
     timingBudgetPs: 2000,
     allowedUnits: ['npn', 'res'],
     requiredUnits: ['npn'],
@@ -217,7 +222,7 @@ export const STAGE1_LEVELS: Level[] = [
     hint: '输出 y 经一个电阻接到 VCC（上拉，默认 1）；三极管集电极接 y、发射极接 GND、基极接输入 a。',
     inputs: 1,
     fn: (a) => (a ? 0 : 1),
-    optimalHalf: 6,
+    optimalHalf: 8,
     timingBudgetPs: 2000,
     allowedUnits: ['npn', 'res'],
     requiredUnits: ['npn'],
@@ -249,10 +254,10 @@ export const STAGE1_LEVELS: Level[] = [
     hint: '一个 NPN + 基极限流电阻 + 集电极上拉电阻就够了（成本 4）。想要输出更强的 1，可以在后面加一级射极跟随器（成本 7）。',
     inputs: 1,
     fn: (a) => (a ? 0 : 1),
-    optimalHalf: 8,
+    optimalHalf: 12,
     // 更优解：省掉基极限流电阻（基极直连输入，1 NPN + 1 上拉电阻 = 6）功能仍正确——
     // 输入 a 是弱信号源，可以直接接基极；满分线仍按标准做法（带基极电阻）8 定。
-    bestKnownHalf: 6,
+    bestKnownHalf: 8,
     timingBudgetPs: 2500,
     moduleAccess: 'none',
     reference: notGateRef('ref-not'),
@@ -297,7 +302,8 @@ export const STAGE1_LEVELS: Level[] = [
     hint: 'Q1 的发射极接到 Q2 的集电极（串联），Q2 的发射极接 GND；输出从 Q1 集电极取出并上拉。',
     inputs: 2,
     fn: (a, b) => (a && b ? 0 : 1),
-    optimalHalf: 14,
+    optimalHalf: 20,
+    bestKnownHalf: 12,
     timingBudgetPs: 3500,
     moduleAccess: 'all',
     reference: nandGateRef('ref-nand'),
@@ -315,7 +321,8 @@ export const STAGE1_LEVELS: Level[] = [
     hint: '最省的做法：两个三极管的集电极都接输出、发射极都接 GND、基极各经一个电阻接 a / b，输出再上拉到 VCC（成本 7）。',
     inputs: 2,
     fn: (a, b) => (a || b ? 0 : 1),
-    optimalHalf: 14,
+    optimalHalf: 20,
+    bestKnownHalf: 12,
     timingBudgetPs: 4000,
     moduleAccess: 'all',
     reference: norFastRef('ref-nor'),
@@ -334,8 +341,8 @@ export const STAGE1_LEVELS: Level[] = [
     fn: (a, b) => (a !== b ? 1 : 0),
     // 满分线 = 标准解（4 个与非门 = 56 半单位）；求解器找到过更省的 42（弱输出与门 + 两个或非门），
     // 记在 bestKnownHalf 里：谁能做到谁就破榜，但课上教的解法照样满分。
-    optimalHalf: 56,
-    bestKnownHalf: 42,
+    optimalHalf: 80,
+    bestKnownHalf: 44,
     timingBudgetPs: 7000,
     allowedUnits: ['npn', 'res'],
     moduleAccess: 'listed',
@@ -358,8 +365,8 @@ export const STAGE1_LEVELS: Level[] = [
     hint: '手搭 4 个 RTL 与非门是标准解（成本 28）；也可以想想用与门/或门拼。',
     inputs: 2,
     fn: (a: 0 | 1, b: 0 | 1) => (a !== b ? 1 : 0),
-    optimalHalf: 56,
-    bestKnownHalf: 42,
+    optimalHalf: 80,
+    bestKnownHalf: 44,
     timingBudgetPs: 7000,
     allowedUnits: ['npn', 'res'],
     moduleAccess: 'listed',
@@ -378,16 +385,55 @@ export const STAGE1_LEVELS: Level[] = [
     hint: '把异或门的输出再接一级单管反相器即可（求解器确认这就是最省的做法）。',
     inputs: 2,
     fn: (a: 0 | 1, b: 0 | 1) => (a === b ? 1 : 0),
-    optimalHalf: 64,
+    optimalHalf: 92,
     // 求解器结论：异或门 + 无基极限流电阻的反相器 = 54（输入 a 是弱信号源可直接接
     // 基极；比带基极电阻的反相器省 2）——记作已知最省。
-    bestKnownHalf: 54,
+    bestKnownHalf: 48,
     timingBudgetPs: 9000,
     allowedUnits: ['npn', 'res'],
     moduleAccess: 'listed',
     allowedModules: ['非门', '与非门', '异或门'],
     reference: xnorGateRef('ref-xnor'),
     unlockName: '同或门',
+    freqHz: 100_000,
+  }),
+
+  // ---- 工艺升级：CMOS（决策 1：支持 CMOS 工艺，元件面板从此多出 N-MOS / P-MOS）----
+  gateLevel({
+    id: 's1-cmos-inv',
+    title: 'CMOS 反相器',
+    brief:
+      '告别上拉电阻——上 pMOS 下 nMOS 的「互补对」：一个导通另一个必截止，输出被直接钉到 VCC 或 GND（轨到轨强驱动），还没有电阻拖累。',
+    teaching:
+      'CMOS 是工业界的终极答案：无电阻、推挽强输出、不耗静态电。这一关把输入 a 同时接到两个栅极：a=0 时 pMOS 导通、nMOS 截止 → y 强 1；a=1 时反过来 → y 强 0。判定的 CMOS 契约会检查你的输出必须是强 1（弱上拉凑出来的过不了关）。',
+    hint: '把输入 a 分别接到 P1 的栅极和 N1 的栅极——两个栅极并在一起，就是互补对。',
+    inputs: 1,
+    fn: (a: 0 | 1) => (a ? 0 : 1),
+    optimalHalf: 4, // 1 pMOS + 1 nMOS = 2 + 2 半分（显示 2）
+    timingBudgetPs: 2000,
+    allowedUnits: ['nmos', 'pmos'],
+    requiredUnits: ['nmos', 'pmos'],
+    family: 'cmos',
+    classroom: {
+      title: 'CMOS：互补 MOS 工艺',
+      analogy:
+        '跷跷板两端各坐一个人——pMOS 管管「拉高」、nMOS 管管「拉低」，栅极一给信号，永远只有一边落地。',
+      points: [
+        '互补对：上 pMOS（栅低导通）下 nMOS（栅高导通），输入并接两个栅极',
+        '输出轨到轨：高 = 强 1（拉到 VCC）、低 = 强 0（拉到 GND），推挽驱动',
+        '没有电阻：CMOS 门不靠上拉凑电平，又便宜又不耗静态电——这就是它取代 RTL/DTL/TTL 的原因',
+      ],
+    },
+    seedDoc: cmosInvSeed(),
+    guideSteps: [
+      '第一步：看——两个管子都放好了，但栅极悬空、输入 a 没接，输出 y 谁也驱动不了',
+      '第二步：把输入 a 接到 P1 的栅极（pMOS 栅低才导通）',
+      '第三步：把输入 a 也接到 N1 的栅极（nMOS 栅高才导通）——两个栅极并在一起',
+      '第四步：点「交付验收」：a=0 亮、a=1 灭，且输出是强驱动（CMOS 契约检查）',
+    ],
+    moduleAccess: 'none',
+    reference: cmosInvRef('ref-cmos-inv'),
+    unlockName: 'CMOS 反相器',
     freqHz: 100_000,
   }),
 ];

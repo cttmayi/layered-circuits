@@ -46,9 +46,9 @@ describe('编译：Design → FlatNet', () => {
 describe('成本：递归到 4 种基础元件', () => {
   it('非门 = 2 三极管 + 3 电阻，成本 7（与 GDD 2.2.2 示例一致）', () => {
     const { counts, costHalf } = computeCosts(notGateDesign(), new InMemoryModuleLibrary());
-    expect(counts).toEqual({ npn: 2, res: 3, dio: 0, cap: 0 });
-    expect(costHalf).toBe(14);
-    expect(costOf(counts)).toBe(7);
+    expect(counts).toEqual({ npn: 2, res: 3, dio: 0, cap: 0, nmos: 0, pmos: 0 });
+    expect(costHalf).toBe(20);
+    expect(costOf(counts)).toBe(10);
   });
 
   it('模块成本在封装时固化，实例化 N 次即 N 倍（不再递归展开）', () => {
@@ -67,16 +67,16 @@ describe('成本：递归到 4 种基础元件', () => {
 
     const buffer = bufferDesign(notModule.hash);
     const { counts } = computeCosts(buffer, library);
-    expect(counts).toEqual({ npn: 4, res: 6, dio: 0, cap: 0 });
-    expect(costOf(counts)).toBe(14);
+    expect(counts).toEqual({ npn: 4, res: 6, dio: 0, cap: 0, nmos: 0, pmos: 0 });
+    expect(costOf(counts)).toBe(20);
 
     // 再封装一层：模块套模块，成本依然是「查表 + 相加」
     const { template: bufferModule } = wrapModule(
       { name: '缓冲器', stage: 1, kind: 'logic', ports: designToModulePorts(buffer), body: buffer },
       library,
     );
-    expect(bufferModule.costHalf).toBe(28);
-    expect(bufferModule.costs).toEqual({ npn: 4, res: 6, dio: 0, cap: 0 });
+    expect(bufferModule.costHalf).toBe(40); // 2 × 非门(20)
+    expect(bufferModule.costs).toEqual({ npn: 4, res: 6, dio: 0, cap: 0, nmos: 0, pmos: 0 });
   });
 
   it('溯源树能展开到基础元件并给出各分支成本', () => {
@@ -93,7 +93,7 @@ describe('成本：递归到 4 种基础元件', () => {
     );
     library.add(template);
     const tree = buildCostTree(bufferDesign(template.hash), library);
-    expect(tree.costHalf).toBe(28);
+    expect(tree.costHalf).toBe(40);
     expect(tree.children).toHaveLength(2);
     expect(tree.children[0]!.kind).toBe('module');
   });
@@ -178,7 +178,7 @@ describe('总线（位宽 > 1）', () => {
 describe('成本模型本身', () => {
   it('diode 的 1.5 用半分整数记账，不产生浮点误差', () => {
     const counts = { ...emptyCounts(), dio: 3 };
-    expect(costOf(counts)).toBe(4.5);
+    expect(costOf(counts)).toBe(3); // 3 × 二极管(1)
   });
 
   it('电容计入成本但不参与仿真（GDD 只把它当时钟器件）', () => {
@@ -186,7 +186,7 @@ describe('成本模型本身', () => {
     b.instances.push({ kind: 'unit', id: 'capX', unit: 'cap' });
     const { counts } = computeCosts(b, new InMemoryModuleLibrary());
     expect(counts.cap).toBe(1);
-    expect(costOf(counts)).toBe(10); // 7 + 3
+    expect(costOf(counts)).toBe(14); // 非门 10 + 电容 4
   });
 });
 
@@ -199,6 +199,6 @@ describe('SR 锁存器编译', () => {
       library,
     );
     expect(template.isSequential).toBe(true);
-    expect(template.costs).toEqual({ npn: 4, res: 6, dio: 0, cap: 0 });
+    expect(template.costs).toEqual({ npn: 4, res: 6, dio: 0, cap: 0, nmos: 0, pmos: 0 });
   });
 });

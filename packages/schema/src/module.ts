@@ -14,6 +14,8 @@ export const UnitCountsSchema = z.object({
   res: z.number().int().min(0).default(0),
   dio: z.number().int().min(0).default(0),
   cap: z.number().int().min(0).default(0),
+  nmos: z.number().int().min(0).default(0),
+  pmos: z.number().int().min(0).default(0),
 });
 
 export const ModuleKindSchema = z.enum(['logic', 'seq', 'arith', 'mem', 'cpu']);
@@ -36,6 +38,8 @@ export const ModuleTemplateSchema = z.object({
   version: z.string().default('1.0'),
   stage: z.number().int().min(1).max(6),
   kind: ModuleKindSchema,
+  /** 生成时的逻辑族契约（由内部电路推导：有 MOS → cmos；含跟随器输出级 → ttl 等） */
+  family: z.enum(['rtl', 'dtl', 'ttl', 'cmos']).default('rtl'),
   ports: z.array(ModulePortSchema),
   /** 内部电路（黑盒时隐藏，溯源时展开） */
   body: DesignSchema,

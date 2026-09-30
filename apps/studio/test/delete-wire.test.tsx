@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 /** 双击连线直接删除（替代「点选 + Delete」） */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { App } from '../src/App';
 import { renderApp, startJob } from './helpers';
 
 const CAMERA = { x: 340, y: 220 };

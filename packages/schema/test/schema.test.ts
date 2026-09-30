@@ -69,9 +69,12 @@ describe('关卡数值规则（GDD 6.1）', () => {
     expect(scoreOf(level, 15)).toBe(50);
   });
 
-  it('成本口径：diode 半分记账，展示时还原成 1.5', () => {
-    expect(formatCost({ npn: 0, res: 0, dio: 1, cap: 0 })).toBe('1.5');
-    expect(costOf({ npn: 0, res: 0, dio: 1, cap: 0 })).toBe(1.5);
+  it('成本口径：半分记账整数，展示时还原（二极管=1、电阻=2、电容=4、MOS=1）', () => {
+    expect(formatCost({ npn: 0, res: 0, dio: 1, cap: 0, nmos: 0, pmos: 0 })).toBe('1');
+    expect(costOf({ npn: 0, res: 0, dio: 1, cap: 0, nmos: 0, pmos: 0 })).toBe(1);
+    expect(costOf({ npn: 0, res: 1, dio: 0, cap: 0, nmos: 0, pmos: 0 })).toBe(2);
+    expect(costOf({ npn: 0, res: 0, dio: 0, cap: 1, nmos: 0, pmos: 0 })).toBe(4);
+    expect(costOf({ npn: 0, res: 0, dio: 0, cap: 0, nmos: 2, pmos: 2 })).toBe(4);
   });
 });
 

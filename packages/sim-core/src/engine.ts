@@ -421,7 +421,7 @@ export class Simulator {
       this.diagnose(
         'floating-input',
         'warning',
-        `三极管 ${this.elemLabel(elem)} 的基极悬空（未连接任何驱动），按截止处理`,
+        `${this.elemLabel(elem)} 的栅极/基极悬空（未连接任何驱动），按截止处理`,
         node,
         elem,
         this.timePs,
@@ -490,6 +490,45 @@ export class Simulator {
           d2 = SIG_WEAK_X;
         } else if (logicValueOf(gate) === V1) {
           // 导通：只向「驱动能力更弱」的一侧传递对端电平（电流从低阻侧流向高阻侧）
+          const pass = passDrives(
+            this.resolveExcluding(p0, e, 0),
+            this.resolveExcluding(p2, e, 2),
+            S_STRONG,
+          );
+          d0 = pass.d0;
+          d2 = pass.d1;
+        }
+        break;
+      }
+      case ElementKind.NMOS: {
+        const gate = this.nodeSig[p1] as number;
+        if (gate === SIG_Z) {
+          this.floatingBase.set(p1, e);
+        } else if (logicValueOf(gate) === VX) {
+          // 栅极电平未知 → 通断未知，向两端注入弱 X
+          d0 = SIG_WEAK_X;
+          d2 = SIG_WEAK_X;
+        } else if (logicValueOf(gate) === V1) {
+          // N-MOS 栅极高电平导通：漏源强导通（栅极不取电流，无需限流）
+          const pass = passDrives(
+            this.resolveExcluding(p0, e, 0),
+            this.resolveExcluding(p2, e, 2),
+            S_STRONG,
+          );
+          d0 = pass.d0;
+          d2 = pass.d1;
+        }
+        break;
+      }
+      case ElementKind.PMOS: {
+        const gate = this.nodeSig[p1] as number;
+        if (gate === SIG_Z) {
+          this.floatingBase.set(p1, e);
+        } else if (logicValueOf(gate) === VX) {
+          d0 = SIG_WEAK_X;
+          d2 = SIG_WEAK_X;
+        } else if (logicValueOf(gate) === V0) {
+          // P-MOS 栅极低电平导通
           const pass = passDrives(
             this.resolveExcluding(p0, e, 0),
             this.resolveExcluding(p2, e, 2),

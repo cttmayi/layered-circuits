@@ -9,6 +9,7 @@
 
 import {
   addCounts,
+  costHalfOf,
   type Design,
   emptyCounts,
   type ModuleLibrary,
@@ -71,8 +72,9 @@ export function computeCosts(design: Design, library: ModuleLibrary): CostResult
   return { counts, costHalf: costHalfOfCounts(counts), diagnostics };
 }
 
+/** 成本（半分整数）：唯一权威口径在 @lc/schema（UNIT_COST_HALF），这里只转发，避免两套账 */
 function costHalfOfCounts(c: UnitCounts): number {
-  return c.npn * 4 + c.res * 2 + c.dio * 3 + c.cap * 6;
+  return costHalfOf(c);
 }
 
 export interface CostTree {

@@ -6,7 +6,7 @@
  */
 
 import { ALL_LEVELS, requiredPortsOf } from '@lc/content';
-import type { Level } from '@lc/schema';
+import type { Level, LogicFamily } from '@lc/schema';
 import type { Doc, StoredModule, Sym } from '../editor/model';
 
 export const PROGRESS_KEY = 'lc-studio-progress-v1';
@@ -63,6 +63,8 @@ export function profitOf(level: Level, costHalf: number): number {
 }
 
 export interface Progress {
+  /** 新游戏时选定的逻辑族契约（RTL/DTL/TTL/CMOS），整个存档固定 */
+  family: LogicFamily;
   /** 已通关记录（clearedAt > 0 才算真通关，失败尝试不写这里） */
   cleared: Record<string, LevelRecord>;
   /** 尝试次数（含失败），只用于展示 */
@@ -128,8 +130,9 @@ export function isNewJob(progress: Progress, levelId: string): boolean {
   return !progress.started?.[levelId] && !isCleared(progress, levelId);
 }
 
-export function emptyProgress(): Progress {
+export function emptyProgress(family: LogicFamily = 'rtl'): Progress {
   return {
+    family,
     cleared: {},
     attempts: {},
     library: [],
@@ -148,6 +151,7 @@ export function loadProgress(): Progress {
     if (!raw) return emptyProgress();
     const parsed = JSON.parse(raw) as Partial<Progress>;
     return {
+      family: parsed.family ?? 'rtl',
       cleared: parsed.cleared && typeof parsed.cleared === 'object' ? parsed.cleared : {},
       attempts: parsed.attempts && typeof parsed.attempts === 'object' ? parsed.attempts : {},
       library: Array.isArray(parsed.library) ? (parsed.library as StoredModule[]) : [],
@@ -389,6 +393,7 @@ export function importSave(text: string): { progress: Progress; error?: string }
   }
   const raw = (save.progress ?? {}) as Partial<Progress>;
   const progress: Progress = {
+    family: raw.family ?? 'rtl',
     cleared: raw.cleared && typeof raw.cleared === 'object' ? raw.cleared : {},
     attempts: raw.attempts && typeof raw.attempts === 'object' ? raw.attempts : {},
     library: Array.isArray(raw.library) ? (raw.library as StoredModule[]) : [],

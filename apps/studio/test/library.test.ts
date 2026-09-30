@@ -135,30 +135,30 @@ describe('本地重挑战榜（M3-E）', () => {
     let progress = emptyProgress();
     expect(leaderboard(progress).every((row) => !row.cleared)).toBe(true);
 
-    // 第 1 关：标准解 8 半单位，通关（但已知最省是 6 —— 输入是弱信号源，可省掉基极限流电阻）
-    progress = recordClear(progress, 's1-not', 100, 8);
+    // 第 1 关：标准解 12 半单位，通关（但已知最省是 8 —— 输入是弱信号源，可省掉基极限流电阻）
+    progress = recordClear(progress, 's1-not', 100, 12);
     progress = recordAttempt(progress, 's1-not');
     progress = recordAttempt(progress, 's1-not');
-    // 异或门：已知最省 42（求解器结论），玩家做到 56
-    progress = recordClear(progress, 's1-xor', 78, 56);
+    // 异或门：已知最省 44（求解器结论），玩家做到 80
+    progress = recordClear(progress, 's1-xor', 78, 80);
 
     const rows = leaderboard(progress);
     const not = rows.find((r) => r.levelId === 's1-not');
     expect(not?.cleared).toBe(true);
-    expect(not?.bestCostHalf).toBe(8);
+    expect(not?.bestCostHalf).toBe(12);
     expect(not?.attempts).toBe(2);
-    expect(not?.bestKnownHalf).toBe(6);
-    expect(not?.atBestKnown).toBe(false); // 8 > 6：还没追到省电阻版
+    expect(not?.bestKnownHalf).toBe(8);
+    expect(not?.atBestKnown).toBe(false); // 12 > 8：还没追到省电阻版
 
-    // 玩家用省电阻版做到 6 → 标「已到最省」
-    progress = recordClear(progress, 's1-not', 100, 6);
+    // 玩家用省电阻版做到 8 → 标「已到最省」
+    progress = recordClear(progress, 's1-not', 100, 8);
     const not2 = leaderboard(progress).find((r) => r.levelId === 's1-not');
     expect(not2?.atBestKnown).toBe(true);
 
     const xor = rows.find((r) => r.levelId === 's1-xor');
-    expect(xor?.optimalHalf).toBe(56);
-    expect(xor?.bestKnownHalf).toBe(42);
-    expect(xor?.atBestKnown).toBe(false); // 56 > 42：还没追到求解器的最省版
+    expect(xor?.optimalHalf).toBe(80);
+    expect(xor?.bestKnownHalf).toBe(44);
+    expect(xor?.atBestKnown).toBe(false); // 80 > 44：还没追到求解器的最省版
     expect(xor?.atBestKnown).toBe(false);
     expect(xor?.bestScore).toBe(78);
   });
@@ -227,7 +227,7 @@ describe('三星目标与称号（P1）', () => {
     // 重挑战拿了满分三星、成本更低 → 星级与利润都刷新
     progress = recordClear(progress, 's1-not', 100, 8, 3);
     expect(progress.cleared['s1-not']?.stars).toBe(3);
-    expect(progress.walletHalf).toBe(2); // 款项 10 − 材料费 8 = 2 半单位（1 元）
+    expect(progress.walletHalf).toBe(7); // 款项 15 − 材料费 8 = 7 半单位（3.5 元）
     expect(progress.cleared['s1-not']?.score).toBe(100);
     expect(progress.cleared['s1-not']?.bestCostHalf).toBe(8);
   });

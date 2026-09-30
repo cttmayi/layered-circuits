@@ -10,9 +10,8 @@
  */
 
 import { ALL_LEVELS } from '@lc/content';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { App } from '../src/App';
 import { PROGRESS_KEY } from '../src/level/progress';
 import { renderApp, startJob } from './helpers';
 
@@ -86,11 +85,11 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
       { timeout: 5000 },
     );
 
-    // 成本面板应该已经算出 4（1 三极管 + 2 电阻）
+    // 成本面板应该已经算出 6（1 三极管 + 2 电阻）
     await waitFor(
       () => {
         const rows = [...document.querySelectorAll('.kv tr')].map((tr) => tr.textContent ?? '');
-        expect(rows.some((row) => row.includes('合计') && row.includes('4'))).toBe(true);
+        expect(rows.some((row) => row.includes('合计') && row.includes('6'))).toBe(true);
       },
       { timeout: 5000 },
     );
@@ -130,7 +129,7 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
         };
         expect(progress.cleared['s1-not']?.score).toBe(100);
         expect(progress.library.map((m) => m.name)).toEqual(['非门']);
-        expect(progress.library[0]?.costHalf).toBe(8); // 成本 4（半单位 8）
+        expect(progress.library[0]?.costHalf).toBe(12); // 成本 6（半单位 12）
       },
       { timeout: 5000 },
     );
@@ -146,12 +145,12 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
       () => expect(screen.getByText(new RegExp(`已通关 4/${LEVEL_TOTAL}`))).toBeTruthy(),
       { timeout: 5000 },
     );
-    // 封装出的【非门】出现在元件库「我的模块」里，成本 4，可以直接拖到下一关复用
+    // 封装出的【非门】出现在元件库「我的模块」里，成本 6，可以直接拖到下一关复用
     const paletteModules = [...document.querySelectorAll('.palette .palette-item')].filter((b) =>
       b.textContent?.includes('非门'),
     );
     expect(paletteModules.length).toBe(1);
-    expect(paletteModules[0]?.textContent).toContain('成本 4');
+    expect(paletteModules[0]?.textContent).toContain('成本 6');
     expect(paletteModules[0]?.textContent).toMatch(/1 入 \/ 1 出/);
 
     // ---- 6. 关卡地图：非门已通关（cleared），与门点亮为新单（不再是锁定灰态）----

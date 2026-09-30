@@ -10,7 +10,7 @@
 
 import type { Design, Instance, PinRef, Port } from '@lc/schema';
 
-export type UnitKind = 'npn' | 'res' | 'dio' | 'cap';
+export type UnitKind = 'npn' | 'res' | 'dio' | 'cap' | 'nmos' | 'pmos';
 export type SymKind = 'unit' | 'vcc' | 'gnd' | 'input' | 'output' | 'module';
 export type Rot = 0 | 1 | 2 | 3;
 /** 输入符号的驱动：0/1 = 高低，2 = X，3 = Z（与 sim-core 的 elemParam 一致） */
@@ -108,6 +108,8 @@ export const UNIT_LABEL: Record<UnitKind, string> = {
   res: '电阻',
   dio: '二极管',
   cap: '电容',
+  nmos: 'N-MOS',
+  pmos: 'P-MOS',
 };
 
 export const EMPTY_DOC: Doc = {
@@ -124,6 +126,16 @@ const PIN_OFFSETS: Record<string, Array<{ name: string; x: number; y: number }>>
     { name: 'c', x: 0, y: -26 },
     { name: 'b', x: -26, y: 0 },
     { name: 'e', x: 0, y: 26 },
+  ],
+  nmos: [
+    { name: 'd', x: 0, y: -26 },
+    { name: 'g', x: -26, y: 0 },
+    { name: 's', x: 0, y: 26 },
+  ],
+  pmos: [
+    { name: 'd', x: 0, y: -26 },
+    { name: 'g', x: -26, y: 0 },
+    { name: 's', x: 0, y: 26 },
   ],
   res: [
     { name: 'a', x: 0, y: -22 },
@@ -313,6 +325,8 @@ const PREFIX: Record<string, string> = {
   res: 'r',
   dio: 'd',
   cap: 'c',
+  nmos: 'm',
+  pmos: 'm',
   vcc: 'vcc',
   gnd: 'gnd',
   input: 'in',
@@ -498,6 +512,8 @@ const UNIT_INPUT_PINS: Record<string, string[]> = {
   npn: ['b', 'c'],
   res: ['a'],
   dio: ['a'],
+  nmos: ['g', 'd'],
+  pmos: ['g', 'd'],
   cap: ['a'],
 };
 

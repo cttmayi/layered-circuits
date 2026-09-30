@@ -63,6 +63,8 @@ export const LevelSchema = z.object({
   /** 关卡端口规格（含位宽，第三章总线；缺省按向量推导、全部 1 位） */
   ports: z.array(PortSpecSchema).default([]),
   mode: z.enum(['logic', 'timing']).default('logic'),
+  /** 本关的逻辑族契约（RTL/DTL/TTL/CMOS）：判定按它的输出强度规范硬约束（默认 rtl = 高弱 1 合法） */
+  family: z.enum(['rtl', 'dtl', 'ttl', 'cmos']).default('rtl'),
   /** 硬核工程模式的额外约束：关键路径不得超过该延迟（ps）；缺省表示硬核模式也不查时序 */
   timingBudgetPs: z.number().int().positive().optional(),
   /** 可用素材（GDD 第 3 节的阶段约束） */

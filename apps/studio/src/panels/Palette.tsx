@@ -49,9 +49,11 @@ export function dragImage(kind: string): HTMLImageElement | HTMLCanvasElement {
 
 const UNITS: Array<{ unit: UnitKind; name: string; cost: string; note: string }> = [
   { unit: 'npn', name: '三极管 NPN', cost: '2', note: '基极高电平导通，双向通路' },
-  { unit: 'res', name: '电阻', cost: '1', note: '弱驱动：永远被强驱动压过' },
-  { unit: 'dio', name: '二极管', cost: '1.5', note: '单向导通 + 逻辑隔离' },
-  { unit: 'cap', name: '电容', cost: '3', note: '只计入成本，不参与逻辑仿真' },
+  { unit: 'res', name: '电阻', cost: '2', note: '弱驱动：永远被强驱动压过；芯片里最占面积' },
+  { unit: 'dio', name: '二极管', cost: '1', note: '单向导通 + 逻辑隔离' },
+  { unit: 'cap', name: '电容', cost: '4', note: '只计入成本，不参与逻辑仿真' },
+  { unit: 'nmos', name: 'N-MOS', cost: '1', note: '栅极高电平导通，漏源双向通路' },
+  { unit: 'pmos', name: 'P-MOS', cost: '1', note: '栅极低电平导通，漏源双向通路' },
 ];
 
 /** 分组折叠的持久化键：值为数组（当前展开的分组 key） */

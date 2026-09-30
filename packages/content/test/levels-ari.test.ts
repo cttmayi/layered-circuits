@@ -16,7 +16,7 @@ import {
   requiredPorts,
   wrapModule,
 } from '@lc/compiler';
-import { DesignBuilder, InMemoryModuleLibrary } from '@lc/schema';
+import { costHalfOf, DesignBuilder, InMemoryModuleLibrary } from '@lc/schema';
 import { runVectors } from '@lc/sim-core';
 import { describe, expect, it } from 'vitest';
 import { computeCosts } from '../../../packages/compiler/src/cost.js';
@@ -69,7 +69,8 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
       expect(r.pass, `${l.id} 参考解应在硬核模式通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${l.id} 最优成本拿满分`).toBe(100);
       const { counts } = computeCosts(design, library);
-      const sum = counts.npn * 4 + counts.res * 2 + counts.dio * 3;
+      // 用权威成本口径（@lc/schema 的 costHalfOf），避免测试里重复一份单价表
+      const sum = costHalfOf(counts);
       expect(sum, `${l.id} 参考解成本应等于 optimalHalf`).toBe(l.optimalHalf);
     }
   });
@@ -207,7 +208,7 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
 
     const r = judgeDesign(design, l, { library, hardcore: true });
     expect(r.pass, r.errors.join('；')).toBe(true);
-    // 玩家解法成本 = 4×全加器(4×126) + 4×异或门(4×56) = 728 = optimalHalf
+    // 玩家解法成本 = 4×全加器(4×180) + 4×异或门(4×80) = 1040 = optimalHalf
     expect(r.score).toBe(100);
   });
 

@@ -13,6 +13,7 @@ import {
   wrapModule,
 } from '@lc/compiler';
 import {
+  costHalfOf,
   formatCost,
   InMemoryModuleLibrary,
   type ModuleLibrary,
@@ -114,7 +115,7 @@ export function handleRequest(req: StudioRequest): StudioResponse {
     }
 
     const { counts, diagnostics: costDiagnostics } = computeCosts(design, library);
-    const half = counts.npn * 4 + counts.res * 2 + counts.dio * 3 + counts.cap * 6;
+    const half = costHalfOf(counts);
 
     let timing: SimSnapshot['timing'] = null;
     if (req.withTiming) {

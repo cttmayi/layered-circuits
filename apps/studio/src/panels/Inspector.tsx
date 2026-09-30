@@ -13,6 +13,8 @@ const UNIT_NAME: Record<UnitKind, string> = {
   res: '电阻',
   dio: '二极管',
   cap: '电容',
+  nmos: 'N-MOS',
+  pmos: 'P-MOS',
 };
 
 /** 右侧检查器：成本 / 内容哈希 / 端口电平 / 诊断 / 时序 */

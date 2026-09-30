@@ -24,6 +24,10 @@ export const ElementKind = {
   INPUT: 5,
   /** 关卡输出引脚（只观察，不驱动）：pins = [node] */
   OUTPUT: 6,
+  /** N-MOS：pins = [drain, gate, source]，栅极高电平导通（栅极不取电流） */
+  NMOS: 7,
+  /** P-MOS：pins = [drain, gate, source]，栅极低电平导通 */
+  PMOS: 8,
 } as const;
 
 export type ElementKind = (typeof ElementKind)[keyof typeof ElementKind];
@@ -38,6 +42,8 @@ export const ELEMENT_LABEL: Record<number, string> = {
   [ElementKind.POWER]: '电源',
   [ElementKind.INPUT]: '输入引脚',
   [ElementKind.OUTPUT]: '输出引脚',
+  [ElementKind.NMOS]: 'N-MOS',
+  [ElementKind.PMOS]: 'P-MOS',
 };
 
 /** 该元素的哪些引脚槽位会「驱动」节点（其余引脚是只读的） */
@@ -45,6 +51,10 @@ export function driveSlotsOf(kind: number): readonly number[] {
   switch (kind) {
     case ElementKind.NPN:
       // 基极只读；导通时集电极与发射极互为导向通
+      return [0, 2];
+    case ElementKind.NMOS:
+    case ElementKind.PMOS:
+      // 栅极只读（不取电流）；导通时漏极与源极互为导向通
       return [0, 2];
     case ElementKind.RES:
       return [0, 1];
@@ -64,6 +74,8 @@ export function driveSlotsOf(kind: number): readonly number[] {
 export function readSlotsOf(kind: number): readonly number[] {
   switch (kind) {
     case ElementKind.NPN:
+    case ElementKind.NMOS:
+    case ElementKind.PMOS:
       return [0, 1, 2];
     case ElementKind.RES:
     case ElementKind.DIO:
@@ -78,7 +90,13 @@ export function readSlotsOf(kind: number): readonly number[] {
 
 /** 基础元件是否属于「无源/直通」元素（用于静态时序分析的分组） */
 export function isPassiveElement(kind: number): boolean {
-  return kind === ElementKind.RES || kind === ElementKind.DIO || kind === ElementKind.NPN;
+  return (
+    kind === ElementKind.RES ||
+    kind === ElementKind.DIO ||
+    kind === ElementKind.NPN ||
+    kind === ElementKind.NMOS ||
+    kind === ElementKind.PMOS
+  );
 }
 
 export interface FlatPort {
@@ -252,6 +270,14 @@ export class NetlistBuilder extends FlatNetAssembler {
 
   cap(a: number, b: number, label = 'C'): number {
     return this.add(ElementKind.CAP, [a, b], 0, label);
+  }
+
+  nmos(drain: number, gate: number, source: number, label = 'M', delayPs = 700): number {
+    return this.add(ElementKind.NMOS, [drain, gate, source], delayPs, label);
+  }
+
+  pmos(drain: number, gate: number, source: number, label = 'M', delayPs = 700): number {
+    return this.add(ElementKind.PMOS, [drain, gate, source], delayPs, label);
   }
 
   power(node: number, level: 0 | 1, label = level === 1 ? 'VCC' : 'GND'): number {

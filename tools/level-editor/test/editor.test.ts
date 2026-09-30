@@ -16,6 +16,8 @@ import { synthesizeSop } from '../src/synth.js';
 const library = new InMemoryModuleLibrary();
 
 /** 2 输入关卡：求解器会连参考解一起给出来 */
+// 与真实关卡 s1-xor 一致只开放 npn/res：允许二极管时门目录里最省的异或构造
+// （二极管级联，弱 1 衰减）都过不了真仿真，求解器会退回 SOP 综合兜底。
 const XOR_SPEC = parseSpec({
   id: 's3-xor-mini',
   stage: 3,
@@ -25,7 +27,7 @@ const XOR_SPEC = parseSpec({
   inputs: ['a', 'b'],
   outputs: ['y'],
   truth: { '0,0': { y: 0 }, '0,1': { y: 1 }, '1,0': { y: 1 }, '1,1': { y: 0 } },
-  allowedUnits: ['npn', 'res', 'dio'],
+  allowedUnits: ['npn', 'res'],
   overhead: 0.2,
 });
 
@@ -97,13 +99,13 @@ describe('关卡编辑器：2 输入关卡全自动（含参考解）', () => {
   });
 
   it('制作人手工写的参考解优先；更省的标准解会被记成「已知最省」而不是抬高分线', () => {
-    // 手工参考解故意用「4 个与非门」的老写法（成本 56 = 显示 28），比求解器找到的 36 贵
+    // 手工参考解故意用「4 个与非门」的老写法（成本 80 = 显示 40），比求解器找到的 RTL 异或 44 贵
     const handWritten = xorGateRef('ref-hand');
     const { level, notes } = buildLevel({ ...XOR_SPEC, reference: handWritten }, library);
     expect(notes.join('；')).not.toContain('参考解由求解器生成');
-    expect(level.optimalHalf).toBe(56); // 满分线跟着参考解走，课上教的解法照样满分
-    expect(level.bestKnownHalf).toBe(36); // 求解器找到的更省解记进榜
-    expect(level.budgetHalf).toBe(Math.ceil(56 * 1.2));
+    expect(level.optimalHalf).toBe(80); // 满分线跟着参考解走，课上教的解法照样满分
+    expect(level.bestKnownHalf).toBe(44); // 求解器找到的更省解记进榜
+    expect(level.budgetHalf).toBe(Math.ceil(80 * 1.2));
     const check = judgeDesign(handWritten, level, { library, hardcore: true });
     expect(check.pass).toBe(true);
     expect(check.score).toBe(100);
