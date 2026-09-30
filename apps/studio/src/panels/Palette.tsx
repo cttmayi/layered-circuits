@@ -51,7 +51,7 @@ const UNITS: Array<{ unit: UnitKind; name: string; cost: string; note: string }>
   { unit: 'npn', name: '三极管 NPN', cost: '2', note: '基极高电平导通，双向通路' },
   { unit: 'res', name: '电阻', cost: '2', note: '弱驱动：永远被强驱动压过；芯片里最占面积' },
   { unit: 'dio', name: '二极管', cost: '1', note: '单向导通 + 逻辑隔离' },
-  { unit: 'cap', name: '电容', cost: '4', note: '只计入成本，不参与逻辑仿真' },
+  { unit: 'cap', name: '电容', cost: '4', note: '只计费，不参与逻辑仿真' },
   { unit: 'nmos', name: 'N-MOS', cost: '1', note: '栅极高电平导通，漏源双向通路' },
   { unit: 'pmos', name: 'P-MOS', cost: '1', note: '栅极低电平导通，漏源双向通路' },
 ];
@@ -224,7 +224,7 @@ export function Palette({
               <span className="palette-name">
                 {item.name} {locked && <em className="locked">本关不可用</em>}
               </span>
-              <span className="palette-cost">成本 {item.cost}</span>
+              <span className="palette-cost">价格 {item.cost}</span>
               <span className="palette-note">{locked ? lockReason(item.unit) : item.note}</span>
             </button>
           );
@@ -281,7 +281,7 @@ export function Palette({
         )}
         {library.length === 0 && (
           <p className="palette-empty">
-            搭好电路后点「封装为模块」，就能像元件一样复用，成本会自动递归累加。
+            搭好电路后点「封装为模块」，就能像元件一样复用，造价会自动递归累加。
           </p>
         )}
         {library.map((mod) => {

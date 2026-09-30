@@ -95,11 +95,11 @@ export function commissionOf(level: Level): Commission {
   return COMMISSIONS[level.id] ?? { ...FALLBACK, note: level.brief || FALLBACK.note };
 }
 
-/** 合同条款：成本上限 / 关键路径上限 —— 全部由关卡现有字段推导，叙事不引入新规则 */
+/** 合同条款：预算上限 / 延迟上限 —— 全部由关卡现有字段推导，叙事不引入新规则 */
 export interface ContractTerms {
   /** 成本上限（元）；null = 不限预算 */
   costCap: number | null;
-  /** 关键路径上限（ns）；null = 不设时限 */
+  /** 延迟上限（ns）；null = 不设时限 */
   timingCap: number | null;
 }
 

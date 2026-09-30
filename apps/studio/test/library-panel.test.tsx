@@ -186,7 +186,7 @@ describe('组件库与成绩面板', () => {
     goToLevel('与非门');
     fireEvent.click(screen.getByText('组件库'));
     expect(screen.getAllByText('我的模块（1）').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/1 个版本 · 最新 v1\.0 · 成本 4/)).toBeTruthy();
+    expect(screen.getByText(/1 个版本 · 最新 v1\.0 · 造价 4/)).toBeTruthy();
   });
 });
 
@@ -200,8 +200,8 @@ describe('委托单与结算（P0 游戏化外壳）', () => {
     expect(screen.getAllByText(/修表铺 · 老周/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/收音机的指示灯接反了/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/款项/).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/成本/).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/关键路径/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/预算/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/延迟/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('委托单 · 非门')).toBeTruthy();
   });
 
@@ -247,7 +247,7 @@ describe('任务墙与星级（P1）', () => {
         .find((b): b is HTMLButtonElement => b !== null);
     expect(node('非门')?.disabled).toBe(false);
     expect(node('与门')?.disabled).toBe(true);
-    expect(screen.getAllByText('成本挑战').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('预算挑战').length).toBeGreaterThanOrEqual(1);
   });
 
   it('已交付的关卡显示星数与称号；钱包不足时给出升级提示', () => {

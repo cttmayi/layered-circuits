@@ -229,7 +229,7 @@ describe('关卡界面', () => {
     expect(capButton.disabled).toBe(true);
     expect(capButton.getAttribute('title')).toContain('时钟专用');
 
-    // 用料进度：材料费 0 / 款项 12 元（预算线 = 对标成本 6 × 2）
+    // 用料进度：材料费 0 / 款项 12 元（预算线 = 满分线 6 × 2）
     const budgetText = document.querySelector('.budget-text')?.textContent ?? '';
     expect(budgetText).toContain('款项');
     expect(budgetText).toContain('12');

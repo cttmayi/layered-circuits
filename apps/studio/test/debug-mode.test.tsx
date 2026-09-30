@@ -49,7 +49,7 @@ describe('调试模式 · 一键出答案', () => {
     await waitFor(() => expect(screen.getByText(/验收报告 · 非门/)).toBeTruthy(), {
       timeout: 5000,
     });
-    expect(screen.getByText(/已达对标成本/)).toBeTruthy(); // 满分：成本正好等于最优
+    expect(screen.getByText(/已达满分线/)).toBeTruthy(); // 满分：达到 0.5×预算
     // 一键出答案的参考解不该有任何「悬空」警告（画布导线是完整的）
     expect(screen.queryByText(/基极悬空|未连接任何驱动/)).toBeNull();
   });
@@ -96,7 +96,7 @@ describe('调试模式 · 一键出答案', () => {
     await waitFor(() => expect(screen.getByText(/验收报告 · 半加器/)).toBeTruthy(), {
       timeout: 5000,
     });
-    expect(screen.getByText(/已达对标成本/)).toBeTruthy();
+    expect(screen.getByText(/已达满分线/)).toBeTruthy();
   });
 
   it('无门版的关（非门）：一键出答案直接出元件版，不弹窗', () => {

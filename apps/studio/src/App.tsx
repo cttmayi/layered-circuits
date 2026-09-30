@@ -153,7 +153,7 @@ export function App(): React.JSX.Element {
   const [rightOpen, setRightOpen] = usePersistentBool('lc-ui-right-open', true);
   /** 调试模式：解锁「一键出答案」等开发辅助（不参与正式玩法） */
   const [debugMode, setDebugMode] = usePersistentBool('lc-ui-debug', false);
-  /** 一键出答案的版本选择（仅当元件版有成本/延迟优势时才弹；单一版本直接执行） */
+  /** 一键出答案的版本选择（仅当元件版有造价/延迟优势时才弹；单一版本直接执行） */
   const [answerCandidates, setAnswerCandidates] = useState<
     { kind: 'element' | 'gate'; note?: string }[] | null
   >(null);
@@ -747,7 +747,7 @@ export function App(): React.JSX.Element {
   };
 
   /** 调试模式：一键把本关参考解搭到画布上（可改、可直接验收）。
-   *  优先逻辑门版；元件版只在它有成本/延迟优势时作为选项（弹窗二选一）；
+   *  优先逻辑门版；元件版只在它有造价/延迟优势时作为选项（弹窗二选一）；
    *  只有一种版本就直接搭，不弹对话框。 */
   const applyAnswer = (kind: 'element' | 'gate'): void => {
     if (!currentLevel) return;
@@ -765,7 +765,7 @@ export function App(): React.JSX.Element {
     loadDoc({ ...next, library });
     setToast(
       kind === 'gate'
-        ? '逻辑门版已搭好（成本不高于元件版，可直接验收）—— 门积木已加入左侧「我的模块」'
+        ? '逻辑门版已搭好（造价不高于元件版，可直接验收）—— 门积木已加入左侧「我的模块」'
         : '参考解已搭好（调试模式）—— 可以直接交付验收',
     );
   };
@@ -784,7 +784,7 @@ export function App(): React.JSX.Element {
     if (spec.reference) {
       const edge = elementEdgeOf(currentLevel);
       if (edge)
-        candidates.unshift({ kind: 'element', note: edge === 'cost' ? '成本更低' : '延迟更短' });
+        candidates.unshift({ kind: 'element', note: edge === 'cost' ? '造价更低' : '延迟更短' });
       else if (!teach || strongContract) candidates.push({ kind: 'element' });
     }
     if (candidates.length === 0) {
@@ -942,7 +942,7 @@ export function App(): React.JSX.Element {
       Date.now(),
     );
     commit({ ...doc, library: addModule(doc.library, stored) });
-    // 星级：功能（交付成功）/ 成本（满分）/ 时序（硬核或时序达标）
+    // 星级：成本与延迟各按预算线四档（0.5/0.75/1 倍），取较差
     const stars = starsOf(judge);
     setProgress((prev) =>
       recordClear(
@@ -1107,7 +1107,7 @@ export function App(): React.JSX.Element {
               type="button"
               className="primary"
               onClick={solveOneKey}
-              title="把本关参考解直接搭到画布上（调试用）。优先逻辑门版；元件版仅在成本/延迟占优时才会弹窗让你选"
+              title="把本关参考解直接搭到画布上（调试用）。优先逻辑门版；元件版仅在造价/延迟占优时才会弹窗让你选"
             >
               一键出答案
             </button>

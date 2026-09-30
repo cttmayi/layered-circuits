@@ -17,7 +17,7 @@ const UNIT_NAME: Record<UnitKind, string> = {
   pmos: 'P-MOS',
 };
 
-/** 右侧检查器：成本 / 内容哈希 / 端口电平 / 诊断 / 时序 */
+/** 右侧检查器：材料费 / 端口电平 / 诊断 / 时序 */
 export function Inspector({
   snapshot,
   units,
@@ -30,7 +30,7 @@ export function Inspector({
 
   return (
     <section className="panel">
-      <h3>成本</h3>
+      <h3>材料费</h3>
       {snapshot ? (
         <>
           <table className="kv">
@@ -114,7 +114,7 @@ export function Inspector({
         <>
           <h3>时序</h3>
           <p className="small">
-            关键路径 {(timing.criticalPathPs / 1000).toFixed(2)} ns ·{' '}
+            延迟 {(timing.criticalPathPs / 1000).toFixed(2)} ns ·{' '}
             {timing.isSequential ? (
               <strong className="warn">时序电路（有记忆）</strong>
             ) : (

@@ -76,7 +76,7 @@ export function JudgePanel({
                 </td>
               </tr>
               <tr>
-                <td>关键路径</td>
+                <td>延迟</td>
                 <td className="num">
                   {(result.criticalPathPs / 1000).toFixed(2)} ns
                   {result.timingBudgetPs !== null && (

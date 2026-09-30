@@ -127,7 +127,7 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
 
       {level.timingBudgetPs !== undefined && (
         <p className="dim small">
-          硬核模式还要求关键路径 ≤ {(level.timingBudgetPs / 1000).toFixed(2)} ns
+          硬核模式还要求延迟 ≤ {(level.timingBudgetPs / 1000).toFixed(2)} ns
         </p>
       )}
     </section>

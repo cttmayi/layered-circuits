@@ -3,8 +3,8 @@
  *
  * 这一块是「长线养成」的可见部分：
  *  - 版本：同名模块的每一版都留着（复古复用关只许用早期版本，覆盖掉就回不去了）；
- *  - 溯源：点一个模块就能看到它的血统（用了哪些下层模块、各版本成本）；
- *  - 重挑战榜：每关的历史最低成本与尝试次数，成本挑战关还标出「还能更省」；
+ *  - 溯源：点一个模块就能看到它的血统（用了哪些下层模块、各版本造价）；
+ *  - 重挑战榜：每关的历史最低造价与尝试次数，预算挑战关还标出「还能更省」；
  *  - 存档：整包导出/导入，方便换机器或备份。
  */
 
@@ -40,7 +40,7 @@ function TraceTree({ node }: { node: TraceNode }): React.JSX.Element {
     <li>
       <span className="trace-node">
         {node.name} v{node.version}
-        <em>成本 {node.costHalf / 2}</em>
+        <em>造价 {node.costHalf / 2}</em>
         {node.levelId && <span className="trace-src">来自 {node.levelId}</span>}
         {node.cyclic && <span className="trace-src">（检测到循环引用）</span>}
       </span>
@@ -104,7 +104,7 @@ export function LibraryPanel({
                 </span>
               </span>
               <span className="library-meta">
-                {versions.length} 个版本 · 最新 v{newest.version} · 成本 {newest.costHalf / 2}
+                {versions.length} 个版本 · 最新 v{newest.version} · 造价 {newest.costHalf / 2}
                 {newest.isSequential ? ' · 时序' : ''}
               </span>
             </button>
@@ -114,7 +114,7 @@ export function LibraryPanel({
                   {versions.map((mod) => (
                     <li key={mod.hash}>
                       v{mod.version}
-                      <em>成本 {mod.costHalf / 2}</em>
+                      <em>造价 {mod.costHalf / 2}</em>
                       {mod.levelId && <span className="trace-src">产出关卡 {mod.levelId}</span>}
                       {mod.version !== newest.version &&
                         compareVersions(mod.version, newest.version) < 0 &&
@@ -145,7 +145,7 @@ export function LibraryPanel({
           <thead>
             <tr>
               <th>关卡</th>
-              <th>最低成本</th>
+              <th>最低造价</th>
               <th>满分线</th>
               <th>得分</th>
               <th>尝试</th>
@@ -219,7 +219,7 @@ export function LibraryPanel({
 function kindLabel(kind: Level['kind']): string {
   switch (kind) {
     case 'cost':
-      return '成本挑战';
+      return '预算挑战';
     case 'timing':
       return '时序挑战';
     case 'retro':
