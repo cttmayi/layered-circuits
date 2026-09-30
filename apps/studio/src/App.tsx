@@ -943,7 +943,7 @@ export function App(): React.JSX.Element {
     );
     commit({ ...doc, library: addModule(doc.library, stored) });
     // 星级：功能（交付成功）/ 成本（满分）/ 时序（硬核或时序达标）
-    const stars = starsOf(judge, forcedHardcore || mode === 'timing');
+    const stars = starsOf(judge);
     setProgress((prev) =>
       recordClear(
         { ...prev, library: addModule(prev.library, stored) },

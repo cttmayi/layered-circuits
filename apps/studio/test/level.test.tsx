@@ -229,10 +229,10 @@ describe('关卡界面', () => {
     expect(capButton.disabled).toBe(true);
     expect(capButton.getAttribute('title')).toContain('时钟专用');
 
-    // 用料进度：材料费 0 / 款项 7.5 元（第 1 关对标成本 6）
+    // 用料进度：材料费 0 / 款项 12 元（预算线 = 对标成本 6 × 2）
     const budgetText = document.querySelector('.budget-text')?.textContent ?? '';
     expect(budgetText).toContain('款项');
-    expect(budgetText).toContain('7.5');
+    expect(budgetText).toContain('12');
     expect(screen.getByText(new RegExp(`已通关 3/${LEVEL_TOTAL}`))).toBeTruthy();
 
     // 关卡地图：非门是进行中（已开工可继续），与门是锁定的灰态（不能点）

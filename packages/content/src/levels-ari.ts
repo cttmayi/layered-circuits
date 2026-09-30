@@ -22,7 +22,8 @@ import { adder4Ref, adder8Ref, aluRef, fullAdderRef, halfAdderRef } from './refe
 /** 阶段 3 允许的元件：仍只用 npn/res/dio（电容留给时钟/存储章节） */
 const STAGE3_UNITS = ['npn', 'res', 'dio'] as const;
 
-const MAIN_OVERHEAD = 0.2;
+/** 预算线 = 标准答案 × 2（评星契约：0.5×预算 = 标准答案 = 3 星档） */
+const MAIN_OVERHEAD = 1.0;
 
 function port(name: string, dir: 'in' | 'out', width = 1): ModulePort {
   return { id: name, name, dir, width };

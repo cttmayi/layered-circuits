@@ -11,11 +11,11 @@ describe('工具铺', () => {
   });
 
   it('购买会扣可用余额，不能重复买，钱不够会被拒绝', () => {
-    // 挣到 5.5 元（11 半）：一次通关 + 手工加钱（模拟再来一单的利润）
+    // 挣到 10 元（20 半）：一次通关利润 16 半（款项 24 − 材料费 8）+ 手工加 4 半
     let progress = emptyProgress();
-    progress = recordClear(progress, 's1-not', 100, 8, 3); // 利润 7 半（款项 15 − 材料费 8）
+    progress = recordClear(progress, 's1-not', 100, 8, 3);
     progress.walletHalf += 4;
-    expect(spendableHalf(progress)).toBe(11);
+    expect(spendableHalf(progress)).toBe(20);
 
     // 探针 12 元买不起 → 拒绝
     const denied = buyEquipment(progress, 'probe');

@@ -59,7 +59,8 @@ import {
 /** 阶段 1 允许的元件：电容是时钟专用，本阶段不开放 */
 const STAGE1_UNITS = ['npn', 'res', 'dio'] as const;
 
-const MAIN_OVERHEAD = 0.2;
+/** 预算线 = 标准答案 × 2（评星契约：0.5×预算 = 标准答案 = 3 星档） */
+const MAIN_OVERHEAD = 1.0;
 
 function vectors1(fn: (a: 0 | 1) => 0 | 1): LevelVector[] {
   return ([0, 1] as const).map((a) => ({ inputs: { a }, expect: { y: fn(a) } }));
@@ -246,7 +247,7 @@ export const STAGE1_LEVELS: Level[] = [
     inputs: 2,
     fn: (a, b) => (a || b ? 1 : 0),
     optimalHalf: 8,
-    timingBudgetPs: 2000,
+    timingBudgetPs: 3200,
     allowedUnits: ['dio', 'res'],
     requiredUnits: ['dio'],
     family: 'dtl', // 契约：本关教学规范
@@ -391,7 +392,7 @@ export const STAGE1_LEVELS: Level[] = [
     // 更优解：省掉基极限流电阻（基极直连输入，1 NPN + 1 上拉电阻 = 6）功能仍正确——
     // 输入 a 是弱信号源，可以直接接基极；满分线仍按标准做法（带基极电阻）8 定。
     bestKnownHalf: 8,
-    timingBudgetPs: 2500,
+    timingBudgetPs: 3000,
     moduleAccess: 'none',
     reference: notGateRef('ref-not'),
     unlockName: '非门',
@@ -410,13 +411,13 @@ export const STAGE1_LEVELS: Level[] = [
     inputs: 2,
     fn: (a, b) => (a && b ? 1 : 0),
     optimalHalf: 8,
-    timingBudgetPs: 2000,
+    timingBudgetPs: 3200,
     moduleAccess: 'none',
     reference: andGateRef('ref-and'),
     unlockName: '与门',
     familyRefs: {
-      cmos: { reference: cmosAndRef('ref-s1-and-cmos'), optimalHalf: 12, timingBudgetPs: 2500 },
-      ttl: { reference: ttlAndRef('ref-s1-and-ttl'), optimalHalf: 28, timingBudgetPs: 4500 },
+      cmos: { reference: cmosAndRef('ref-s1-and-cmos'), optimalHalf: 12, timingBudgetPs: 4200 },
+      ttl: { reference: ttlAndRef('ref-s1-and-ttl'), optimalHalf: 28, timingBudgetPs: 8000 },
     },
     freqHz: 100_000,
   }),
@@ -429,13 +430,13 @@ export const STAGE1_LEVELS: Level[] = [
     inputs: 2,
     fn: (a, b) => (a || b ? 1 : 0),
     optimalHalf: 8,
-    timingBudgetPs: 2000,
+    timingBudgetPs: 3200,
     moduleAccess: 'none',
     reference: orGateRef('ref-or'),
     unlockName: '或门',
     familyRefs: {
-      cmos: { reference: cmosOrRef('ref-s1-or-cmos'), optimalHalf: 12, timingBudgetPs: 3000 },
-      ttl: { reference: ttlOrRef('ref-s1-or-ttl'), optimalHalf: 28, timingBudgetPs: 3500 },
+      cmos: { reference: cmosOrRef('ref-s1-or-cmos'), optimalHalf: 12, timingBudgetPs: 5600 },
+      ttl: { reference: ttlOrRef('ref-s1-or-ttl'), optimalHalf: 28, timingBudgetPs: 6000 },
     },
     freqHz: 100_000,
   }),
@@ -449,7 +450,7 @@ export const STAGE1_LEVELS: Level[] = [
     fn: (a, b) => (a && b ? 0 : 1),
     optimalHalf: 20,
     bestKnownHalf: 12,
-    timingBudgetPs: 3500,
+    timingBudgetPs: 5000,
     moduleAccess: 'all',
     reference: nandGateRef('ref-nand'),
     unlockName: '与非门',
@@ -472,7 +473,7 @@ export const STAGE1_LEVELS: Level[] = [
     fn: (a, b) => (a || b ? 0 : 1),
     optimalHalf: 20,
     bestKnownHalf: 12,
-    timingBudgetPs: 4000,
+    timingBudgetPs: 3000,
     moduleAccess: 'all',
     reference: norFastRef('ref-nor'),
     unlockName: '或非门',
@@ -496,7 +497,7 @@ export const STAGE1_LEVELS: Level[] = [
     // 记在 bestKnownHalf 里：谁能做到谁就破榜，但课上教的解法照样满分。
     optimalHalf: 80,
     bestKnownHalf: 44,
-    timingBudgetPs: 7000,
+    timingBudgetPs: 13000,
     allowedUnits: ['npn', 'res'],
     moduleAccess: 'listed',
     allowedModules: ['非门', '与非门'],
@@ -523,7 +524,7 @@ export const STAGE1_LEVELS: Level[] = [
     fn: (a: 0 | 1, b: 0 | 1) => (a !== b ? 1 : 0),
     optimalHalf: 80,
     bestKnownHalf: 44,
-    timingBudgetPs: 7000,
+    timingBudgetPs: 13000,
     allowedUnits: ['npn', 'res'],
     moduleAccess: 'listed',
     allowedModules: ['非门', '与门', '或门'],
@@ -548,7 +549,7 @@ export const STAGE1_LEVELS: Level[] = [
     // 求解器结论：异或门 + 无基极限流电阻的反相器 = 54（输入 a 是弱信号源可直接接
     // 基极；比带基极电阻的反相器省 2）——记作已知最省。
     bestKnownHalf: 48,
-    timingBudgetPs: 9000,
+    timingBudgetPs: 16000,
     allowedUnits: ['npn', 'res'],
     moduleAccess: 'listed',
     allowedModules: ['非门', '与非门', '异或门'],
@@ -572,7 +573,7 @@ export const STAGE1_LEVELS: Level[] = [
     inputs: 1,
     fn: (a: 0 | 1) => (a ? 0 : 1),
     optimalHalf: 4, // 1 pMOS + 1 nMOS = 2 + 2 半分（显示 2）
-    timingBudgetPs: 2000,
+    timingBudgetPs: 2800,
     allowedUnits: ['nmos', 'pmos'],
     requiredUnits: ['nmos', 'pmos'],
     family: 'cmos',
@@ -610,7 +611,7 @@ export const STAGE1_LEVELS: Level[] = [
     inputs: 2,
     fn: (a: 0 | 1, b: 0 | 1) => (a === 1 && b === 1 ? 0 : 1),
     optimalHalf: 8, // 2 pMOS + 2 nMOS = 4 × 2 半分（显示 4）
-    timingBudgetPs: 3000,
+    timingBudgetPs: 4200,
     allowedUnits: ['nmos', 'pmos'],
     requiredUnits: ['nmos', 'pmos'],
     family: 'cmos',

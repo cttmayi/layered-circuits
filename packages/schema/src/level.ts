@@ -215,7 +215,10 @@ export function budgetOverhead(level: Level): number {
   return level.budgetHalf / level.optimalHalf - 1;
 }
 
-/** 由最优成本与上浮比例生成预算（半分整数，向上取整） */
+/**
+ * 由最优成本与上浮比例生成预算（半分整数，向上取整）。
+ * 评星契约：预算线 = 标准答案 × 2（overhead = 1.0）——玩家做到标准答案即 0.5×预算 = 3 星档。
+ */
 export function budgetFromOptimal(optimalHalf: number, overhead: number): number {
   return Math.ceil(optimalHalf * (1 + overhead));
 }
@@ -277,7 +280,7 @@ export function levelViewOf(level: Level, family: LogicFamily): Level {
     ...(ref.timingBudgetPs !== undefined ? { timingBudgetPs: ref.timingBudgetPs } : {}),
     referenceSolution: ref.reference,
     optimalHalf: ref.optimalHalf,
-    budgetHalf: budgetFromOptimal(ref.optimalHalf, 0.2),
+    budgetHalf: budgetFromOptimal(ref.optimalHalf, 1.0),
   };
 }
 
@@ -292,7 +295,7 @@ export function familySpecOf(level: Level, family: LogicFamily): FamilyLevelSpec
         units: [...(ref.allowedUnits ?? level.allowedUnits)],
         reference: ref.reference,
         optimalHalf: ref.optimalHalf,
-        budgetHalf: budgetFromOptimal(ref.optimalHalf, 0.2),
+        budgetHalf: budgetFromOptimal(ref.optimalHalf, 1.0),
         bestKnownHalf: ref.bestKnownHalf ?? ref.optimalHalf,
         timingBudgetPs: ref.timingBudgetPs ?? level.timingBudgetPs,
       };
@@ -316,7 +319,7 @@ export function familySpecOf(level: Level, family: LogicFamily): FamilyLevelSpec
       units: [...units],
       reference: ref.reference,
       optimalHalf: ref.optimalHalf,
-      budgetHalf: budgetFromOptimal(ref.optimalHalf, 0.2),
+      budgetHalf: budgetFromOptimal(ref.optimalHalf, 1.0),
       bestKnownHalf: ref.bestKnownHalf ?? ref.optimalHalf,
       timingBudgetPs: ref.timingBudgetPs ?? level.timingBudgetPs,
     };

@@ -130,7 +130,7 @@ describe('关卡类型：时序挑战关（GDD 4.3）', () => {
     const fast = level('s2-dff-fast');
     expect(fast.kind).toBe('timing');
     expect(fast.clock?.freqHz).toBe(20_000_000);
-    expect(fast.timingBudgetPs).toBe(20_000);
+    expect(fast.timingBudgetPs).toBe(13_000); // 延迟线 = 参考解实测 × 2
     expect(fast.checks.clockPort).toBe('clk');
     const result = judgeDesign(dffRef('ref-fast'), fast, {
       library: new InMemoryModuleLibrary(),

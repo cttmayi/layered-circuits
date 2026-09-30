@@ -206,16 +206,28 @@ describe('存档导入导出（M3-E）', () => {
 });
 
 describe('三星目标与称号（P1）', () => {
-  it('星级规则：功能 1 星，材料费 ≤ 对标 2 星，硬核时序达标 3 星', () => {
-    const base = { pass: true, score: 60, timingBudgetPs: null as number | null, timingOk: false };
-    expect(starsOf({ ...base, pass: false }, true)).toBe(0);
-    expect(starsOf(base, false)).toBe(1); // 只交付
-    expect(starsOf({ ...base, score: 100 }, false)).toBe(2); // 满分 + 非硬核
-    expect(starsOf(base, true)).toBe(2); // 硬核交付（没有时序预算的关卡）
-    expect(starsOf({ ...base, score: 100 }, true)).toBe(3);
-    // 有时序预算的关卡：时序星看 timingOk，与模式无关
-    expect(starsOf({ ...base, timingBudgetPs: 7000, timingOk: false }, true)).toBe(1);
-    expect(starsOf({ ...base, timingBudgetPs: 7000, timingOk: true, score: 100 }, false)).toBe(3);
+  it('星级规则：成本与延迟各按预算线四档（0.5=3星/0.75=2星/1=1星/超=0星），取较差', () => {
+    // 预算线 = 标准答案 × 2：成本档
+    const base = {
+      pass: true,
+      costHalf: 50,
+      budgetHalf: 100,
+      timingBudgetPs: null as number | null,
+      criticalPathPs: 0,
+    };
+    expect(starsOf({ ...base, pass: false })).toBe(0);
+    expect(starsOf({ ...base, costHalf: 50 })).toBe(3); // 0.5 × 预算 = 标准答案
+    expect(starsOf({ ...base, costHalf: 40 })).toBe(3); // ≤ 0.5 都算 3 星
+    expect(starsOf({ ...base, costHalf: 60 })).toBe(2); // 0.6 × 预算 → 2 星档
+    expect(starsOf({ ...base, costHalf: 75 })).toBe(2); // ≤ 0.75
+    expect(starsOf({ ...base, costHalf: 100 })).toBe(1); // ≤ 1（预算线）
+    expect(starsOf({ ...base, costHalf: 101 })).toBe(0); // 超预算 = 0 星（仍可交付）
+    // 延迟档与成本取较差
+    expect(starsOf({ ...base, timingBudgetPs: 1000, criticalPathPs: 500 })).toBe(3); // 0.5 × 延迟预算
+    expect(starsOf({ ...base, timingBudgetPs: 1000, criticalPathPs: 750 })).toBe(2); // 0.75 × 延迟预算
+    expect(starsOf({ ...base, timingBudgetPs: 1000, criticalPathPs: 1000 })).toBe(1);
+    expect(starsOf({ ...base, costHalf: 50, timingBudgetPs: 1000, criticalPathPs: 1100 })).toBe(0); // 延迟超预算 → 0 星
+    expect(starsOf({ ...base, costHalf: 75, timingBudgetPs: 1000, criticalPathPs: 500 })).toBe(2); // 成本 2 星、延迟 3 星 → 取较差 2 星
   });
 
   it('星级与利润取历史最好，钱包是各关最好一次的利润之和', () => {
@@ -224,7 +236,8 @@ describe('三星目标与称号（P1）', () => {
     // 重挑战拿了满分三星、成本更低 → 星级与利润都刷新
     progress = recordClear(progress, 's1-not', 100, 8, 3);
     expect(progress.cleared['s1-not']?.stars).toBe(3);
-    expect(progress.walletHalf).toBe(7); // 款项 15 − 材料费 8 = 7 半单位（3.5 元）
+    // 预算线 = 标准答案 × 2：款项 24 半（12 元）− 材料费 8 半 = 16 半（8 元）
+    expect(progress.walletHalf).toBe(16);
     expect(progress.cleared['s1-not']?.score).toBe(100);
     expect(progress.cleared['s1-not']?.bestCostHalf).toBe(8);
   });

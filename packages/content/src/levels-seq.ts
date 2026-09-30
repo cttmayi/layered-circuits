@@ -21,7 +21,8 @@ import { dffRef, dLatchRef, srLatchRef } from './references-seq.js';
 /** 阶段 2 允许的元件：还是只能用手搭（时钟/使能由端口给出，电容仍不开放） */
 const STAGE2_UNITS = ['npn', 'res', 'dio'] as const;
 
-const MAIN_OVERHEAD = 0.2;
+/** 预算线 = 标准答案 × 2（评星契约：0.5×预算 = 标准答案 = 3 星档） */
+const MAIN_OVERHEAD = 1.0;
 
 /** 时序关卡的采样等待：锁存器/触发器关卡的向量是「时钟电平保持一段」，按 20MHz 取半周期 25ns */
 const DFF_SETTLE_PS = 25_000;
@@ -156,7 +157,7 @@ export const STAGE2_LEVELS: Level[] = [
       '数据被整体搬运一次。所以整个时钟周期里输出只会跳一次，抖动（空翻）被挡在主锁存器里。',
     hint: '主锁存器用「反相的 clk」使能、从锁存器用 clk 使能，再把主的输出送到从的数据端；时钟反相用一个单管反相器即可（成本 68）。',
     mode: 'timing',
-    timingBudgetPs: 20_000,
+    timingBudgetPs: 13_000,
     allowedUnits: [...STAGE2_UNITS],
     moduleAccess: 'all',
     budgetHalf: budgetFromOptimal(196, MAIN_OVERHEAD),
@@ -194,7 +195,7 @@ export const STAGE2_LEVELS: Level[] = [
       '经常能发现某一级其实可以合并。',
     hint: '参考解用了 68（两个 D 锁存器 + 一个单管反相器）。想更省，可以试试主锁存器只保留必要的门控管，或者复用同一个反相器给两级用。',
     mode: 'timing',
-    timingBudgetPs: 30_000,
+    timingBudgetPs: 13_000,
     allowedUnits: [...STAGE2_UNITS],
     moduleAccess: 'all',
     budgetHalf: 0,
@@ -224,7 +225,7 @@ export const STAGE2_LEVELS: Level[] = [
       '这条不等式就是硬核模式里那把尺子。',
     hint: '参考解的延迟链路是 d → 主锁存器 → 从锁存器 → q，约 6.5ns；把门级数压下来（例如两级都用最少的门控结构）才能腾出更多时序裕量。',
     mode: 'timing',
-    timingBudgetPs: 20_000,
+    timingBudgetPs: 13_000,
     allowedUnits: [...STAGE2_UNITS],
     moduleAccess: 'all',
     budgetHalf: budgetFromOptimal(196, MAIN_OVERHEAD),

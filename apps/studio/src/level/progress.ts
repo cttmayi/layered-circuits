@@ -29,15 +29,38 @@ export interface LevelRecord {
  *  - 成本星：材料费 ≤ 对标成本（等价于拿满 100 分）
  *  - 时序星：有时序预算的关卡看 timingOk，其余关卡要求「用硬核模式交付」
  */
-export function starsOf(
-  result: { pass: boolean; score: number; timingBudgetPs: number | null; timingOk: boolean },
-  hardcore: boolean,
-): number {
+/**
+ * 星级（评星契约，用户定稿）：指标 = 成本 与 延迟，各自按「相对预算线」分四档，
+ * 取两者较差（两个指标都达到才有对应档的星）。
+ *
+ * 预算线 = 标准答案 × 2，因此：
+ *  - ≤ 0.5 × 预算（= 标准答案）        → 3 星
+ *  - ≤ 0.75 × 预算（= 1.5 × 标准答案）  → 2 星
+ *  - ≤ 1 × 预算（= 2 × 标准答案）       → 1 星
+ *  - 超过预算                          → 0 星（仍可交付，只是没星）
+ * 无时序预算的关只按成本评星（延迟视为达标）。
+ */
+export function starsOf(result: {
+  pass: boolean;
+  costHalf: number;
+  budgetHalf: number;
+  timingBudgetPs: number | null;
+  criticalPathPs: number;
+}): number {
   if (!result.pass) return 0;
-  let stars = 1;
-  if (result.score >= 100) stars += 1;
-  if (result.timingBudgetPs !== null ? result.timingOk : hardcore) stars += 1;
-  return stars;
+  const costStars = ratioStars(result.costHalf, result.budgetHalf);
+  const timingStars =
+    result.timingBudgetPs !== null ? ratioStars(result.criticalPathPs, result.timingBudgetPs) : 3;
+  return Math.min(costStars, timingStars);
+}
+
+/** 实际值 / 预算线 → 星级档位 */
+function ratioStars(actual: number, budget: number): number {
+  const r = actual / budget;
+  if (r <= 0.5) return 3;
+  if (r <= 0.75) return 2;
+  if (r <= 1) return 1;
+  return 0;
 }
 
 export const MAX_STARS_PER_LEVEL = 3;
