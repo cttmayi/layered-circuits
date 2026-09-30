@@ -134,6 +134,10 @@ export function App(): React.JSX.Element {
   const [rightOpen, setRightOpen] = usePersistentBool('lc-ui-right-open', true);
   /** 调试模式：解锁「一键出答案」等开发辅助（不参与正式玩法） */
   const [debugMode, setDebugMode] = usePersistentBool('lc-ui-debug', false);
+  // URL 带 ?debug=1：进入即强制开调试模式并记住（重启/刷新后保持），普通玩法不受影响
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('debug') === '1') setDebugMode(true);
+  }, []);
   /** 低频面板弹窗：任务墙 / 工具铺 / 组件库 / 波形（点击启动，不用时不留侧栏） */
   const [panelOpen, setPanelOpen] = useState<null | 'map' | 'shop' | 'library' | 'wave'>(null);
   /** 画布探针：买下探针后可点连线钉读数 */
