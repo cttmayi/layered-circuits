@@ -254,27 +254,34 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
       }
     }
   }
-  // 1.1c) 三极管基极回路限流：真实电路基极-发射极只有约 0.7V，强信号直接怼基极会过流，
-  //       必须有限流电阻（基极侧或发射极侧都算——回路阻抗决定基极电流）。
-  //       逻辑仿真用「b 网或 e 网是否含电阻」近似这个物理约束；模块是封装好的黑盒，
-  //       封装时已经过判定，内部不再重复检查。
+  // 1.1c) 三极管基极回路限流：把 b、e 看成同一个点（真实电路 b-e 导通时只有约 0.7V，
+  //       相当于短路）。这个点上如果同时出现「强驱动 1」（基极网直连 VCC / 输入引脚）
+  //       和「GND」（发射极网直连地），就是强信号直接怼 b-e 结 → 过流，打回；
+  //       经电阻的弱驱动（弱 1）+ GND 是合理的（限流电阻把强驱动变弱）。
+  //       限流电阻在基极侧或发射极侧都算——回路阻抗决定基极电流。
   if (usedUnits.has('npn')) {
     const unitOf = new Map(design.instances.map((i) => [i.id, i]));
     const netOf = (instId: string, pin: string) =>
       design.nets.find((n) => n.pins.some((p) => p.inst === instId && p.pin === pin));
-    const hasResOn = (net: (typeof design.nets)[number] | undefined) =>
+    const hasStrongSource = (net: (typeof design.nets)[number] | undefined) =>
       !!net?.pins.some((p) => {
         const other = unitOf.get(p.inst);
-        return other !== undefined && other.kind === 'unit' && other.unit === 'res';
+        return other !== undefined && other.kind === 'vcc';
+      }) ||
+      (net !== undefined && design.ports.some((p) => p.dir === 'in' && p.nets.includes(net.id)));
+    const hasGndDirect = (net: (typeof design.nets)[number] | undefined) =>
+      !!net?.pins.some((p) => {
+        const other = unitOf.get(p.inst);
+        return other !== undefined && other.kind === 'gnd';
       });
     for (const instance of design.instances) {
       if (instance.kind !== 'unit' || instance.unit !== 'npn') continue;
       const netB = netOf(instance.id, 'b');
       const netE = netOf(instance.id, 'e');
       if (!netB || !netE) continue; // 基极/发射极悬空交给「浮空/缺连接」类检查
-      if (!hasResOn(netB) && !hasResOn(netE)) {
+      if (hasStrongSource(netB) && hasGndDirect(netE)) {
         errors.push(
-          `${instance.label || '三极管'} 的基极回路没有限流电阻：真实电路基极-发射极只有约 0.7V，强信号直接怼基极会过流——请在基极串一个电阻，或在发射极到地之间加一个电阻。`,
+          `${instance.label || '三极管'} 的基极回路没有限流电阻：真实电路 b-e 只有约 0.7V，强信号直接怼基极会过流——请在基极串一个电阻，或在发射极到地之间加一个电阻限流。`,
         );
       }
     }

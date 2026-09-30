@@ -378,8 +378,9 @@ export const STAGE1_LEVELS: Level[] = [
     inputs: 2,
     fn: (a: 0 | 1, b: 0 | 1) => (a === b ? 1 : 0),
     optimalHalf: 64,
-    // 求解器结论：异或门 + 无基极限流电阻的反相器 = 54（比带限流电阻的反相器省 2）
-    bestKnownHalf: 54,
+    // 基极限流是强制规则：旧 54（异或门 + 无基极限流反相器）已非法。
+    // 求解器结论：手搭 4 个与非门 = 56，比模块版（异或+非门）64 更省——记作已知最省。
+    bestKnownHalf: 56,
     timingBudgetPs: 9000,
     allowedUnits: ['npn', 'res'],
     moduleAccess: 'listed',
