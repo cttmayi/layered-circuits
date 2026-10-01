@@ -291,6 +291,14 @@ export function teachingSolutionOf(levelId: string): Design | null {
       return adderByModules(8, 'teach-s3-a8', '8位加法器（门版）');
     case 's3-alu':
       return aluByModules('teach-s3-alu', '简易ALU（门版）');
+    case 's3-bcd2bin':
+      return bcd2binByModules('teach-s3-bcd2bin', 'BCD→二进制（门版）');
+    case 's3-bin2bcd':
+      return bin2bcdByModules('teach-s3-bin2bcd', '二进制→BCD（门版）');
+    case 's3-reg-8':
+      return reg8ByModules('teach-s3-reg8', '8位寄存器（门版）');
+    case 's3-calc':
+      return calcByModules('teach-s3-calc', '简易计算器（门版）');
     default:
       return null;
   }
@@ -318,4 +326,248 @@ export function elementEdgeOf(level: Level): 'cost' | 'delay' | null {
   const gd = analyzeTiming(compileDesign(teach, { library: gateLib }).net).criticalPathPs;
   if (ed < gd) return 'delay';
   return null;
+}
+
+// ---------------------------------------------------------------- 计算器章节门版
+// 与 references-calc 的元件版同结构、同逻辑，只是把拼装块换成教学门积木：
+//   - bcd2bin：12 个【全加器】积木（×8/×2 移位加权 + 两级行波进位）
+//   - bin2bcd：14 个「加 3」单元（【非门】+【与非门】+【与门】+【异或门】积木）
+//   - reg8：8 个主从 D 触发器（【非门】时钟反相 + 2×【D锁存器】）
+//   - calc：bcd2bin×2 → 8×【全加器】加法 → bin2bcd → 8 个主从 D 触发器锁存
+// 结构相同 → 成本与元件版一致或更低（教学积木里与门是二极管版更省），
+// 因此 elementEdgeOf 对新 4 关都为 null → 一键出答案直接出门版（符合既定原则）。
+
+/** 两位 BCD → 二进制（门版拼装块）：等价 bcd2binInto，全加器换成积木 */
+function bcd2binModulesInto(
+  b: DesignBuilder,
+  p: string,
+  t: string[],
+  u: string[],
+  bin: string[],
+): void {
+  const fa = hashOf('全加器');
+  // 2t：t 左移 1 位（bit i = t[i-1]；bit0 = 0）
+  const t2 = Array.from({ length: 5 }, (_, i) => (i === 0 ? 'gnd' : (t[i - 1] as string)));
+  // 第一级：s1 = u + t2（5 位）
+  const s1 = Array.from({ length: 5 }, (_, i) => `${p}s1${i}`);
+  let carry = 'gnd';
+  for (let i = 0; i < 5; i++) {
+    const next = i === 4 ? `${p}c1` : `${p}c1${i}`;
+    b.module(
+      fa,
+      { a: u[i] as string, b: t2[i] as string, cin: carry, s: s1[i] as string, cout: next },
+      `${p}A${i}`,
+    );
+    carry = next;
+  }
+  // 8t：t 左移 3 位
+  const t8 = Array.from({ length: 7 }, (_, j) => (j < 3 ? 'gnd' : (t[j - 3] as string)));
+  // 第二级：bin = s1 + t8（7 位）
+  carry = 'gnd';
+  for (let i = 0; i < 7; i++) {
+    const next = i === 6 ? `${p}c2` : `${p}c2${i}`;
+    b.module(
+      fa,
+      {
+        a: i < 5 ? (s1[i] as string) : 'gnd',
+        b: t8[i] as string,
+        cin: carry,
+        s: bin[i] as string,
+        cout: next,
+      },
+      `${p}B${i}`,
+    );
+    carry = next;
+  }
+}
+
+/** double-dabble「加 3」单元（门版拼装块）：等价 plus3Into，逻辑完全一致 */
+function plus3ModulesInto(b: DesignBuilder, p: string, a: string[], y: string[]): void {
+  const not = hashOf('非门');
+  const nand = hashOf('与非门');
+  const xor = hashOf('异或门');
+  const and = hashOf('与门');
+  const na0 = `${p}na0`;
+  const na1 = `${p}na1`;
+  const na3 = `${p}na3`;
+  b.module(not, { a: a[0] as string, y: na0 }, `${p}N0`);
+  b.module(not, { a: a[1] as string, y: na1 }, `${p}N1`);
+  b.module(not, { a: a[3] as string, y: na3 }, `${p}N3`);
+  const o10 = `${p}o10`; // a1 ∨ a0
+  b.module(nand, { a: na1, b: na0, y: o10 }, `${p}G10`);
+  const na20 = `${p}na20`; // ¬(a2∧(a1∨a0))
+  b.module(nand, { a: a[2] as string, b: o10, y: na20 }, `${p}G20`);
+  const ge5 = `${p}ge5`; // a3 ∨ (a2∧(a1∨a0)) = ¬(¬a3 ∧ ¬(a2∧o10))
+  b.module(nand, { a: na3, b: na20, y: ge5 }, `${p}G5`);
+  // y0 = a0 ⊕ ge5
+  b.module(xor, { a: a[0] as string, b: ge5, y: y[0] as string }, `${p}X0`);
+  // y1 = a1 ⊕ (ge5·¬a0)
+  const t1 = `${p}t1`;
+  b.module(and, { a: ge5, b: na0, y: t1 }, `${p}A1`);
+  b.module(xor, { a: a[1] as string, b: t1, y: y[1] as string }, `${p}X1`);
+  // c2 = ge5·(a1∨a0)
+  const c2 = `${p}c2`;
+  b.module(and, { a: ge5, b: o10, y: c2 }, `${p}A2`);
+  b.module(xor, { a: a[2] as string, b: c2, y: y[2] as string }, `${p}X2`);
+  // c3 = a2·c2
+  const c3 = `${p}c3`;
+  b.module(and, { a: a[2] as string, b: c2, y: c3 }, `${p}A3`);
+  b.module(xor, { a: a[3] as string, b: c3, y: y[3] as string }, `${p}X3`);
+}
+
+/** 二进制 → 两位 BCD（门版拼装块）：等价 bin2bcdInto（double-dabble 组合展开） */
+function bin2bcdModulesInto(
+  b: DesignBuilder,
+  p: string,
+  bin: string[],
+  t: string[],
+  u: string[],
+): void {
+  let tens = Array.from({ length: 4 }, (_, i) => `${p}s0t${i}`);
+  let ones = Array.from({ length: 4 }, (_, i) => `${p}s0u${i}`);
+  // 初始全 0：net 经电阻拉低（弱 0；后续 plus3 强 1 驱动会覆盖）
+  for (let i = 0; i < 4; i++) {
+    b.unit('res', { a: 'gnd', b: tens[i] as string }, `${p}z${i}R`);
+    b.unit('res', { a: 'gnd', b: ones[i] as string }, `${p}zy${i}R`);
+  }
+  for (let step = 0; step < 7; step++) {
+    const st = `${p}s${step + 1}`;
+    const onesP = Array.from({ length: 4 }, (_, i) => `${st}u${i}`);
+    const tensP = Array.from({ length: 4 }, (_, i) => `${st}t${i}`);
+    plus3ModulesInto(b, `${st}u`, ones, onesP);
+    plus3ModulesInto(b, `${st}t`, tens, tensP);
+    const bit = bin[6 - step] as string;
+    ones = [bit, onesP[0] as string, onesP[1] as string, onesP[2] as string];
+    tens = [onesP[3] as string, tensP[0] as string, tensP[1] as string, tensP[2] as string];
+  }
+  for (let i = 0; i < 4; i++) {
+    t[i] = tens[i] as string;
+    u[i] = ones[i] as string;
+  }
+}
+
+/** 8 位寄存器（门版）：8 个主从 D 触发器共用时钟反相器 */
+function reg8ByModules(id: string, name: string): Design {
+  const b = new DesignBuilder(id, name);
+  const dff = hashOf('D锁存器');
+  const not = hashOf('非门');
+  b.module(not, { a: 'clk', y: 'nclk' }, 'N0');
+  for (let i = 0; i < 8; i++) {
+    b.module(dff, { d: `d${i}`, en: 'nclk', q: `m${i}`, qn: `mqn${i}` }, `M${i}`);
+    b.module(dff, { d: `m${i}`, en: 'clk', q: `q${i}`, qn: `qn${i}` }, `S${i}`);
+  }
+  b.port(
+    'd',
+    'in',
+    Array.from({ length: 8 }, (_, i) => `d${i}`),
+  );
+  b.port('clk', 'in', 'clk');
+  b.port(
+    'q',
+    'out',
+    Array.from({ length: 8 }, (_, i) => `q${i}`),
+  );
+  return b.build();
+}
+
+/** 两位 BCD → 二进制（门版参考解）：端口与 s3-bcd2bin 关卡一致（bcd[7:0] → bin[6:0]） */
+function bcd2binByModules(id: string, name: string): Design {
+  const b = new DesignBuilder(id, name);
+  b.vcc('vcc');
+  b.gnd('gnd');
+  const t = Array.from({ length: 4 }, (_, i) => `bcd${i + 4}`);
+  const u = Array.from({ length: 4 }, (_, i) => `bcd${i}`);
+  const bin = Array.from({ length: 7 }, (_, i) => `bin${i}`);
+  bcd2binModulesInto(b, 'x', t, u, bin);
+  b.port(
+    'bcd',
+    'in',
+    Array.from({ length: 8 }, (_, i) => `bcd${i}`),
+  );
+  b.port('bin', 'out', bin);
+  return b.build();
+}
+
+/** 二进制 → 两位 BCD（门版参考解）：端口与 s3-bin2bcd 关卡一致（bin[6:0] → bcd[7:0] 十位 + bcd[3:0] 个位） */
+function bin2bcdByModules(id: string, name: string): Design {
+  const b = new DesignBuilder(id, name);
+  b.vcc('vcc');
+  b.gnd('gnd');
+  const bin = Array.from({ length: 7 }, (_, i) => `bin${i}`);
+  const t = Array.from({ length: 4 }, (_, i) => `bcd${i + 4}`);
+  const u = Array.from({ length: 4 }, (_, i) => `bcd${i}`);
+  bin2bcdModulesInto(b, 'x', bin, t, u);
+  b.port('bin', 'in', bin);
+  b.port('bcd', 'out', [...u, ...t]);
+  return b.build();
+}
+
+/** 简易计算器（门版参考解）：端口与 s3-calc 关卡一致（a/b BCD、eq 按钮、disp_t/disp_u 十位/个位） */
+function calcByModules(id: string, name: string): Design {
+  const b = new DesignBuilder(id, name);
+  b.vcc('vcc');
+  b.gnd('gnd');
+  const fa = hashOf('全加器');
+  const dff = hashOf('D锁存器');
+  const not = hashOf('非门');
+  // a、b（BCD）→ 二进制
+  const aT = Array.from({ length: 4 }, (_, i) => `a${i + 4}`);
+  const aU = Array.from({ length: 4 }, (_, i) => `a${i}`);
+  const bT = Array.from({ length: 4 }, (_, i) => `b${i + 4}`);
+  const bU = Array.from({ length: 4 }, (_, i) => `b${i}`);
+  const aBin = Array.from({ length: 7 }, (_, i) => `aBin${i}`);
+  const bBin = Array.from({ length: 7 }, (_, i) => `bBin${i}`);
+  bcd2binModulesInto(b, 'a', aT, aU, aBin);
+  bcd2binModulesInto(b, 'b', bT, bU, bBin);
+  // 8 位二进制加法
+  const sum = Array.from({ length: 8 }, (_, i) => `sum${i}`);
+  let carry = 'gnd';
+  for (let i = 0; i < 8; i++) {
+    const next = i === 7 ? 'sumc' : `sumc${i}`;
+    b.module(
+      fa,
+      {
+        a: i < 7 ? (aBin[i] as string) : 'gnd',
+        b: i < 7 ? (bBin[i] as string) : 'gnd',
+        cin: carry,
+        s: sum[i] as string,
+        cout: next,
+      },
+      `S${i}`,
+    );
+    carry = next;
+  }
+  // sum → BCD
+  const t = Array.from({ length: 4 }, (_, i) => `t${i}`);
+  const u = Array.from({ length: 4 }, (_, i) => `u${i}`);
+  bin2bcdModulesInto(b, 'c', sum, t, u);
+  // eq 上升沿锁存
+  b.module(not, { a: 'eq', y: 'neq' }, 'N0');
+  for (let i = 0; i < 8; i++) {
+    const d = i < 4 ? (u[i] as string) : (t[i - 4] as string);
+    b.module(dff, { d, en: 'neq', q: `m${i}`, qn: `mqn${i}` }, `M${i}`);
+    b.module(dff, { d: `m${i}`, en: 'eq', q: `q${i}`, qn: `qn${i}` }, `S${i}`);
+  }
+  b.port(
+    'a',
+    'in',
+    Array.from({ length: 8 }, (_, i) => `a${i}`),
+  );
+  b.port(
+    'b',
+    'in',
+    Array.from({ length: 8 }, (_, i) => `b${i}`),
+  );
+  b.port('eq', 'in', 'eq');
+  b.port(
+    'disp_t',
+    'out',
+    Array.from({ length: 4 }, (_, i) => `q${i + 4}`),
+  );
+  b.port(
+    'disp_u',
+    'out',
+    Array.from({ length: 4 }, (_, i) => `q${i}`),
+  );
+  return b.build();
 }

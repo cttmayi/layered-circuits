@@ -9,6 +9,7 @@ import { judgeDesign } from '@lc/compiler';
 import { InMemoryModuleLibrary, type Level } from '@lc/schema';
 import { describe, expect, it } from 'vitest';
 import { ALL_LEVELS } from '../src/levels.js';
+import { elementEdgeOf, TEACHING_MODULES, teachingSolutionOf } from '../src/teachings.js';
 
 const lib = new InMemoryModuleLibrary();
 const NEW_IDS = ['s3-bcd2bin', 's3-bin2bcd', 's3-reg-8', 's3-calc'];
@@ -36,6 +37,29 @@ describe('计算器链新关', () => {
       },
       // 大电路的时序行为探测较慢（calc 是 600+ 元件、10 输入），放宽超时
       id === 's3-calc' ? 30_000 : 15_000,
+    );
+
+    it(
+      `${id}：门版参考解过关且满分（一键出答案直接出门版）`,
+      () => {
+        const level = ALL_LEVELS.find((l) => l.id === id) as Level;
+        const teach = teachingSolutionOf(id);
+        expect(teach, `${id} 有门版（优先逻辑门版原则）`).toBeTruthy();
+        const gateLib = new InMemoryModuleLibrary([...TEACHING_MODULES]);
+        const r = judgeDesign(teach!, level, {
+          library: gateLib,
+          family: 'rtl',
+          units: level.allowedUnits,
+          optimalHalf: level.optimalHalf,
+          budgetHalf: level.budgetHalf,
+          hardcore: true,
+        });
+        expect(r.pass, `${id} 门版应过关：${r.errors.join('；')}`).toBe(true);
+        expect(r.score).toBe(100);
+        // 原则：元件版不占优 → 不弹窗，一键出答案直接出门版
+        expect(elementEdgeOf(level)).toBeNull();
+      },
+      id === 's3-calc' ? 60_000 : 30_000,
     );
   }
 

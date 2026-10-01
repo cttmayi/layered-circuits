@@ -87,8 +87,8 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.score, `${level.id} 门版应满分`).toBe(100);
       expect(r.costHalf, `${level.id} 门版成本应 ≤ 元件版`).toBeLessThanOrEqual(level.optimalHalf);
     }
-    // 12 关有门版：第 1 章 2（异或/同或）+ 第 2 章 5（SR/D锁存/DFF×3）+ 第 3 章 5（算术）
-    expect(checked).toBe(12);
+    // 16 关有门版：第 1 章 2（异或/同或）+ 第 2 章 5（SR/D锁存/DFF×3）+ 第 3 章 9（算术+计算器链）
+    expect(checked).toBe(16);
   });
 
   it('门版 还原 → 再导出 → 判定通关且满分（App 的完整链路）', () => {
@@ -110,7 +110,7 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.pass, `${level.id} 门版还原后应通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${level.id} 门版还原后应满分`).toBe(100);
     }
-    expect(checked).toBe(12);
+    expect(checked).toBe(16);
   });
 });
 
@@ -155,5 +155,6 @@ describe('元件版 vs 门版：一键出答案的版本选择依据', () => {
       const edge = elementEdgeOf(level);
       expect(edge, `${level.id} 元件版不应有优势（现在是 ${edge}）`).toBeNull();
     }
-  });
+    // calc 门版是大电路（几百模块实例），analyzeTiming 较慢，放宽超时
+  }, 60_000);
 });

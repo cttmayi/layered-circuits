@@ -107,4 +107,34 @@ describe('调试模式 · 一键出答案', () => {
     expect(screen.getByText(/参考解已搭好/)).toBeTruthy();
     expect(screen.queryByRole('dialog', { name: '一键出答案' })).toBeNull();
   });
+
+  it('计算器（新关）：一键出答案直接出门版（元件版无优势，不弹窗）', async () => {
+    // 预置第三章前 8 关已通关，解锁计算器
+    const cleared = {
+      ...teachCleared(),
+      's3-half-adder': { score: 100, bestCostHalf: 84, clearedAt: 1 },
+      's3-full-adder': { score: 100, bestCostHalf: 180, clearedAt: 1 },
+      's3-adder-4': { score: 100, bestCostHalf: 720, clearedAt: 1 },
+      's3-adder-8': { score: 100, bestCostHalf: 1440, clearedAt: 1 },
+      's3-alu': { score: 100, bestCostHalf: 1040, clearedAt: 1 },
+      's3-bcd2bin': { score: 100, bestCostHalf: 2160, clearedAt: 1 },
+      's3-bin2bcd': { score: 100, bestCostHalf: 7872, clearedAt: 1 },
+      's3-reg-8': { score: 100, bestCostHalf: 1568, clearedAt: 1 },
+    };
+    localStorage.setItem(
+      'lc-studio-progress-v1',
+      JSON.stringify({ cleared, attempts: {}, library: [], started: {} }),
+    );
+    render(<App />);
+    startJob('简易计算器');
+    fireEvent.click(screen.getByText('调试模式'));
+    fireEvent.click(screen.getByText('一键出答案'));
+    // 优先逻辑门版（元件版无成本/延迟优势）→ 直接出门版，不弹窗
+    expect(screen.getByText(/逻辑门版已搭好/)).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: '一键出答案' })).toBeNull();
+    // 门积木加入画布库（左侧「我的模块」出现 D锁存器/全加器等）
+    await waitFor(() => expect(screen.getByText(/我的模块（\d+）/)).toBeTruthy(), {
+      timeout: 15000,
+    });
+  }, 60_000);
 });
