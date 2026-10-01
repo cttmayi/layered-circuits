@@ -11,6 +11,12 @@
  * 门版和元件版元件构成相同 → 成本相同。「用逻辑门」并不天然更贵 —— 贵的是「教科书直觉搭法」
  * （异或+与+或全加器要用强驱动或门，会超预算），而本项目教学版直接复用参考解的优化结构。
  *
+ * 积木分两层（关卡设计规范 §二.4：同一单元 ≥3 次必须封装，答案顶层盒数 ≤ 15）：
+ *  - 基础门（TEACHING_MODULES_BASE）：非门/与非门/或门/异或门/与门/D锁存器/全加器，元件级封装；
+ *  - 复合积木（COMPOSITE_ORDER）：加3单元、主从D触发器、BCD→二进制、二进制→BCD、八位寄存器，
+ *    基于基础门（或更早的复合积木）封装，供 bin2bcd / reg-8 / calc 的门版复用，
+ *    内部可经画布「双击模块」下钻查看。
+ *
  * 注意：这些 Design 引用了模块 hash，必须带 TEACHING_MODULES 建库才能编译/判定，
  * 因此**不能**放进关卡数据的 referenceSolution（那必须空库可编译）——只给「一键出答案」用。
  */
@@ -97,8 +103,8 @@ function dLatchQnRef(id = 'ref-dlatch-qn'): Design {
   return b.build();
 }
 
-/** RTL 教学用门级模块（内容哈希确定）——门版的默认积木集 */
-export const TEACHING_MODULES: readonly ModuleTemplate[] = [
+/** RTL 基础门积木（元件级，EMPTY_LIB 封装，内容哈希稳定）——复合积木的原料 */
+const TEACHING_MODULES_BASE: readonly ModuleTemplate[] = [
   wrapGate('非门', notGateRef(), 'logic'),
   wrapGate('与非门', nandGateRef(), 'logic'),
   wrapGate('或门', orGateRef(), 'logic'),
@@ -150,15 +156,93 @@ function gateTemplateFor(name: string, family: LogicFamily = 'rtl'): ModuleTempl
   return t;
 }
 
-/** 某工艺的教学积木全集（App 一键出答案门版时并入画布库；判定库也用这个） */
-export function teachingModulesFor(family: LogicFamily): readonly ModuleTemplate[] {
-  if (family === 'rtl') return TEACHING_MODULES;
+/**
+ * 复合积木（基于基础门/更早的复合积木封装）——关卡设计规范 §二.4：同一单元 ≥3 次必须封装。
+ * 目前服务计算器链：加3单元（bin2bcd 的 14 个重复单元）、主从D触发器（reg-8/calc 复用）、
+ * BCD↔二进制转换器与八位寄存器（calc 组装关的粗粒度积木）。内部可经「双击模块」下钻查看。
+ */
+const COMPOSITE_ORDER = [
+  '加3单元',
+  '主从D触发器',
+  'BCD→二进制',
+  '二进制→BCD',
+  '八位寄存器',
+] as const;
+const COMPOSITE_KIND: Record<string, ModuleKind> = {
+  加3单元: 'arith',
+  主从D触发器: 'seq',
+  'BCD→二进制': 'arith',
+  '二进制→BCD': 'arith',
+  八位寄存器: 'seq',
+};
+const compositeCache = new Map<string, ModuleTemplate>();
+
+/** 复合积木的 body：按依赖顺序引用已存在的积木（绝不自引用/循环） */
+function compositeBodyOf(name: string, family: LogicFamily): Design {
+  switch (name) {
+    case '加3单元':
+      return plus3BrickRef(family);
+    case '主从D触发器':
+      return dffByModules(`brick-dff-${family}`, '主从D触发器', family);
+    case 'BCD→二进制':
+      return bcd2binByModules(`brick-bcd2bin-${family}`, 'BCD→二进制', family);
+    case '二进制→BCD':
+      return bin2bcdByModules(`brick-bin2bcd-${family}`, '二进制→BCD', family);
+    case '八位寄存器':
+      return reg8ByModules(`brick-reg8-${family}`, '八位寄存器', family);
+    default:
+      throw new Error(`未知复合积木：${name}`);
+  }
+}
+
+/** 封装复合积木：库 = 基础门 + 依赖顺序排在前面的复合积木 */
+function compositeFor(name: string, family: LogicFamily): ModuleTemplate {
+  const key = `${family}:${name}`;
+  let t = compositeCache.get(key);
+  if (!t) {
+    const idx = COMPOSITE_ORDER.indexOf(name as (typeof COMPOSITE_ORDER)[number]);
+    const body = compositeBodyOf(name, family);
+    const lib = new InMemoryModuleLibrary([
+      ...baseTemplatesFor(family),
+      ...COMPOSITE_ORDER.slice(0, idx).map((n) => compositeFor(n, family)),
+    ]);
+    const { template } = wrapModule(
+      { name, stage: 3, kind: COMPOSITE_KIND[name] ?? 'logic', ports: body.ports, body },
+      lib,
+    );
+    t = template;
+    compositeCache.set(key, t);
+  }
+  return t;
+}
+
+/** 基础门积木（按工艺：RTL 用基础集，TTL/CMOS 用对应工艺参考解封装） */
+function baseTemplatesFor(family: LogicFamily): readonly ModuleTemplate[] {
+  if (family === 'rtl') return TEACHING_MODULES_BASE;
   const names = Object.keys(FAMILY_GATES);
   return names.map((n) => gateTemplateFor(n, family));
 }
 
+/** 全部教学积木（基础门 + 复合积木）——App 一键出答案门版时并入画布库；判定库也用这个 */
+export const TEACHING_MODULES: readonly ModuleTemplate[] = [
+  ...TEACHING_MODULES_BASE,
+  ...COMPOSITE_ORDER.map((n) => compositeFor(n, 'rtl')),
+];
+
+/** 某工艺的教学积木全集（基础门 + 复合积木；App 一键出答案门版时并入画布库；判定库也用这个） */
+export function teachingModulesFor(family: LogicFamily): readonly ModuleTemplate[] {
+  if (family === 'rtl') return TEACHING_MODULES;
+  return [...baseTemplatesFor(family), ...COMPOSITE_ORDER.map((n) => compositeFor(n, family))];
+}
+
+/** 按名取积木模板（基础门与复合积木都能取，复合积木按依赖顺序惰性封装） */
+function templateFor(name: string, family: LogicFamily = 'rtl'): ModuleTemplate {
+  if ((COMPOSITE_ORDER as readonly string[]).includes(name)) return compositeFor(name, family);
+  return gateTemplateFor(name, family);
+}
+
 function hashOf(name: string, family: LogicFamily = 'rtl'): string {
-  return gateTemplateFor(name, family).hash;
+  return templateFor(name, family).hash;
 }
 
 /** 半加器（门版）：s = a⊕b（异或门），c = a∧b（与门） */
@@ -319,6 +403,33 @@ function xnorByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
   return b.build();
 }
 
+/**
+ * 异或门·复古版（门版）：4【与门】+ 4【非门】= 8 盒，成本 80（恰等于满分线）。
+ * 本关禁用【与非门】积木，只许用 非门/与门/或门。与门/或门是二极管逻辑（弱输出），
+ * 二极管阳极若挂在「输出侧」会在强度对等时把电平反灌回输入（组合反馈 → 振荡），
+ * 所以不能用 a·¬b / ¬a·b 再合并的结构；改用标准 4-与非门展开（每个与非门 = 与门+非门）：
+ *   w1 = ¬(a·b)；w2 = ¬(a·w1)；w3 = ¬(b·w1)；y = ¬(w2·w3) = (a·¬b)∨(¬a·b)
+ * 中间节点全是与非门输出（强 0 / 弱 1），二极管阴极接弱 1 被 cathodeHigh 挡住、接强 0 只把
+ * 输出拉低，不会反灌 → 仿真稳定收敛。
+ */
+function xorRetroByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
+  const b = new DesignBuilder(id, name);
+  const and = hashOf('与门', family);
+  const not = hashOf('非门', family);
+  b.module(and, { a: 'a', b: 'b', y: 'ab' }, 'A1');
+  b.module(not, { a: 'ab', y: 'w1' }, 'N1');
+  b.module(and, { a: 'a', b: 'w1', y: 'aw1' }, 'A2');
+  b.module(not, { a: 'aw1', y: 'w2' }, 'N2');
+  b.module(and, { a: 'b', b: 'w1', y: 'bw1' }, 'A3');
+  b.module(not, { a: 'bw1', y: 'w3' }, 'N3');
+  b.module(and, { a: 'w2', b: 'w3', y: 'w2w3' }, 'A4');
+  b.module(not, { a: 'w2w3', y: 'y' }, 'N4');
+  b.port('a', 'in', 'a');
+  b.port('b', 'in', 'b');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
 /** 与非门 SR 锁存器（门版）：2 个【与非门】交叉耦合，低有效置位/复位 */
 function srLatchByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
@@ -377,6 +488,9 @@ export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl')
       return norByModules('teach-s1-nor', '或非门（门版）', family);
     case 's1-xor':
       return xorByModules('teach-s1-xor', '异或门（门版）', family);
+    case 's1-xor-retro':
+      // 复古复用关禁用【与非门】积木：用 非门/与门/或门 拼（5 盒，符合本关素材约束）
+      return xorRetroByModules('teach-s1-xor-retro', '异或门（复古版）', family);
     case 's1-xnor':
       return xnorByModules('teach-s1-xnor', '同或门（门版）', family);
     case 's2-sr-latch':
@@ -530,6 +644,21 @@ function plus3ModulesInto(
 }
 
 /** 二进制 → 两位 BCD（门版拼装块）：等价 bin2bcdInto（double-dabble 组合展开） */
+/** 加 3 单元（复合积木 body）：a ≥ 5 时 y = a + 3，否则原样（double-dabble 核心一步） */
+function plus3BrickRef(family: LogicFamily = 'rtl'): Design {
+  const b = new DesignBuilder(`brick-plus3-${family}`, '加3单元');
+  const a = Array.from({ length: 4 }, (_, i) => `a${i}`);
+  const y = Array.from({ length: 4 }, (_, i) => `y${i}`);
+  plus3ModulesInto(b, 'x', a, y, family);
+  b.port('a', 'in', a);
+  b.port('y', 'out', y);
+  return b.build();
+}
+
+/**
+ * 二进制 → 两位 BCD（门版拼装块）：14 个【加3单元】积木（7 步 × 个位/十位各 1）。
+ * 初始零直接接地（与 bcd2bin 的 t2/t8 零位同模式），不再用电阻拉低——顶层盒数 14 ≤ 15。
+ */
 function bin2bcdModulesInto(
   b: DesignBuilder,
   p: string,
@@ -538,38 +667,35 @@ function bin2bcdModulesInto(
   u: string[],
   family: LogicFamily = 'rtl',
 ): void {
-  let tens = Array.from({ length: 4 }, (_, i) => `${p}s0t${i}`);
-  let ones = Array.from({ length: 4 }, (_, i) => `${p}s0u${i}`);
-  // 初始全 0：net 经电阻拉低（弱 0；后续 plus3 强 1 驱动会覆盖）
-  for (let i = 0; i < 4; i++) {
-    b.unit('res', { a: 'gnd', b: tens[i] as string }, `${p}z${i}R`);
-    b.unit('res', { a: 'gnd', b: ones[i] as string }, `${p}zy${i}R`);
-  }
+  let tens = Array.from({ length: 4 }, () => 'gnd');
+  let ones = Array.from({ length: 4 }, () => 'gnd');
   for (let step = 0; step < 7; step++) {
     const st = `${p}s${step + 1}`;
     const onesP = Array.from({ length: 4 }, (_, i) => `${st}u${i}`);
     const tensP = Array.from({ length: 4 }, (_, i) => `${st}t${i}`);
-    plus3ModulesInto(b, `${st}u`, ones, onesP, family);
-    plus3ModulesInto(b, `${st}t`, tens, tensP, family);
+    b.module(hashOf('加3单元', family), { a: ones, y: onesP }, `${p}U${step}`);
+    b.module(hashOf('加3单元', family), { a: tens, y: tensP }, `${p}T${step}`);
     const bit = bin[6 - step] as string;
     ones = [bit, onesP[0] as string, onesP[1] as string, onesP[2] as string];
     tens = [onesP[3] as string, tensP[0] as string, tensP[1] as string, tensP[2] as string];
   }
+  // 输出。注意：最后一步移入的 bin[0] 直接以输入端口网名出现（ones[0] = bin[0]），
+  // 顶层展开时 bin/bcd 端口位 0 恰好共享同一节点、语义正确；但封装成模块后两个端口
+  // 绑定会互相覆盖 → 输出位悬空。这里用与门缓冲成独立新网（AND(x,x)=x，+8 半单位）。
+  const ob = `${p}ob`;
+  b.module(hashOf('与门', family), { a: ones[0] as string, b: ones[0] as string, y: ob }, `${p}O`);
   for (let i = 0; i < 4; i++) {
     t[i] = tens[i] as string;
-    u[i] = ones[i] as string;
+    u[i] = i === 0 ? ob : (ones[i] as string);
   }
 }
 
-/** 8 位寄存器（门版）：8 个主从 D 触发器共用时钟反相器 */
+/** 8 位寄存器（门版）：8 个【主从D触发器】共用时钟（复用 s2-dff 产出模块，顶层 8 盒） */
 function reg8ByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
-  const dff = hashOf('D锁存器', family);
-  const not = hashOf('非门', family);
-  b.module(not, { a: 'clk', y: 'nclk' }, 'N0');
+  const dff = hashOf('主从D触发器', family);
   for (let i = 0; i < 8; i++) {
-    b.module(dff, { d: `d${i}`, en: 'nclk', q: `m${i}`, qn: `mqn${i}` }, `M${i}`);
-    b.module(dff, { d: `m${i}`, en: 'clk', q: `q${i}`, qn: `qn${i}` }, `S${i}`);
+    b.module(dff, { d: `d${i}`, clk: 'clk', q: `q${i}`, qn: `qn${i}` }, `F${i}`);
   }
   b.port(
     'd',
@@ -618,23 +744,22 @@ function bin2bcdByModules(id: string, name: string, family: LogicFamily = 'rtl')
 }
 
 /** 简易计算器（门版参考解）：端口与 s3-calc 关卡一致（a/b BCD、eq 按钮、disp_t/disp_u 十位/个位） */
+/** 简易计算器（门版参考解，组装关）：2×【BCD→二进制】+ 8×【全加器】+ 1×【二进制→BCD】+ 1×【八位寄存器】= 12 盒 */
 function calcByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
   b.gnd('gnd');
   const fa = hashOf('全加器', family);
-  const dff = hashOf('D锁存器', family);
-  const not = hashOf('非门', family);
-  // a、b（BCD）→ 二进制
+  // a、b（BCD）→ 二进制（两个 BCD→二进制 积木）
   const aT = Array.from({ length: 4 }, (_, i) => `a${i + 4}`);
   const aU = Array.from({ length: 4 }, (_, i) => `a${i}`);
   const bT = Array.from({ length: 4 }, (_, i) => `b${i + 4}`);
   const bU = Array.from({ length: 4 }, (_, i) => `b${i}`);
   const aBin = Array.from({ length: 7 }, (_, i) => `aBin${i}`);
   const bBin = Array.from({ length: 7 }, (_, i) => `bBin${i}`);
-  bcd2binModulesInto(b, 'a', aT, aU, aBin, family);
-  bcd2binModulesInto(b, 'b', bT, bU, bBin, family);
-  // 8 位二进制加法
+  b.module(hashOf('BCD→二进制', family), { bcd: [...aU, ...aT], bin: aBin }, 'BCD2BIN_A');
+  b.module(hashOf('BCD→二进制', family), { bcd: [...bU, ...bT], bin: bBin }, 'BCD2BIN_B');
+  // 8 位二进制加法（8× 全加器 积木）
   const sum = Array.from({ length: 8 }, (_, i) => `sum${i}`);
   let carry = 'gnd';
   for (let i = 0; i < 8; i++) {
@@ -652,17 +777,14 @@ function calcByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
     );
     carry = next;
   }
-  // sum → BCD
+  // sum → BCD（一个 二进制→BCD 积木；a+b ≤ 99 只需 7 位）
   const t = Array.from({ length: 4 }, (_, i) => `t${i}`);
   const u = Array.from({ length: 4 }, (_, i) => `u${i}`);
-  bin2bcdModulesInto(b, 'c', sum, t, u, family);
-  // eq 上升沿锁存
-  b.module(not, { a: 'eq', y: 'neq' }, 'N0');
-  for (let i = 0; i < 8; i++) {
-    const d = i < 4 ? (u[i] as string) : (t[i - 4] as string);
-    b.module(dff, { d, en: 'neq', q: `m${i}`, qn: `mqn${i}` }, `M${i}`);
-    b.module(dff, { d: `m${i}`, en: 'eq', q: `q${i}`, qn: `qn${i}` }, `S${i}`);
-  }
+  b.module(hashOf('二进制→BCD', family), { bin: sum.slice(0, 7), bcd: [...u, ...t] }, 'BIN2BCD');
+  // eq 上升沿锁存（一个 八位寄存器 积木：d = 个位 u + 十位 t）
+  const dIn = [...u, ...t];
+  const q = Array.from({ length: 8 }, (_, i) => `q${i}`);
+  b.module(hashOf('八位寄存器', family), { d: dIn, clk: 'eq', q }, 'REG8');
   b.port(
     'a',
     'in',

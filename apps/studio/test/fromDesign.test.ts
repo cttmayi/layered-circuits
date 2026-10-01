@@ -95,9 +95,24 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.score, `${level.id} 门版应满分`).toBe(100);
       expect(r.costHalf, `${level.id} 门版成本应 ≤ 元件版`).toBeLessThanOrEqual(level.optimalHalf);
     }
-    // 18 关有门版：第 1 章 4（与非/或非/异或/同或）+ 第 2 章 5（SR/D锁存/DFF×3）+ 第 3 章 9（算术+计算器链）；
+    // 19 关有门版：第 1 章 5（与非/或非/异或/同或/异或·复古版）+ 第 2 章 5（SR/D锁存/DFF×3）+ 第 3 章 9（算术+计算器链）；
     // 非门/与门/或门 moduleAccess: 'none'（禁用模块）→ 不出门版
-    expect(checked).toBe(18);
+    expect(checked).toBe(19);
+  });
+
+  it('门版答案顶层盒数 ≤ 15（关卡设计规范：画布顶层可见盒子数上限）', () => {
+    // 元件版（性能隐藏解）、教学关、模块详情弹窗内部电路豁免；门版答案必须 ≤ 15 盒。
+    for (const level of ALL_LEVELS) {
+      const teaching = teachingSolutionOf(level.id);
+      if (!teaching) continue;
+      const boxes = teaching.instances.filter(
+        (i) => i.kind === 'unit' || i.kind === 'module',
+      ).length;
+      expect(
+        boxes,
+        `${level.id} 门版应 ≤ 15 盒（现在是 ${boxes}）——见 docs/关卡设计规范（规模与积木复用）.md §二`,
+      ).toBeLessThanOrEqual(15);
+    }
   });
 
   it('门版 还原 → 再导出 → 判定通关且满分（App 的完整链路）', () => {
@@ -119,7 +134,7 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.pass, `${level.id} 门版还原后应通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${level.id} 门版还原后应满分`).toBe(100);
     }
-    expect(checked).toBe(18);
+    expect(checked).toBe(19);
   });
 });
 
@@ -166,6 +181,12 @@ describe('元件版 vs 门版：一键出答案的版本选择依据', () => {
       // 元件版传播延迟必然更短 → 'delay'（弹窗二选一，符合「元件版占优才给选项」原则）
       if (level.id === 's1-nor') {
         expect(edge, 's1-nor 元件版（并联下拉）应延迟占优').toBe('delay');
+        continue;
+      }
+      // s1-xor-retro 例外：复古关禁【与非门】积木，门版用「与门+非门」组合 4 个与非门
+      // （4 级延迟、成本 80），参考解是 4 个真 RTL 与非门（2 级延迟、成本 80）→ 延迟占优。
+      if (level.id === 's1-xor-retro') {
+        expect(edge, 's1-xor-retro 元件版（真与非门两级）应延迟占优').toBe('delay');
         continue;
       }
       expect(edge, `${level.id} 元件版不应有优势（现在是 ${edge}）`).toBeNull();
