@@ -106,17 +106,24 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       trace: false,
       maxEvents: 2_000_000,
       initialSignals: req.prevSignals,
+      initialContribs: req.prevContribs,
     });
     const values: Record<string, DriveValue> = {};
-    // 瞬时按钮端口：先按 0 驱动，让组合逻辑稳定后再置目标值。
-    // 否则冷启动仿真里 eq 的上升沿出现在 t=0，会锁存组合链尚未稳定的中间态
-    // （真实玩家是先设好 a/b、组合链早已稳定，再按下等号键）。
+    // 瞬时按钮端口：
+    //  - 时序模式：先按 0 驱动，让组合逻辑稳定后再置目标值。否则冷启动仿真里 eq 的上升沿
+    //    出现在 t=0，会锁存组合链尚未稳定的中间态（真实玩家是先设好 a/b、组合链早已稳定，
+    //    再按下等号键）。
+    //  - 逻辑模式：按钮就是普通输入，直接按目标值驱动（settle 收敛到终态，无沿语义；
+    //    锁存器保持态由 prevSignals 跨仿真携带）。
     const buttonPorts = new Set(req.buttonPorts ?? []);
     for (const port of net.ports) {
       if (port.dir !== 'in') continue;
       const drive = inputs[port.name] ?? 3;
       values[port.name] = drive;
-      sim.setInput(port.name, buttonPorts.has(port.name) ? 0 : paramToLogic(drive));
+      sim.setInput(
+        port.name,
+        mode === 'timing' && buttonPorts.has(port.name) ? 0 : paramToLogic(drive),
+      );
     }
 
     let unstable = false;
@@ -134,9 +141,18 @@ export function handleRequest(req: StudioRequest): StudioResponse {
     }
 
     const netSignals: Array<[string, number]> = [];
+    const contrib: Array<[string, number[]]> = [];
     for (let node = 0; node < net.nodeCount; node++) {
       const netId = netIds[node];
-      if (netId) netSignals.push([netId, sim.signalOf(node)]);
+      if (!netId) continue;
+      netSignals.push([netId, sim.signalOf(node)]);
+      const start = net.driveStart[node] as number;
+      const end = net.driveStart[node + 1] as number;
+      const vals: number[] = [];
+      for (let i = start; i < end; i++) {
+        vals.push(sim.contribOf(net.driveElem[i] as number, net.driveSlot[i] as number));
+      }
+      contrib.push([netId, vals]);
     }
 
     const { counts, diagnostics: costDiagnostics } = computeCosts(design, library);
@@ -171,6 +187,7 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       inputs: values,
       portValues: sim.readAllOutputs(),
       netSignals,
+      contrib,
       nodeCount: net.nodeCount,
       elemCount: net.elemCount,
       evaluations: sim.stats.evaluations,

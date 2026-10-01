@@ -28,6 +28,12 @@ function bcdInputs(a: number, b: number, eq: 0 | 1): Record<string, DriveValue> 
 
 interface SnapshotLike {
   netSignals: Array<[string, number]>;
+  contrib: Array<[string, number[]]>;
+}
+
+interface PrevState {
+  signals: Record<string, number>;
+  contribs: Record<string, number[]>;
 }
 
 /** 从仿真快照读十位/个位（q 寄存器即 disp_t/disp_u 的网） */
@@ -44,8 +50,8 @@ function readDisp(snap: SnapshotLike): number {
   return bus(4) * 10 + bus(0);
 }
 
-/** 连续 GUI 仿真：带 prevSignals（状态保持）与 buttonPorts（两相） */
-function guiSim(a: number, b: number, eq: 0 | 1, prev: Record<string, number> | undefined) {
+/** 连续 GUI 仿真：带 prevSignals + prevContribs（状态与贡献保持）与 buttonPorts（两相） */
+function guiSim(a: number, b: number, eq: 0 | 1, prev: PrevState | undefined) {
   const resp = handleRequest({
     id: 1,
     type: 'simulate',
@@ -54,16 +60,23 @@ function guiSim(a: number, b: number, eq: 0 | 1, prev: Record<string, number> | 
     mode: 'timing',
     inputs: bcdInputs(a, b, eq),
     buttonPorts: ['eq'],
-    prevSignals: prev,
+    prevSignals: prev?.signals,
+    prevContribs: prev?.contribs,
   });
   expect(resp.error).toBeUndefined();
   const snap = resp.snapshot as SnapshotLike;
-  return { snap, next: Object.fromEntries(snap.netSignals) };
+  return {
+    snap,
+    next: {
+      signals: Object.fromEntries(snap.netSignals),
+      contribs: Object.fromEntries(snap.contrib),
+    },
+  };
 }
 
 describe('计算器关 GUI 仿真通道（按钮 + 状态保持）', () => {
   it('设 23+5 按等号显示 28，松开保持；换 50+19 再按锁存 69', { timeout: 60_000 }, () => {
-    let prev: Record<string, number> | undefined;
+    let prev: PrevState | undefined;
     // 上电/设数（未锁存，显示上电态即可）
     ({ next: prev } = guiSim(0x23, 0x05, 0, prev));
     // 按等号（两相）：23+5=28
@@ -84,7 +97,7 @@ describe('计算器关 GUI 仿真通道（按钮 + 状态保持）', () => {
   });
 
   it('0+0 按等号显示 00', { timeout: 60_000 }, () => {
-    let prev: Record<string, number> | undefined;
+    let prev: PrevState | undefined;
     ({ next: prev } = guiSim(0, 0, 0, prev));
     const r = guiSim(0, 0, 1, prev);
     expect(readDisp(r.snap)).toBe(0);

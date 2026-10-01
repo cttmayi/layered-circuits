@@ -98,7 +98,11 @@ export function App(): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   /** 上次仿真的节点信号 + 电路指纹（锁存器/寄存器状态跨仿真保持） */
-  const prevSimRef = useRef<{ key: string; signals: Record<string, number> } | null>(null);
+  const prevSimRef = useRef<{
+    key: string;
+    signals: Record<string, number>;
+    contribs: Record<string, number[]>;
+  } | null>(null);
   const dragRef = useRef<DragState>({
     mode: 'none',
     originX: 0,
@@ -224,6 +228,7 @@ export function App(): React.JSX.Element {
       const designKey = JSON.stringify(design);
       const prev = prevSimRef.current;
       const prevSignals = prev && prev.key === designKey ? prev.signals : undefined;
+      const prevContribs = prev && prev.key === designKey ? prev.contribs : undefined;
       runner
         .send({
           type: 'simulate',
@@ -234,6 +239,7 @@ export function App(): React.JSX.Element {
           // 瞬时按钮端口：仿真先按 0 稳定、再置 1（上升沿锁存正确值）
           buttonPorts: doc.syms.filter((s) => s.kind === 'input' && s.button).map((s) => s.label),
           prevSignals,
+          prevContribs,
           withTiming: showTiming,
           withTruth: showTruth,
           maxTruthRows: 32,
@@ -246,10 +252,12 @@ export function App(): React.JSX.Element {
           if (response.snapshot) {
             setSnapshot(response.snapshot);
             setResultDoc(doc);
-            // 记住这次的信号与电路指纹，供下一次仿真续用
+            // 记住这次的信号与电路指纹，供下一次仿真续用（信号与贡献出自同一终态，
+            // 恢复时必须一起还原，否则元素求值读到上电旧贡献会把状态电路毒化）
             prevSimRef.current = {
               key: designKey,
               signals: Object.fromEntries(response.snapshot.netSignals),
+              contribs: Object.fromEntries(response.snapshot.contrib),
             };
           }
         })

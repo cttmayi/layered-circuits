@@ -45,6 +45,11 @@ export interface SimOptions {
    *  锁存器/寄存器的「保持」跨仿真保留（否则每次冷启动都回到上电非法态）。
    *  只恢复能对上的网，其余节点维持上电默认。 */
   initialSignals?: Record<string, number>;
+  /** 与 initialSignals 配套的元素贡献缓存（键 = 顶层网 id → 该网各驱动元素槽位的
+   *  贡献值，按 net.driveStart 顺序）。恢复信号时必须一并恢复贡献，否则元素求值时
+   *  经 resolveExcluding 读到上电旧贡献，会把恢复态「毒化」—— 状态电路在输入变化时
+   *  被错误翻转或卡死。两者都来自上一次仿真的终态快照，天然一致。 */
+  initialContribs?: Record<string, number[]>;
 }
 
 export type DiagnosticKind =
@@ -214,6 +219,29 @@ export class Simulator {
         const s = sig[id];
         if (s !== undefined) this.nodeSig[node] = s & 0x0f;
       }
+      // 恢复只写 nodeSig 是不够的：contrib（元素贡献缓存）仍是上电旧值，二者不一致。
+      // 下一次求值时，元素会经 resolveExcluding 读到其他元素的陈旧贡献，把恢复态
+      // 「毒化」—— 状态电路（按钮/锁存器）在输入变化时被错误翻转或卡死
+      // （例：rst 复位后松开，锁存器因上电态三极管贡献而弹回置位）。
+      // 所以快照同时携带 contrib（上一次仿真的终态贡献），这里按网还原到对应槽位；
+      // 信号与贡献出自同一终态，恢复后完全一致，无需任何重收敛。
+      const ic = this.options.initialContribs;
+      if (ic) {
+        for (let node = 0; node < this.net.nodeCount; node++) {
+          const id = this.net.nodeLabel[node];
+          if (!id) continue;
+          const vals = ic[id];
+          if (!vals) continue;
+          const start = this.net.driveStart[node] as number;
+          const end = this.net.driveStart[node + 1] as number;
+          const n = Math.min(end - start, vals.length);
+          for (let i = 0; i < n; i++) {
+            const de = this.net.driveElem[start + i] as number;
+            const ds = this.net.driveSlot[start + i] as number;
+            this.contrib[de * PIN_STRIDE + ds] = vals[i] ?? SIG_Z;
+          }
+        }
+      }
     }
   }
 
@@ -350,6 +378,11 @@ export class Simulator {
 
   signalOf(node: number): number {
     return this.nodeSig[node] as number;
+  }
+
+  /** 元素某槽位对所在网的贡献值（快照用，配合 initialContribs 跨仿真恢复） */
+  contribOf(elem: number, slot: number): number {
+    return this.contrib[elem * PIN_STRIDE + slot] ?? SIG_Z;
   }
 
   nodeLabel(node: number): string {

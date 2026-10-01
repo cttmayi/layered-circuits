@@ -18,6 +18,10 @@ export interface SimSnapshot {
   portValues: Record<string, Logic>;
   /** 每个网（netId）对应的仿真电平编码 */
   netSignals: Array<[string, number]>;
+  /** 每个网各驱动元素槽位的贡献值（按 net.driveStart 顺序），与 netSignals 同一终态。
+   *  恢复初始态时两者必须一起还原（见 prevSignals/prevContribs），否则元素求值会读到
+   *  上电旧贡献，把锁存器/寄存器等状态电路在输入变化时错误翻转或卡死。 */
+  contrib: Array<[string, number[]]>;
   nodeCount: number;
   elemCount: number;
   evaluations: number;
@@ -61,6 +65,9 @@ export type StudioRequest =
       buttonPorts?: string[];
       /** 上次仿真的节点信号（顶层网 id → signal），用于锁存器/寄存器状态跨仿真保持 */
       prevSignals?: Record<string, number>;
+      /** 与 prevSignals 配套的贡献缓存（顶层网 id → 各驱动槽位贡献值，按 driveStart 顺序）：
+       *  恢复信号必须一并恢复贡献，否则元素求值读到上电旧贡献会把状态电路毒化 */
+      prevContribs?: Record<string, number[]>;
       withTiming?: boolean;
       withTruth?: boolean;
       maxTruthRows?: number;
