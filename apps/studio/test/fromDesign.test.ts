@@ -87,8 +87,9 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.score, `${level.id} 门版应满分`).toBe(100);
       expect(r.costHalf, `${level.id} 门版成本应 ≤ 元件版`).toBeLessThanOrEqual(level.optimalHalf);
     }
-    // 16 关有门版：第 1 章 2（异或/同或）+ 第 2 章 5（SR/D锁存/DFF×3）+ 第 3 章 9（算术+计算器链）
-    expect(checked).toBe(16);
+    // 17 关有门版：第 1 章 3（与非/异或/同或）+ 第 2 章 5（SR/D锁存/DFF×3）+ 第 3 章 9（算术+计算器链）；
+    // 非门/与门/或门/或非门 moduleAccess: 'none'（禁用模块）→ 不出门版
+    expect(checked).toBe(17);
   });
 
   it('门版 还原 → 再导出 → 判定通关且满分（App 的完整链路）', () => {
@@ -110,7 +111,7 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.pass, `${level.id} 门版还原后应通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${level.id} 门版还原后应满分`).toBe(100);
     }
-    expect(checked).toBe(16);
+    expect(checked).toBe(17);
   });
 });
 

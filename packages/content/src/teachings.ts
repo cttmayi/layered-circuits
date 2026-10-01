@@ -106,6 +106,16 @@ function halfAdderByModules(id: string, name: string): Design {
   return b.build();
 }
 
+/** 与非门（门版）：1 枚【与非门】积木（本关 moduleAccess: 'all'，通关即解锁这枚积木） */
+function nandByModules(id: string, name: string): Design {
+  const b = new DesignBuilder(id, name);
+  b.module(hashOf('与非门'), { a: 'a', b: 'b', y: 'y' }, 'N1');
+  b.port('a', 'in', 'a');
+  b.port('b', 'in', 'b');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
 /** 全加器（门版）：经典 9 与非门，结构同参考解，但每个与非门都是模块积木 */
 function fullAdderByModules(id: string, name: string): Design {
   const b = new DesignBuilder(id, name);
@@ -269,6 +279,10 @@ function dffByModules(id: string, name: string): Design {
 /** 某关卡有没有逻辑门版参考解；没有返回 null（此时退元件版即可） */
 export function teachingSolutionOf(levelId: string): Design | null {
   switch (levelId) {
+    case 's1-nand':
+      // 与非门关 moduleAccess: 'all'（通关解锁「与非门」积木）——门版就是这枚积木本身；
+      // 其余基础门关（非门/与门/或门/或非门）moduleAccess: 'none'，禁用模块 → 不出门版。
+      return nandByModules('teach-s1-nand', '与非门（门版）');
     case 's1-xor':
       return xorByModules('teach-s1-xor', '异或门（门版）');
     case 's1-xnor':
