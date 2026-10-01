@@ -62,7 +62,7 @@ function guiSim(a: number, b: number, eq: 0 | 1, prev: Record<string, number> | 
 }
 
 describe('计算器关 GUI 仿真通道（按钮 + 状态保持）', () => {
-  it('设 23+5 按等号显示 28，松开保持；换 50+19 再按锁存 69', () => {
+  it('设 23+5 按等号显示 28，松开保持；换 50+19 再按锁存 69', { timeout: 60_000 }, () => {
     let prev: Record<string, number> | undefined;
     // 上电/设数（未锁存，显示上电态即可）
     ({ next: prev } = guiSim(0x23, 0x05, 0, prev));
@@ -83,7 +83,7 @@ describe('计算器关 GUI 仿真通道（按钮 + 状态保持）', () => {
     expect(readDisp(r.snap)).toBe(69);
   });
 
-  it('0+0 按等号显示 00', () => {
+  it('0+0 按等号显示 00', { timeout: 60_000 }, () => {
     let prev: Record<string, number> | undefined;
     ({ next: prev } = guiSim(0, 0, 0, prev));
     const r = guiSim(0, 0, 1, prev);

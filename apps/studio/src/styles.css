@@ -1613,13 +1613,21 @@ body,
   width: min(1000px, 100%);
   flex: 1;
   min-height: 0;
+  /* 关卡超过一屏时地图区上下滚动（viewBox 高度随关卡数增长） */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* 内容容器：高度由 SVG 撑起，节点按钮以它为包含块做百分比定位 */
+.map-canvas {
+  position: relative;
+  width: 100%;
 }
 
 .map-svg {
-  position: absolute;
-  inset: 0;
+  display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
 }
 
 .stage-title {
