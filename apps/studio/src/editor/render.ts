@@ -124,6 +124,31 @@ export function signalText(signal: number | undefined, showStrength = true): str
   return `${tag}${strengthOf(signal) === S_STRONG ? '·强' : '·弱'}`;
 }
 
+/**
+ * 门级模块在画布上的 IEC 逻辑符号（用字符表达，替代中文门名）：
+ *   与门 &、或门 ≥1、非门 1、异或门 =1；与非/或非/同或/反相在输出侧画反相气泡。
+ * 非门类模块（锁存器/加法器/寄存器等）没有标准单字符符号 → null，保持显示名称。
+ */
+const MODULE_GLYPHS: Record<string, { text: string; bubble: boolean }> = {
+  非门: { text: '1', bubble: true },
+  上拉反相器: { text: '1', bubble: true },
+  'CMOS 反相器': { text: '1', bubble: true },
+  跟随器: { text: '1', bubble: false },
+  缓冲器: { text: '1', bubble: false },
+  与门: { text: '&', bubble: false },
+  或门: { text: '≥1', bubble: false },
+  与非门: { text: '&', bubble: true },
+  或非门: { text: '≥1', bubble: true },
+  异或门: { text: '=1', bubble: false },
+  '异或门（复古版）': { text: '=1', bubble: false },
+  同或门: { text: '=1', bubble: true },
+  'CMOS 与非门': { text: '&', bubble: true },
+};
+
+export function moduleGlyph(name: string): { text: string; bubble: boolean } | null {
+  return MODULE_GLYPHS[name] ?? null;
+}
+
 function footprintOf(
   sym: Sym,
   library: StoredModule[],
@@ -1146,6 +1171,38 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
       const box = moduleBox(sym, doc.library);
       ctx.fillRect(-box.w / 2, -box.h / 2, box.w, box.h);
       ctx.strokeRect(-box.w / 2, -box.h / 2, box.w, box.h);
+      // 门级模块：中文门名为主（居中，按长度缩放），右上角小字标 IEC 符号（& / ≥1 / =1 / 1），
+      // 反相门在输出侧画气泡。非门类模块（锁存器/加法器等）不在盒内画字，名称走下方标签段。
+      const stored = doc.library.find((m) => m.hash === sym.module);
+      const glyph = moduleGlyph(stored?.name ?? sym.label);
+      if (glyph) {
+        ctx.save();
+        const name = stored?.name || sym.label || '';
+        const nameSize = Math.min(13, Math.max(8, Math.floor(58 / Math.max(name.length, 2))));
+        ctx.font = `${nameSize}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = PALETTE.text;
+        ctx.fillText(name, 0, box.h * 0.04);
+        // 辅助徽标：右上角 IEC 符号字符
+        ctx.font = `bold ${Math.min(11, box.h * 0.2)}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = PALETTE.textDim;
+        ctx.fillText(glyph.text, box.w / 2 - 4, -box.h / 2 + 4);
+        // 反相气泡：输出侧引脚
+        if (glyph.bubble) {
+          ctx.strokeStyle = PALETTE.body;
+          ctx.lineWidth = 1.6 / camera.scale;
+          for (const off of pinOffsets(sym, doc.library)) {
+            if (off.x <= 0) continue; // 反相气泡画在输出侧（x > 0 的引脚）
+            ctx.beginPath();
+            ctx.arc(off.x, off.y, 5.2, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
       break;
     }
     default:
@@ -1205,15 +1262,21 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
     }
   } else if (key === 'module') {
     const stored = doc.library.find((m) => m.hash === sym.module);
-    ctx.fillStyle = PALETTE.text;
-    ctx.fillText(sym.label, 0, -4);
-    ctx.fillStyle = PALETTE.textDim;
-    ctx.font = `${Math.max(8, 10 * camera.scale)}px ui-monospace, monospace`;
-    ctx.fillText(
-      `#${(stored?.hash ?? sym.module ?? '').slice(0, 6)} · ${stored ? stored.costHalf / 2 : '?'}`,
-      0,
-      10,
-    );
+    const glyph = moduleGlyph(stored?.name ?? sym.label);
+    const hashCost = `#${(stored?.hash ?? sym.module ?? '').slice(0, 6)} · ${stored ? stored.costHalf / 2 : '?'}`;
+    if (!glyph) {
+      // 非门类模块：盒内仍是名称，下方接 hash · 成本
+      ctx.fillStyle = PALETTE.text;
+      ctx.fillText(sym.label, 0, -4);
+      ctx.fillStyle = PALETTE.textDim;
+      ctx.font = `${Math.max(8, 10 * camera.scale)}px ui-monospace, monospace`;
+      ctx.fillText(hashCost, 0, 10);
+    } else {
+      // 门级模块：盒内是逻辑符号（见 case 'module'），识别信息移到盒下方
+      ctx.fillStyle = PALETTE.textDim;
+      ctx.font = `${Math.max(8, 10 * camera.scale)}px ui-monospace, monospace`;
+      ctx.fillText(hashCost, 0, labelY + 6);
+    }
   } else if (key !== 'vcc' && key !== 'gnd') {
     ctx.fillStyle = PALETTE.textDim;
     ctx.fillText(sym.label, 0, labelY);

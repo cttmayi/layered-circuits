@@ -72,6 +72,7 @@ import { LevelMap } from './panels/LevelMap';
 import { LibraryPanel } from './panels/LibraryPanel';
 import { MainMenu } from './panels/MainMenu';
 import { Modal } from './panels/Modal';
+import { ModuleDetailModal } from './panels/ModuleDetailModal';
 import { Palette } from './panels/Palette';
 import { SettlementPanel } from './panels/SettlementPanel';
 import { TruthTable } from './panels/TruthTable';
@@ -189,6 +190,8 @@ export function App(): React.JSX.Element {
   /** 封装过场：电路被压成一颗芯片落进组件库 */
   const [chipDrop, setChipDrop] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 900, height: 600 });
+  /** 双击模块展开的模块详情（null = 弹窗关闭） */
+  const [expandedModule, setExpandedModule] = useState<StoredModule | null>(null);
 
   // ---- 画布尺寸自适应（含 HiDPI）：主菜单→工作台时容器才出现，所以要跟 screen 重新量 ----
   useEffect(() => {
@@ -458,11 +461,19 @@ export function App(): React.JSX.Element {
     setSelection([created.id]);
   };
 
-  /** 双击连线 → 直接删除这根线（比「点选 + Delete」顺手） */
+  /** 双击连线 → 直接删除这根线（比「点选 + Delete」顺手）；双击模块 → 展开内部电路 */
   const onDoubleClick = (event: React.MouseEvent): void => {
     if (placing) return;
     const { wx, wy } = localPoint(event);
     const target = hitTest(currentScene(), wx, wy);
+    if (target?.kind === 'sym') {
+      const sym = findSym(doc, target.id);
+      if (sym?.kind === 'module' && sym.module) {
+        const stored = doc.library.find((m) => m.hash === sym.module);
+        if (stored) setExpandedModule(stored);
+      }
+      return;
+    }
     if (target?.kind === 'wire') {
       commit({ ...doc, wires: doc.wires.filter((w) => w.id !== target.id) });
       setSelectedWires([]);
@@ -1071,6 +1082,11 @@ export function App(): React.JSX.Element {
 
   const selectedSyms = doc.syms.filter((s) => selection.includes(s.id));
   const levelRecord = currentLevel ? progress.cleared[currentLevel.id] : undefined;
+  /** 单选中的模块（Inspector 里给出「展开内部电路」入口） */
+  const selectedModule =
+    selectedSyms.length === 1 && selectedSyms[0]?.kind === 'module' && selectedSyms[0]?.module
+      ? (doc.library.find((m) => m.hash === (selectedSyms[0] as Sym).module) ?? null)
+      : null;
 
   // ---- 主菜单（开场）：模式只在这是选 ----
   if (screen === 'menu') {
@@ -1316,7 +1332,7 @@ export function App(): React.JSX.Element {
               ? '点击画布放置元件（Esc 取消）'
               : pendingPin
                 ? '再点一个引脚完成连线（Esc 取消）'
-                : '拖动空白处平移 · 滚轮缩放 · 点两个引脚连线 · 双击连线删除 · 点输入符号切换 0/1（Alt 循环 X/Z）'}
+                : '拖动空白处平移 · 滚轮缩放 · 点两个引脚连线 · 双击连线删除 · 双击模块展开内部电路 · 点输入符号切换 0/1（Alt 循环 X/Z）'}
           </div>
           {classroomOpen && currentLevel?.classroom && (
             <ClassroomModal level={currentLevel} onStart={() => setClassroomOpen(false)} />
@@ -1362,6 +1378,13 @@ export function App(): React.JSX.Element {
               </div>
               <p>交付完成 · 已封装进组件库</p>
             </div>
+          )}
+          {expandedModule && (
+            <ModuleDetailModal
+              module={expandedModule}
+              library={doc.library}
+              onClose={() => setExpandedModule(null)}
+            />
           )}
           {toast && (
             <button type="button" className="toast" onClick={() => setToast(null)}>
@@ -1436,6 +1459,8 @@ export function App(): React.JSX.Element {
                     ? describeSym(selectedSyms[0] as Sym, doc)
                     : `已选中 ${selectedSyms.length} 个元件`
               }
+              selectedModule={selectedModule}
+              onExpandModule={selectedModule ? () => setExpandedModule(selectedModule) : undefined}
               pinTable={
                 selectedSyms.length === 1
                   ? pinNames(selectedSyms[0] as Sym, doc.library).map((pin) => ({

@@ -1,4 +1,4 @@
-import type { UnitKind } from '../editor/model';
+import type { StoredModule, UnitKind } from '../editor/model';
 import type { SimSnapshot } from '../sim/protocol';
 
 export interface InspectorProps {
@@ -6,6 +6,9 @@ export interface InspectorProps {
   units: Array<[UnitKind, number]>;
   selectionLabel: string | null;
   pinTable: Array<{ pin: string; text: string }>;
+  /** 单选中的模块（有则显示「展开内部电路」入口） */
+  selectedModule?: StoredModule | null;
+  onExpandModule?: () => void;
 }
 
 const UNIT_NAME: Record<UnitKind, string> = {
@@ -23,6 +26,8 @@ export function Inspector({
   units,
   selectionLabel,
   pinTable,
+  selectedModule,
+  onExpandModule,
 }: InspectorProps): React.JSX.Element {
   const timing = snapshot?.timing ?? null;
   const simErrors = snapshot?.simDiagnostics ?? [];
@@ -106,6 +111,16 @@ export function Inspector({
                 ))}
               </tbody>
             </table>
+          )}
+          {selectedModule && onExpandModule && (
+            <button
+              type="button"
+              className="expand-btn"
+              onClick={onExpandModule}
+              title="打开内部电路图与成本明细（双击画布上的模块也可以）"
+            >
+              展开内部电路…
+            </button>
           )}
         </>
       )}

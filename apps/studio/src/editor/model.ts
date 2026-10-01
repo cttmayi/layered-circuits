@@ -675,7 +675,8 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
     } else if (inst.kind === 'module') {
       sym.module = inst.module;
       const stored = baseDoc.library.find((m) => m.hash === inst.module);
-      sym.label = sym.label || stored?.name || '模块';
+      // 参考解的模块实例 label 常是自动编号（G1/G2…），门名才是玩家认得的，优先用门名
+      sym.label = stored?.name || sym.label || '模块';
     } else {
       sym.label = inst.kind === 'vcc' ? 'VCC' : 'GND';
     }
