@@ -30,13 +30,21 @@ const level = (id: string) => {
 };
 
 describe('阶段 2 关卡内容', () => {
-  it('主线三关按「锁存器 → 门控锁存器 → 边沿触发器」排列，后面接两个挑战关', () => {
+  it('主线四关按「锁存器 → 按钮锁存 → 门控锁存器 → 边沿触发器」排列，后面接两个挑战关', () => {
     const ids = STAGE2_LEVELS.map((l) => l.id);
-    expect(ids).toEqual(['s2-sr-latch', 's2-d-latch', 's2-dff', 's2-dff-cost', 's2-dff-fast']);
+    expect(ids).toEqual([
+      's2-sr-latch',
+      's2-btn-latch',
+      's2-d-latch',
+      's2-dff',
+      's2-dff-cost',
+      's2-dff-fast',
+    ]);
     // 挑战关的类型（GDD 4.2 / 4.3）
     expect(level('s2-dff-cost').kind).toBe('cost');
     expect(level('s2-dff-fast').kind).toBe('timing');
-    expect(levelOrder('s2-sr-latch')).toBeLessThan(levelOrder('s2-d-latch'));
+    expect(levelOrder('s2-sr-latch')).toBeLessThan(levelOrder('s2-btn-latch'));
+    expect(levelOrder('s2-btn-latch')).toBeLessThan(levelOrder('s2-d-latch'));
     expect(levelOrder('s2-d-latch')).toBeLessThan(levelOrder('s2-dff'));
 
     for (const l of STAGE2_LEVELS) {

@@ -10,6 +10,7 @@ import { familySpecOf, type LogicFamily, levelViewOf } from '@lc/schema';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emptyDoc, notGateDemo } from './editor/demos';
 import {
+  createDeviceSym,
   createSym,
   type Doc,
   findSym,
@@ -455,7 +456,9 @@ export function App(): React.JSX.Element {
         ? createSym(doc, 'unit', kind.unit, snap(wx), snap(wy))
         : kind.kind === 'module'
           ? createSym(doc, 'module', undefined, snap(wx), snap(wy), kind.hash)
-          : createSym(doc, kind.kind, undefined, snap(wx), snap(wy));
+          : kind.kind === 'button' || kind.kind === 'segment'
+            ? createDeviceSym(doc, kind.kind, snap(wx), snap(wy))
+            : createSym(doc, kind.kind, undefined, snap(wx), snap(wy));
     next.syms.push(created);
     commit(next);
     setSelection([created.id]);
@@ -494,7 +497,14 @@ export function App(): React.JSX.Element {
     const [tag, extra] = raw.split(':');
     if (tag === 'unit' && extra) placeAt({ kind: 'unit', unit: extra as UnitKind }, w.x, w.y);
     else if (tag === 'module' && extra) placeAt({ kind: 'module', hash: extra }, w.x, w.y);
-    else if (tag === 'vcc' || tag === 'gnd' || tag === 'input' || tag === 'output')
+    else if (
+      tag === 'vcc' ||
+      tag === 'gnd' ||
+      tag === 'input' ||
+      tag === 'output' ||
+      tag === 'button' ||
+      tag === 'segment'
+    )
       placeAt({ kind: tag }, w.x, w.y);
   };
 

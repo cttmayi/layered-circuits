@@ -37,6 +37,44 @@ export function srLatchRef(id = 'ref-sr'): Design {
 }
 
 /**
+ * 按钮锁存器（高有效 SR 锁存），成本 64（2 非门 + 2 与非门）：
+ * btn / rst 先各用一个非门反相成低有效 sn / rn，再进两个与非门交叉耦合的 SR 锁存器。
+ * btn=1（按下）→ sn=0 → 置位 q=1；rst=1 → rn=0 → 复位 q=0；都松开后保持。
+ * 注意不能直接手搭「或非门交叉耦合」：RTL 或非门输入带二极管下拉，保持态（双输入 0）时
+ * 反馈的弱电平会在二极管处与下拉等强冲突，sim 判定组合振荡（q=X）。与非门基极走电阻，
+ * 弱 1 输入也能收敛（s2-d-latch 同款结构已验证）。
+ */
+export function btnLatchRef(id = 'ref-btn-latch'): Design {
+  const b = new DesignBuilder(id, '按钮锁存器');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  // 非门 1：btn → sn（按钮高有效置位 → 低有效）
+  b.unit('res', { a: 'btn', b: 'bs' }, 'R1');
+  b.unit('npn', { c: 'sn', b: 'bs', e: 'gnd' }, 'QN1');
+  b.unit('res', { a: 'vcc', b: 'sn' }, 'R2');
+  // 非门 2：rst → rn（复位端同转低有效）
+  b.unit('res', { a: 'rst', b: 'br' }, 'R3');
+  b.unit('npn', { c: 'rn', b: 'br', e: 'gnd' }, 'QN2');
+  b.unit('res', { a: 'vcc', b: 'rn' }, 'R4');
+  // 与非门 1：输入 sn 与 qn → 输出 q
+  b.unit('res', { a: 'sn', b: 'b1' }, 'R5');
+  b.unit('res', { a: 'qn', b: 'b2' }, 'R6');
+  b.unit('npn', { c: 'q', b: 'b1', e: 'm1' }, 'Q1');
+  b.unit('npn', { c: 'm1', b: 'b2', e: 'gnd' }, 'Q2');
+  b.unit('res', { a: 'vcc', b: 'q' }, 'R7');
+  // 与非门 2：输入 rn 与 q → 输出 qn
+  b.unit('res', { a: 'rn', b: 'b3' }, 'R8');
+  b.unit('res', { a: 'q', b: 'b4' }, 'R9');
+  b.unit('npn', { c: 'qn', b: 'b3', e: 'm2' }, 'Q3');
+  b.unit('npn', { c: 'm2', b: 'b4', e: 'gnd' }, 'Q4');
+  b.unit('res', { a: 'vcc', b: 'qn' }, 'R10');
+  b.port('btn', 'in', 'btn');
+  b.port('rst', 'in', 'rst');
+  b.port('q', 'out', 'q');
+  return b.build();
+}
+
+/**
  * 门控 D 锁存器（d + en → q），成本 32：
  * 一个单管反相器造出 d̄，两个与非门做门控，两个与非门做锁存。
  * en=1 时透明（q 跟 d），en=0 时保持。

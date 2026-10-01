@@ -18,7 +18,7 @@ import {
   parseLevel,
 } from '@lc/schema';
 import { adder4Ref, adder8Ref, aluRef, fullAdderRef, halfAdderRef } from './references-ari.js';
-import { bcd2binRef, bin2bcdRef, calcRef, reg8Ref } from './references-calc.js';
+import { bcd2binRef, bin2bcdRef, calcRef, displayRef, reg8Ref } from './references-calc.js';
 
 /** 阶段 3 允许的元件：仍只用 npn/res/dio（电容留给时钟/存储章节） */
 const STAGE3_UNITS = ['npn', 'res', 'dio'] as const;
@@ -330,6 +330,47 @@ const BIN2BCD: Level = parseLevel({
   referenceSolution: bin2bcdRef('ref-s3-bin2bcd'),
 });
 
+/** 数码管显示关：把 0-99 的二进制值直接「显示」成两位十进制（两个七段数码管端口）。 */
+const S3_DISPLAY: Level = parseLevel({
+  schemaVersion: 1,
+  id: 's3-display',
+  stage: 3,
+  kind: 'main',
+  title: '数码管显示',
+  brief:
+    '七段数码管是计算器的屏幕：给它 BCD 值，它就把数字点亮给你看。这一关把 0-99 的二进制结果直接显示成两位十进制。',
+  teaching:
+    '屏幕只会显示 BCD，不会理解二进制。所以先把二进制换算成两位 BCD（double-dabble，s3-bin2bcd 那套），' +
+    '再把十位/个位接到数码管端口。显示本身是渲染层的活，你要解决的是「二进制 → 十进制编码」这一步。',
+  hint: '拖一个【二进制→BCD】积木：val[6:0] 接输入，十位/个位 BCD 分别接到 disp_t / disp_u。参考解约 7872 半单位。',
+  ports: [
+    port('val', 'in', 7),
+    { id: 'disp_t', name: 'disp_t', dir: 'out', width: 4, display: 'segment' },
+    { id: 'disp_u', name: 'disp_u', dir: 'out', width: 4, display: 'segment' },
+  ],
+  mode: 'logic',
+  allowedUnits: [...STAGE3_UNITS],
+  moduleAccess: 'all',
+  budgetHalf: budgetFromOptimal(7872, MAIN_OVERHEAD),
+  optimalHalf: 7872,
+  checks: {},
+  vectors: [
+    { inputs: { val: 0 }, expect: { disp_t: 0, disp_u: 0 }, note: '0 → 数码管 00' },
+    { inputs: { val: 5 }, expect: { disp_t: 0, disp_u: 5 }, note: '5 → 数码管 05' },
+    { inputs: { val: 23 }, expect: { disp_t: 2, disp_u: 3 }, note: '23 → 数码管 23' },
+    { inputs: { val: 56 }, expect: { disp_t: 5, disp_u: 6 }, note: '56 → 数码管 56' },
+    { inputs: { val: 99 }, expect: { disp_t: 9, disp_u: 9 }, note: '99 → 数码管 99' },
+  ] satisfies LevelVector[],
+  unlock: {
+    name: '数码管显示',
+    kind: 'logic',
+    stage: 3,
+    ports: [port('val', 'in', 7), port('disp_t', 'out', 4), port('disp_u', 'out', 4)],
+  },
+  // 应用关：复用【二进制→BCD】积木，解锁「数码管显示」封装
+  referenceSolution: displayRef('ref-s3-display'),
+});
+
 /** 计算器链的锁存台阶：8 个 D 触发器并排共用 clk，数据「存下来」。 */
 const REG_8: Level = parseLevel({
   schemaVersion: 1,
@@ -504,6 +545,7 @@ export const STAGE3_LEVELS: Level[] = [
   ALU,
   BCD2BIN,
   BIN2BCD,
+  S3_DISPLAY,
   REG_8,
   CALC,
 ];

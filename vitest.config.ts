@@ -26,5 +26,8 @@ export default defineConfig({
       'tools/*/test/**/*.test.ts',
       'apps/*/test/**/*.test.{ts,tsx}',
     ],
+    // 时序分析用例（elementEdgeOf 快照、calc/reg-8 探测）很重，默认全核并行会让
+    // worker 忙到 RPC 超时（vitest "Timeout calling onTaskUpdate" 假错误）→ 限并发保稳定。
+    maxWorkers: 2,
   },
 });

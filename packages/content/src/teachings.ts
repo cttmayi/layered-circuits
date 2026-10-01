@@ -443,6 +443,21 @@ function srLatchByModules(id: string, name: string, family: LogicFamily = 'rtl')
   return b.build();
 }
 
+/** 按钮锁存器（门版）：2 个【非门】把 btn/rst 反相成低有效 sn/rn + 2 个【与非门】交叉耦合，4 盒 */
+function btnLatchByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
+  const b = new DesignBuilder(id, name);
+  const nand = hashOf('与非门', family);
+  const not = hashOf('非门', family);
+  b.module(not, { a: 'btn', y: 'sn' }, 'N1');
+  b.module(not, { a: 'rst', y: 'rn' }, 'N2');
+  b.module(nand, { a: 'sn', b: 'qn', y: 'q' }, 'G1');
+  b.module(nand, { a: 'rn', b: 'q', y: 'qn' }, 'G2');
+  b.port('btn', 'in', 'btn');
+  b.port('rst', 'in', 'rst');
+  b.port('q', 'out', 'q');
+  return b.build();
+}
+
 /** 门控 D 锁存器（门版）：【非门】造 d̄ + 4 个【与非门】（2 门控 + 2 锁存） */
 function dLatchByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
@@ -495,6 +510,8 @@ export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl')
       return xnorByModules('teach-s1-xnor', '同或门（门版）', family);
     case 's2-sr-latch':
       return srLatchByModules('teach-s2-sr', 'SR锁存器（门版）', family);
+    case 's2-btn-latch':
+      return btnLatchByModules('teach-s2-btn-latch', '按钮锁存器（门版）', family);
     case 's2-d-latch':
       return dLatchByModules('teach-s2-dl', 'D锁存器（门版）', family);
     case 's2-dff':
@@ -515,6 +532,8 @@ export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl')
       return bcd2binByModules('teach-s3-bcd2bin', 'BCD→二进制（门版）', family);
     case 's3-bin2bcd':
       return bin2bcdByModules('teach-s3-bin2bcd', '二进制→BCD（门版）', family);
+    case 's3-display':
+      return displayByModules('teach-s3-display', '数码管显示（门版）', family);
     case 's3-reg-8':
       return reg8ByModules('teach-s3-reg8', '8位寄存器（门版）', family);
     case 's3-calc':
@@ -740,6 +759,21 @@ function bin2bcdByModules(id: string, name: string, family: LogicFamily = 'rtl')
   bin2bcdModulesInto(b, 'x', bin, t, u, family);
   b.port('bin', 'in', bin);
   b.port('bcd', 'out', [...u, ...t]);
+  return b.build();
+}
+
+/** 数码管显示（门版）：与 s3-display 关卡端口一致（val[6:0] → disp_t/disp_u 十位/个位数码管） */
+function displayByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
+  const b = new DesignBuilder(id, name);
+  b.vcc('vcc');
+  b.gnd('gnd');
+  const val = Array.from({ length: 7 }, (_, i) => `val${i}`);
+  const t = Array.from({ length: 4 }, (_, i) => `t${i}`);
+  const u = Array.from({ length: 4 }, (_, i) => `u${i}`);
+  bin2bcdModulesInto(b, 'x', val, t, u, family);
+  b.port('val', 'in', val);
+  b.port('disp_t', 'out', t);
+  b.port('disp_u', 'out', u);
   return b.build();
 }
 

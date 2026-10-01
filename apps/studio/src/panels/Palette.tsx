@@ -187,7 +187,14 @@ export function Palette({
   const pick = (kind: string, unit?: UnitKind, hash?: string): void => {
     if (kind === 'unit' && unit) onPick({ kind: 'unit', unit });
     else if (kind === 'module' && hash) onPick({ kind: 'module', hash });
-    else if (kind === 'vcc' || kind === 'gnd' || kind === 'input' || kind === 'output')
+    else if (
+      kind === 'vcc' ||
+      kind === 'gnd' ||
+      kind === 'input' ||
+      kind === 'output' ||
+      kind === 'button' ||
+      kind === 'segment'
+    )
       onPick({ kind });
   };
 
@@ -235,7 +242,7 @@ export function Palette({
         open={openSections.has(SECTIONS.power)}
         onToggle={() => toggleSection(SECTIONS.power)}
         title="电源与端口"
-        badge="4"
+        badge="6"
       >
         {(
           [
@@ -243,10 +250,14 @@ export function Palette({
             ['gnd', 'GND 地', '免费端口'],
             ['input', '输入引脚', '可点击切换电平'],
             ['output', '输出引脚', '显示实时电平'],
+            ['button', '按钮', '瞬时按键：点击 = 电平 1，自动弹回 0'],
+            ['segment', '七段数码管', '按端口值（BCD 0-9）点亮段'],
           ] as Array<[string, string, string]>
         ).map(([kind, name, note]) => {
-          // 关卡模式下端口已预置（a/b/y 是契约），输入/输出引脚不开放自加；VCC/GND 保留就近取电
-          const locked = (kind === 'input' || kind === 'output') && Boolean(level);
+          // 关卡模式下端口已预置（a/b/y 是契约），输入/输出/按钮/数码管不开放自加；VCC/GND 保留就近取电
+          const locked =
+            (kind === 'input' || kind === 'output' || kind === 'button' || kind === 'segment') &&
+            Boolean(level);
           return (
             <button
               key={kind}

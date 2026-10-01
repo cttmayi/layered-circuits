@@ -263,6 +263,21 @@ export function bin2bcdRef(id = 'ref-bin2bcd'): Design {
   return b.build();
 }
 
+/** 数码管显示参考解：val[6:0]（0-99 二进制）→ 十位/个位两位 BCD，喂给七段数码管端口。成本与 bin2bcd 相同（7872）。 */
+export function displayRef(id = 'ref-display'): Design {
+  const b = new DesignBuilder(id, '数码管显示');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  const val = Array.from({ length: 7 }, (_, i) => `val${i}`);
+  const t = Array.from({ length: 4 }, (_, i) => `t${i}`);
+  const u = Array.from({ length: 4 }, (_, i) => `u${i}`);
+  bin2bcdInto(b, 'x', val, t, u);
+  b.port('val', 'in', val);
+  b.port('disp_t', 'out', t);
+  b.port('disp_u', 'out', u);
+  return b.build();
+}
+
 /** 简易计算器参考解（高成本版）：eq 上升沿把 a+b（BCD）锁存到显示 */
 export function calcRef(id = 'ref-calc'): Design {
   const b = new DesignBuilder(id, '简易计算器');

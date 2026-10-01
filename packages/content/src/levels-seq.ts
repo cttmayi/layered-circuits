@@ -16,7 +16,7 @@ import {
   type ModulePort,
   parseLevel,
 } from '@lc/schema';
-import { dffRef, dLatchRef, srLatchRef } from './references-seq.js';
+import { btnLatchRef, dffRef, dLatchRef, srLatchRef } from './references-seq.js';
 
 /** 阶段 2 允许的元件：还是只能用手搭（时钟/使能由端口给出，电容仍不开放） */
 const STAGE2_UNITS = ['npn', 'res', 'dio'] as const;
@@ -107,6 +107,48 @@ export const STAGE2_LEVELS: Level[] = [
       ports: [port('sn', 'in'), port('rn', 'in'), port('q', 'out'), port('qn', 'out')],
     },
     referenceSolution: srLatchRef('ref-s2-sr'),
+  }),
+
+  parseLevel({
+    schemaVersion: 1,
+    id: 's2-btn-latch',
+    stage: 2,
+    kind: 'main',
+    title: '按钮锁存',
+    brief:
+      '按钮是瞬时按键：按下去电平变 1，一松手就自动弹回 0。要把「按过」这件事记住，得靠锁存器 —— 按一下置位、rst 清零。',
+    teaching:
+      '按钮本身不保持状态，锁存器才保持。把按钮接到 SR 锁存器的置位端（S）、rst 接复位端（R）：' +
+      '按钮按下（S=1）→ q=1 并保持；rst=1 → q=0 并保持。与 s2-sr-latch 同一结构，只是置位端变成按钮 —— ' +
+      '先把高有效的 btn/rst 反相成低有效端，再进与非门交叉耦合（或非门交叉耦合在弱电平保持态不稳，勿用）。',
+    hint: '两个【非门】把 btn/rst 反相成 sn/rn，再拖 2 个【与非门】交叉耦合（G1: sn+qn→q，G2: rn+q→qn）；或用【SR锁存器】积木把低有效端反相。参考解成本 64。',
+    ports: [
+      { id: 'btn', name: 'btn', dir: 'in', button: true },
+      port('rst', 'in'),
+      port('q', 'out'),
+    ],
+    mode: 'logic',
+    allowedUnits: [...STAGE2_UNITS],
+    moduleAccess: 'all',
+    budgetHalf: budgetFromOptimal(64, MAIN_OVERHEAD),
+    optimalHalf: 64,
+    clock: { freqHz: 100_000 },
+    checks: {},
+    vectors: [
+      { inputs: { btn: 0, rst: 1 }, expect: { q: 0 }, note: 'rst 复位：初始为 0' },
+      { inputs: { btn: 0, rst: 0 }, expect: { q: 0 }, note: '松开 rst：保持 0' },
+      { inputs: { btn: 1, rst: 0 }, expect: { q: 1 }, note: '按下按钮：置位' },
+      { inputs: { btn: 0, rst: 0 }, expect: { q: 1 }, note: '松开按钮：保持 1' },
+      { inputs: { btn: 0, rst: 1 }, expect: { q: 0 }, note: '再按 rst：清零' },
+    ] satisfies LevelVector[],
+    // 时序电路（输出依赖历史）：unlock.kind='seq' 让判定器放行；解锁「按钮锁存器」积木供后续复用
+    unlock: {
+      name: '按钮锁存器',
+      kind: 'seq',
+      stage: 2,
+      ports: [port('btn', 'in'), port('rst', 'in'), port('q', 'out')],
+    },
+    referenceSolution: btnLatchRef('ref-s2-btn-latch'),
   }),
 
   parseLevel({

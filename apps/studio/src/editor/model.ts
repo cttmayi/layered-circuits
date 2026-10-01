@@ -107,6 +107,8 @@ export type PlaceKind =
   | { kind: 'gnd' }
   | { kind: 'input' }
   | { kind: 'output' }
+  | { kind: 'button' }
+  | { kind: 'segment' }
   | { kind: 'module'; hash: string };
 
 export const UNIT_LABEL: Record<UnitKind, string> = {
@@ -363,6 +365,29 @@ export function createSym(
   }
   if (kind === 'input') sym.value = 0;
   return sym;
+}
+
+/** 器件专用编号：端口名（label）就是导出后的端口名，必须全局唯一（btn1/btn2…、seg1/seg2…） */
+function nextDeviceLabel(doc: Doc, prefix: string): string {
+  const used = new Set(doc.syms.map((s) => s.label));
+  let n = 1;
+  while (used.has(`${prefix}${n}`)) n++;
+  return `${prefix}${n}`;
+}
+
+/**
+ * 放置「按钮」/「七段数码管」器件：
+ * - 按钮 = 输入端口 + button 标志 + sprite 'button'（点击 = 电平 1，400ms 自动弹回 0）；
+ * - 数码管 = 输出端口 + display 'segment' + 4 位位宽（按端口值 BCD 0-9 点亮段）。
+ * 与关卡锁定端口同构（同一个 Sym 字段），导出后就是普通端口，判定侧零改动。
+ */
+export function createDeviceSym(doc: Doc, kind: 'button' | 'segment', x: number, y: number): Sym {
+  if (kind === 'button') {
+    const sym = createSym(doc, 'input', undefined, x, y);
+    return { ...sym, label: nextDeviceLabel(doc, 'btn'), button: true, sprite: 'button' };
+  }
+  const sym = createSym(doc, 'output', undefined, x, y);
+  return { ...sym, label: nextDeviceLabel(doc, 'seg'), display: 'segment', width: 4 };
 }
 
 /**

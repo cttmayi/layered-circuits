@@ -95,9 +95,9 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.score, `${level.id} 门版应满分`).toBe(100);
       expect(r.costHalf, `${level.id} 门版成本应 ≤ 元件版`).toBeLessThanOrEqual(level.optimalHalf);
     }
-    // 19 关有门版：第 1 章 5（与非/或非/异或/同或/异或·复古版）+ 第 2 章 5（SR/D锁存/DFF×3）+ 第 3 章 9（算术+计算器链）；
+    // 21 关有门版：第 1 章 5（与非/或非/异或/同或/异或·复古版）+ 第 2 章 6（SR/D锁存/按钮锁存/DFF×3）+ 第 3 章 10（算术+计算器链+数码管显示）；
     // 非门/与门/或门 moduleAccess: 'none'（禁用模块）→ 不出门版
-    expect(checked).toBe(19);
+    expect(checked).toBe(21);
   });
 
   it('门版答案顶层盒数 ≤ 15（关卡设计规范：画布顶层可见盒子数上限）', () => {
@@ -134,7 +134,7 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.pass, `${level.id} 门版还原后应通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${level.id} 门版还原后应满分`).toBe(100);
     }
-    expect(checked).toBe(19);
+    expect(checked).toBe(21);
   });
 });
 

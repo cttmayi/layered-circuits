@@ -1475,6 +1475,38 @@ export function drawIcon(kind: string, ctx: CanvasRenderingContext2D, size: numb
       ctx.stroke();
       break;
     }
+    case 'button': {
+      // 按钮器件图标：圆帽 + 底座杆（与画布 drawSprite('button') 同形）
+      ctx.strokeStyle = PALETTE.bodyDim;
+      ctx.fillStyle = PALETTE.fill;
+      ctx.beginPath();
+      ctx.arc(0, -6, 13, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = PALETTE.body;
+      ctx.fillRect(-4, 6, 8, 6);
+      ctx.strokeRect(-6, 12, 12, 4);
+      break;
+    }
+    case 'segment': {
+      // 七段数码管图标：画出 7 段（a-g）围成的「8」
+      ctx.strokeStyle = PALETTE.body;
+      ctx.lineWidth = 3;
+      const seg = (x1: number, y1: number, x2: number, y2: number): void => {
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      };
+      seg(-8, -14, 8, -14); // a（顶）
+      seg(11, -11, 11, 1); // b（右上）
+      seg(11, 5, 11, 17); // c（右下）
+      seg(-8, 20, 8, 20); // d（底）
+      seg(-11, 5, -11, 17); // e（左下）
+      seg(-11, -11, -11, 1); // f（左上）
+      seg(-8, 3, 8, 3); // g（中）
+      break;
+    }
     case 'module': {
       ctx.fillRect(-24, -16, 48, 32);
       ctx.strokeRect(-24, -16, 48, 32);
