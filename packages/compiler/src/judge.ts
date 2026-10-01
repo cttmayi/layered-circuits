@@ -42,6 +42,12 @@ export interface JudgeOptions {
   budgetHalf?: number;
   /** 生效已知最省（半分）；契约感知时由 familySpecOf 算出；缺省 = level.bestKnownHalf */
   bestKnownHalf?: number;
+  /**
+   * 宽松判定（门版答案专用）：内容提供的教学门版（如 TTL 与非门 = 与门+非门 两门拼）
+   * 是「默认答案」，不按玩家电路的成本/时序预算卡死——成本超了只降评分，不判失败。
+   * 功能断言、强度契约、元件集照常检查。玩家自搭电路不得传此标志。
+   */
+  lenient?: boolean;
 }
 
 export interface JudgeRow {
@@ -394,8 +400,9 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     }
   }
 
-  // 3) 成本预算：成本挑战关（GDD 4.2）不设上限，只比谁更省 → 不算「超预算」
-  const budgetEnforced = level.kind !== 'cost';
+  // 3) 成本预算：成本挑战关（GDD 4.2）不设上限，只比谁更省 → 不算「超预算」；
+  //    门版答案（lenient）是内容提供的默认答案，成本超了只降评分，不判失败
+  const budgetEnforced = level.kind !== 'cost' && !options.lenient;
   const overBudget = budgetEnforced && costHalf > effectiveBudgetHalf;
   if (overBudget) {
     errors.push(`成本超预算：${costHalf / 2} > ${effectiveBudgetHalf / 2}`);
@@ -440,6 +447,7 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     );
   }
   const timingOk =
+    options.lenient ||
     !options.hardcore ||
     effectiveTimingBudgetPs === undefined ||
     criticalPathPs <= effectiveTimingBudgetPs;

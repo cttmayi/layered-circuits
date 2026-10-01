@@ -5,6 +5,7 @@
  * 预算不以「拍脑袋」给出：optimalHalf 由离线最优解求解器（tools/opt-solver）产出，
  * budgetHalf = optimalHalf × 1.15~1.20（主线）/ × 1.05~1.10（挑战关），
  * 并且每个关卡都要带 referenceSolution 供 CI 校验「关卡仍然可通关」。
+ *
  */
 
 import { z } from 'zod';

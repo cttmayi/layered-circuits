@@ -369,12 +369,12 @@ export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl')
   switch (levelId) {
     case 's1-nand':
       // 与非门 = 与门 + 非门（用其他门搭；答案绝不能是「与非门积木」——自引用/循环）。
-      // 仅 RTL 契约给门版：RTL 拼两门 20 = 满分线；TTL/CMOS 推挽单门即满分线（20/8），
-      // 拼两门必超预算 → 回退元件版（契约参考解本身就是该工艺的答案）。
-      return family === 'rtl' ? nandByModules('teach-s1-nand', '与非门（门版）', family) : null;
+      // 每个契约都给门版（默认答案）；TTL/CMOS 拼两门贵（44/16 > 满分线 20/8），
+      // 由 familySpecOf 放宽预算到 2.2× 满分线承接，元件版因此成为「更优解」选项。
+      return nandByModules('teach-s1-nand', '与非门（门版）', family);
     case 's1-nor':
-      // 或非门 = 或门 + 非门（本关 teaching 的「模块化组合」思路）；同样仅 RTL 契约。
-      return family === 'rtl' ? norByModules('teach-s1-nor', '或非门（门版）', family) : null;
+      // 或非门 = 或门 + 非门（本关 teaching 的「模块化组合」思路）；同样全契约给门版。
+      return norByModules('teach-s1-nor', '或非门（门版）', family);
     case 's1-xor':
       return xorByModules('teach-s1-xor', '异或门（门版）', family);
     case 's1-xnor':

@@ -110,6 +110,8 @@ export function App(): React.JSX.Element {
   // 会话（模式 / 当前关卡 / 存档）一次性装载
   const session = useMemo(() => initialSession(), []);
   const [doc, setDoc] = useState<Doc>(() => session.doc);
+  /** 最近一次「一键出答案门版」搭出的画布（引用跟踪：玩家未修改时 lenient 判定） */
+  const lastGateDocRef = useRef<Doc | null>(null);
   // 模块库瘦身：同名模块只留最新版本（旧版是展示用的版本历史，没有玩法用途，
   // 删掉后存档变小；持久化 effect 会把它写回 localStorage，存档自动瘦身）
   const [progress, setProgress] = useState<Progress>(() => ({
@@ -793,12 +795,20 @@ export function App(): React.JSX.Element {
     const extra = kind === 'gate' ? teachingStoredFor(spec.family) : [];
     const library = [...doc.library, ...extra];
     const next = fromDesign(ref, docForLevel(currentLevel, library));
-    loadDoc({ ...next, library });
-    setToast(
-      kind === 'gate'
-        ? '逻辑门版已搭好（造价不高于元件版，可直接验收）—— 门积木已加入左侧「我的模块」'
-        : '参考解已搭好（调试模式）—— 可以直接交付验收',
-    );
+    const nextDoc = { ...next, library };
+    loadDoc(nextDoc);
+    lastGateDocRef.current = kind === 'gate' ? nextDoc : null;
+    if (kind === 'gate') {
+      // 元件版相对门版占优（更省/更快）时如实提示：门版是默认答案，元件版是更优解
+      const edge = elementEdgeOf(currentLevel, spec.family);
+      setToast(
+        edge
+          ? `逻辑门版已搭好（可直接验收）—— 元件版${edge === 'cost' ? '造价更低' : '延迟更短'}，需要可重新一键出答案选择`
+          : '逻辑门版已搭好（造价不高于元件版，可直接验收）—— 门积木已加入左侧「我的模块」',
+      );
+    } else {
+      setToast('参考解已搭好（调试模式）—— 可以直接交付验收');
+    }
   };
 
   const solveOneKey = (): void => {
@@ -811,11 +821,13 @@ export function App(): React.JSX.Element {
     const candidates: { kind: 'element' | 'gate'; note?: string }[] = [];
     // 门版按玩家工艺取（TTL/CMOS 用强输出积木，判定能过强度检查）；无该工艺门版时
     // 此处为空 → 只给契约元件版（spec.reference 一定是该契约能过的工艺答案）。
+    // 门版是默认答案（排在前，弹窗默认选中）；元件版仅在相对门版占优（更省/更快）时
+    // 作为「更优解」追加在后并标注。无门版 → 元件版兜底。
     if (teach) candidates.push({ kind: 'gate' });
     if (spec.reference) {
       const edge = elementEdgeOf(currentLevel, spec.family);
       if (edge)
-        candidates.unshift({ kind: 'element', note: edge === 'cost' ? '造价更低' : '延迟更短' });
+        candidates.push({ kind: 'element', note: edge === 'cost' ? '造价更低' : '延迟更短' });
       else if (!teach) candidates.push({ kind: 'element' });
     }
     if (candidates.length === 0) {
@@ -842,6 +854,7 @@ export function App(): React.JSX.Element {
     setPlacing(null);
     setPendingPin(null);
     setPendingPoint(null);
+    lastGateDocRef.current = null;
   };
 
   /** 进入关卡工作台：直接开工（不再弹「新委托」选择），验收通过自动打钩发奖励 */
@@ -910,13 +923,18 @@ export function App(): React.JSX.Element {
     setJudging(true);
     setProgress((prev) => recordAttempt(prev, judgedLevel.id));
     try {
+      const design = toDesign(doc, { id: `level-${judgedLevel.id}`, name: judgedLevel.title });
+      // 门版答案宽松：画布还是「一键出答案门版」原样（玩家没改过）时，判定不卡玩家
+      // 成本/时序预算（成本超了只降评分）——「门版是默认答案」；改过/自搭照常从严。
+      const lenient = lastGateDocRef.current !== null && doc === lastGateDocRef.current;
       const response = await runner.send({
         type: 'judge',
-        design: toDesign(doc, { id: `level-${judgedLevel.id}`, name: judgedLevel.title }),
+        design,
         library: doc.library.map((m) => m.template),
         level: judgedLevel,
         hardcore: forcedHardcore || mode === 'timing',
         family: progress.family,
+        lenient,
       });
       if (response.error || !response.judge) {
         setToast(`校验失败：${response.error ?? '未知错误'}`);

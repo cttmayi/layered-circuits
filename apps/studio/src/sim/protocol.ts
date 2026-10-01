@@ -76,6 +76,11 @@ export type StudioRequest =
       hardcore: boolean;
       /** 玩家契约：判定按契约换可用元件集、满分线/预算/时序预算（缺省 rtl） */
       family?: LogicFamily;
+      /**
+       * 宽松判定（门版答案专用）：画布电路与内容提供的门版参考解同构时，
+       * 不按玩家成本/时序预算卡死（成本超了只降评分）。玩家自搭不得传。
+       */
+      lenient?: boolean;
     };
 
 /** 去掉 id 的请求（Omit 在联合类型上会塌成公共字段，必须分配式处理） */
