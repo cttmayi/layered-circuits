@@ -4,8 +4,14 @@
  */
 
 import { judgeDesign } from '@lc/compiler';
-import { ALL_LEVELS, elementEdgeOf, TEACHING_MODULES, teachingSolutionOf } from '@lc/content';
-import { InMemoryModuleLibrary } from '@lc/schema';
+import {
+  ALL_LEVELS,
+  elementEdgeOf,
+  TEACHING_MODULES,
+  teachingModulesFor,
+  teachingSolutionOf,
+} from '@lc/content';
+import { familySpecOf, InMemoryModuleLibrary } from '@lc/schema';
 import { describe, expect, it } from 'vitest';
 import { fromDesign, toDesign } from '../src/editor/model';
 import { docForLevel } from '../src/level/progress';
@@ -87,9 +93,9 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.score, `${level.id} 门版应满分`).toBe(100);
       expect(r.costHalf, `${level.id} 门版成本应 ≤ 元件版`).toBeLessThanOrEqual(level.optimalHalf);
     }
-    // 17 关有门版：第 1 章 3（与非/异或/同或）+ 第 2 章 5（SR/D锁存/DFF×3）+ 第 3 章 9（算术+计算器链）；
-    // 非门/与门/或门/或非门 moduleAccess: 'none'（禁用模块）→ 不出门版
-    expect(checked).toBe(17);
+    // 18 关有门版：第 1 章 4（与非/或非/异或/同或）+ 第 2 章 5（SR/D锁存/DFF×3）+ 第 3 章 9（算术+计算器链）；
+    // 非门/与门/或门 moduleAccess: 'none'（禁用模块）→ 不出门版
+    expect(checked).toBe(18);
   });
 
   it('门版 还原 → 再导出 → 判定通关且满分（App 的完整链路）', () => {
@@ -111,7 +117,7 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.pass, `${level.id} 门版还原后应通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${level.id} 门版还原后应满分`).toBe(100);
     }
-    expect(checked).toBe(17);
+    expect(checked).toBe(18);
   });
 });
 
@@ -157,5 +163,33 @@ describe('元件版 vs 门版：一键出答案的版本选择依据', () => {
       expect(edge, `${level.id} 元件版不应有优势（现在是 ${edge}）`).toBeNull();
     }
     // calc 门版是大电路（几百模块实例），analyzeTiming 较慢，放宽超时
+  }, 60_000);
+
+  it('TTL/CMOS 强输出契约：与非门/或非门等门版用工艺积木，判定满分、元件版不占优', () => {
+    // 每个有 familyRefs 的关 × 每个契约：门版必须用该工艺积木并通过强度硬约束，
+    // 且 elementEdgeOf 为 null（元件版不占优 → 一键出答案直接出门版，不弹窗）。
+    const families = ['ttl', 'cmos'] as const;
+    for (const level of ALL_LEVELS) {
+      for (const fam of families) {
+        const spec = familySpecOf(level, fam);
+        // 该契约没有独立参考解 → 判定回退 RTL，无需专门门版（RTL 门版已覆盖）
+        if (spec.reference === level.referenceSolution) continue;
+        const teach = teachingSolutionOf(level.id, spec.family);
+        if (!teach) continue;
+        const gateLib = new InMemoryModuleLibrary([...teachingModulesFor(spec.family)]);
+        const r = judgeDesign(teach, level, {
+          library: gateLib,
+          family: spec.family,
+          units: spec.units,
+          optimalHalf: spec.optimalHalf,
+          budgetHalf: spec.budgetHalf,
+          hardcore: true,
+        });
+        expect(r.pass, `${level.id} ${fam} 门版应过关：${r.errors.join('；')}`).toBe(true);
+        expect(r.score, `${level.id} ${fam} 门版应满分`).toBe(100);
+        expect(r.costHalf, `${level.id} ${fam} 门版成本应等于契约满分线`).toBe(spec.optimalHalf);
+        expect(elementEdgeOf(level, fam), `${level.id} ${fam} 元件版不应有优势`).toBeNull();
+      }
+    }
   }, 60_000);
 });

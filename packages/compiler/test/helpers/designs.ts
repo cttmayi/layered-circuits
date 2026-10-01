@@ -20,6 +20,21 @@ export function notGateDesign(id = 'not'): Design {
   return b.build();
 }
 
+/** CMOS 与非门：2 PMOS 上拉 + 2 NMOS 下拉（推挽，无电阻） */
+export function cmosNandDesign(id = 'cmos-nand'): Design {
+  const b = new DesignBuilder(id, 'CMOS与非门');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  b.unit('pmos', { d: 'm', g: 'a', s: 'vcc' }, 'P1');
+  b.unit('pmos', { d: 'y', g: 'b', s: 'm' }, 'P2');
+  b.unit('nmos', { d: 'y', g: 'a', s: 'n1' }, 'N1');
+  b.unit('nmos', { d: 'n1', g: 'b', s: 'gnd' }, 'N2');
+  b.port('a', 'in', 'a');
+  b.port('b', 'in', 'b');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
 /** SR 锁存器：4 NPN + 6 电阻 */
 export function srLatchDesign(id = 'sr-latch'): Design {
   const b = new DesignBuilder(id, 'SR锁存器');

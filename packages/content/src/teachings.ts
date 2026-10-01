@@ -18,13 +18,37 @@ import { analyzeTiming, compileDesign, computeCosts, wrapModule } from '@lc/comp
 import {
   type Design,
   DesignBuilder,
+  familySpecOf,
   InMemoryModuleLibrary,
   type Level,
+  type LogicFamily,
   type ModuleKind,
   type ModuleTemplate,
 } from '@lc/schema';
-import { andGateRef, nandGateRef, notGateRef, xorGateRef } from './references.js';
+import {
+  andGateRef,
+  cmosInvRef,
+  cmosNandRef,
+  nandGateRef,
+  norFastRef,
+  notGateRef,
+  orGateRef,
+  xnorGateRef,
+  xorGateRef,
+} from './references.js';
 import { fullAdderRef } from './references-ari.js';
+import {
+  cmosAndRef,
+  cmosNorRef,
+  cmosOrRef,
+  cmosXnorRef,
+  cmosXorRef,
+  ttlAndRef,
+  ttlNandRef,
+  ttlNorRef,
+  ttlNotRef,
+  ttlOrRef,
+} from './references-family.js';
 
 /** 门级参考解都是纯底层元件，空库即可封装（hash 由内容决定，稳定可复现） */
 const EMPTY_LIB = new InMemoryModuleLibrary();
@@ -76,29 +100,77 @@ function dLatchQnRef(id = 'ref-dlatch-qn'): Design {
   return b.build();
 }
 
-/** 教学用门级模块（内容哈希确定） */
+/** RTL 教学用门级模块（内容哈希确定）——门版的默认积木集 */
 export const TEACHING_MODULES: readonly ModuleTemplate[] = [
   wrapGate('非门', notGateRef(), 'logic'),
   wrapGate('与非门', nandGateRef(), 'logic'),
   wrapGate('异或门', xorGateRef(), 'logic'),
   wrapGate('与门', andGateRef(), 'logic'),
+  wrapGate('或非门', norFastRef(), 'logic'),
   wrapGate('D锁存器', dLatchQnRef(), 'seq'),
   wrapGate('全加器', fullAdderRef(), 'arith'),
 ];
 
-const MODULE_BY_NAME = new Map(TEACHING_MODULES.map((m) => [m.name, m]));
+type GateRef = (id?: string) => Design;
+/**
+ * 教学门积木的工艺表：每个门按契约给工艺参考解（TTL 推挽 / CMOS 互补都是强输出，
+ * 强输出契约判定才过得去）；缺失的工艺自动回退 RTL（只有该契约有 familyRefs 的关
+ * 判定才查强度，其余关回退 RTL 判定 → RTL 积木即可）。
+ */
+const FAMILY_GATES: Record<string, Partial<Record<LogicFamily, GateRef>>> = {
+  非门: { rtl: notGateRef, ttl: ttlNotRef, cmos: cmosInvRef },
+  与非门: { rtl: nandGateRef, ttl: ttlNandRef, cmos: cmosNandRef },
+  与门: { rtl: andGateRef, ttl: ttlAndRef, cmos: cmosAndRef },
+  或门: { rtl: orGateRef, ttl: ttlOrRef, cmos: cmosOrRef },
+  或非门: { rtl: norFastRef, ttl: ttlNorRef, cmos: cmosNorRef },
+  异或门: { rtl: xorGateRef, cmos: cmosXorRef },
+  同或门: { rtl: xnorGateRef, cmos: cmosXnorRef },
+  D锁存器: { rtl: dLatchQnRef },
+  全加器: { rtl: fullAdderRef },
+};
 
-function hashOf(name: string): string {
-  const m = MODULE_BY_NAME.get(name);
-  if (!m) throw new Error(`教学模块缺失：${name}`);
-  return m.hash;
+const GATE_KIND: Record<string, ModuleKind> = {
+  非门: 'logic',
+  与非门: 'logic',
+  与门: 'logic',
+  或门: 'logic',
+  或非门: 'logic',
+  异或门: 'logic',
+  同或门: 'logic',
+  D锁存器: 'seq',
+  全加器: 'arith',
+};
+
+const templateCache = new Map<string, ModuleTemplate>();
+
+function gateTemplateFor(name: string, family: LogicFamily = 'rtl'): ModuleTemplate {
+  const key = `${family}:${name}`;
+  let t = templateCache.get(key);
+  if (!t) {
+    const ref = FAMILY_GATES[name]?.[family] ?? FAMILY_GATES[name]?.rtl;
+    if (!ref) throw new Error(`教学模块缺失：${name}`);
+    t = wrapGate(name, ref(), GATE_KIND[name] ?? 'logic');
+    templateCache.set(key, t);
+  }
+  return t;
+}
+
+/** 某工艺的教学积木全集（App 一键出答案门版时并入画布库；判定库也用这个） */
+export function teachingModulesFor(family: LogicFamily): readonly ModuleTemplate[] {
+  if (family === 'rtl') return TEACHING_MODULES;
+  const names = Object.keys(FAMILY_GATES);
+  return names.map((n) => gateTemplateFor(n, family));
+}
+
+function hashOf(name: string, family: LogicFamily = 'rtl'): string {
+  return gateTemplateFor(name, family).hash;
 }
 
 /** 半加器（门版）：s = a⊕b（异或门），c = a∧b（与门） */
-function halfAdderByModules(id: string, name: string): Design {
+function halfAdderByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
-  b.module(hashOf('异或门'), { a: 'a', b: 'b', y: 's' }, 'X1');
-  b.module(hashOf('与门'), { a: 'a', b: 'b', y: 'c' }, 'A1');
+  b.module(hashOf('异或门', family), { a: 'a', b: 'b', y: 's' }, 'X1');
+  b.module(hashOf('与门', family), { a: 'a', b: 'b', y: 'c' }, 'A1');
   b.port('a', 'in', 'a');
   b.port('b', 'in', 'b');
   b.port('s', 'out', 's');
@@ -107,9 +179,9 @@ function halfAdderByModules(id: string, name: string): Design {
 }
 
 /** 与非门（门版）：1 枚【与非门】积木（本关 moduleAccess: 'all'，通关即解锁这枚积木） */
-function nandByModules(id: string, name: string): Design {
+function nandByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
-  b.module(hashOf('与非门'), { a: 'a', b: 'b', y: 'y' }, 'N1');
+  b.module(hashOf('与非门', family), { a: 'a', b: 'b', y: 'y' }, 'N1');
   b.port('a', 'in', 'a');
   b.port('b', 'in', 'b');
   b.port('y', 'out', 'y');
@@ -117,9 +189,9 @@ function nandByModules(id: string, name: string): Design {
 }
 
 /** 全加器（门版）：经典 9 与非门，结构同参考解，但每个与非门都是模块积木 */
-function fullAdderByModules(id: string, name: string): Design {
+function fullAdderByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
-  const nand = hashOf('与非门');
+  const nand = hashOf('与非门', family);
   const n1 = 't1';
   const n2 = 't2';
   const n3 = 't3';
@@ -145,7 +217,12 @@ function fullAdderByModules(id: string, name: string): Design {
 }
 
 /** N 位行波进位加法器（门版）：N 个【全加器】积木串联进位，最低位 cin 接地 */
-function adderByModules(width: number, id: string, name: string): Design {
+function adderByModules(
+  width: number,
+  id: string,
+  name: string,
+  family: LogicFamily = 'rtl',
+): Design {
   const b = new DesignBuilder(id, name);
   const aNets = Array.from({ length: width }, (_, i) => `a${i}`);
   const bNets = Array.from({ length: width }, (_, i) => `b${i}`);
@@ -154,7 +231,7 @@ function adderByModules(width: number, id: string, name: string): Design {
   for (let i = 0; i < width; i++) {
     const next = i === width - 1 ? 'cout' : `c${i}`;
     b.module(
-      hashOf('全加器'),
+      hashOf('全加器', family),
       {
         a: aNets[i] as string,
         b: bNets[i] as string,
@@ -174,17 +251,17 @@ function adderByModules(width: number, id: string, name: string): Design {
 }
 
 /** 简易ALU（门版）：4×【异或门】取反 + 4×【全加器】，op 兼作最低位进位（补码减法） */
-function aluByModules(id: string, name: string): Design {
+function aluByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   const aNets = Array.from({ length: 4 }, (_, i) => `a${i}`);
   const bNets = Array.from({ length: 4 }, (_, i) => `b${i}`);
   const tNets = Array.from({ length: 4 }, (_, i) => `t${i}`);
   const yNets = Array.from({ length: 4 }, (_, i) => `y${i}`);
-  const xor = hashOf('异或门');
+  const xor = hashOf('异或门', family);
   for (let i = 0; i < 4; i++)
     b.module(xor, { a: 'op', b: bNets[i] as string, y: tNets[i] as string }, `X${i}`);
   let carry = 'op';
-  const fa = hashOf('全加器');
+  const fa = hashOf('全加器', family);
   for (let i = 0; i < 4; i++) {
     const next = `c${i}`;
     b.module(
@@ -208,9 +285,9 @@ function aluByModules(id: string, name: string): Design {
 }
 
 /** 异或门（门版）：经典 4 与非门（本关本就许用【非门】【与非门】） */
-function xorByModules(id: string, name: string): Design {
+function xorByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
-  const nand = hashOf('与非门');
+  const nand = hashOf('与非门', family);
   const n1 = 'n1';
   const n2 = 'n2';
   const n3 = 'n3';
@@ -225,10 +302,10 @@ function xorByModules(id: string, name: string): Design {
 }
 
 /** 同或门（门版）：【异或门】+【非门】 */
-function xnorByModules(id: string, name: string): Design {
+function xnorByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
-  b.module(hashOf('异或门'), { a: 'a', b: 'b', y: 'x' }, 'X1');
-  b.module(hashOf('非门'), { a: 'x', y: 'y' }, 'N1');
+  b.module(hashOf('异或门', family), { a: 'a', b: 'b', y: 'x' }, 'X1');
+  b.module(hashOf('非门', family), { a: 'x', y: 'y' }, 'N1');
   b.port('a', 'in', 'a');
   b.port('b', 'in', 'b');
   b.port('y', 'out', 'y');
@@ -236,9 +313,9 @@ function xnorByModules(id: string, name: string): Design {
 }
 
 /** 与非门 SR 锁存器（门版）：2 个【与非门】交叉耦合，低有效置位/复位 */
-function srLatchByModules(id: string, name: string): Design {
+function srLatchByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
-  const nand = hashOf('与非门');
+  const nand = hashOf('与非门', family);
   b.module(nand, { a: 'sn', b: 'qn', y: 'q' }, 'G1');
   b.module(nand, { a: 'rn', b: 'q', y: 'qn' }, 'G2');
   b.port('sn', 'in', 'sn');
@@ -249,10 +326,10 @@ function srLatchByModules(id: string, name: string): Design {
 }
 
 /** 门控 D 锁存器（门版）：【非门】造 d̄ + 4 个【与非门】（2 门控 + 2 锁存） */
-function dLatchByModules(id: string, name: string): Design {
+function dLatchByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
-  const nand = hashOf('与非门');
-  b.module(hashOf('非门'), { a: 'd', y: 'nd' }, 'N1');
+  const nand = hashOf('与非门', family);
+  b.module(hashOf('非门', family), { a: 'd', y: 'nd' }, 'N1');
   b.module(nand, { a: 'd', b: 'en', y: 'ns' }, 'G1');
   b.module(nand, { a: 'nd', b: 'en', y: 'nr' }, 'G2');
   b.module(nand, { a: 'ns', b: 'qn', y: 'q' }, 'G3');
@@ -264,11 +341,11 @@ function dLatchByModules(id: string, name: string): Design {
 }
 
 /** 主从 D 触发器（门版）：时钟反相 + 2 个【D锁存器】（主使能 nclk、从使能 clk），q/qn 出自从锁存器 */
-function dffByModules(id: string, name: string): Design {
+function dffByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
-  b.module(hashOf('非门'), { a: 'clk', y: 'nclk' }, 'N1');
-  b.module(hashOf('D锁存器'), { d: 'd', en: 'nclk', q: 'm', qn: 'mqn' }, 'MASTER');
-  b.module(hashOf('D锁存器'), { d: 'm', en: 'clk', q: 'q', qn: 'qn' }, 'SLAVE');
+  b.module(hashOf('非门', family), { a: 'clk', y: 'nclk' }, 'N1');
+  b.module(hashOf('D锁存器', family), { d: 'd', en: 'nclk', q: 'm', qn: 'mqn' }, 'MASTER');
+  b.module(hashOf('D锁存器', family), { d: 'm', en: 'clk', q: 'q', qn: 'qn' }, 'SLAVE');
   b.port('d', 'in', 'd');
   b.port('clk', 'in', 'clk');
   b.port('q', 'out', 'q');
@@ -276,43 +353,59 @@ function dffByModules(id: string, name: string): Design {
   return b.build();
 }
 
-/** 某关卡有没有逻辑门版参考解；没有返回 null（此时退元件版即可） */
-export function teachingSolutionOf(levelId: string): Design | null {
+/** 或非门（门版）：1 枚【或非门】积木（本关 moduleAccess: 'all'，与与非门关同待遇） */
+function norByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
+  const b = new DesignBuilder(id, name);
+  b.module(hashOf('或非门', family), { a: 'a', b: 'b', y: 'y' }, 'N1');
+  b.port('a', 'in', 'a');
+  b.port('b', 'in', 'b');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/**
+ * 某关卡有没有逻辑门版参考解；没有返回 null（此时退元件版即可）。
+ * family = 按玩家工艺取对应工艺的门版（TTL/CMOS 强输出积木；缺失工艺回退 RTL）。
+ * 注意传 familySpecOf 回退后的 family（无该契约 familyRefs 的关判定回退 RTL，门版也回退）。
+ */
+export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl'): Design | null {
   switch (levelId) {
     case 's1-nand':
       // 与非门关 moduleAccess: 'all'（通关解锁「与非门」积木）——门版就是这枚积木本身；
-      // 其余基础门关（非门/与门/或门/或非门）moduleAccess: 'none'，禁用模块 → 不出门版。
-      return nandByModules('teach-s1-nand', '与非门（门版）');
+      // 其余基础门关（非门/与门/或门）moduleAccess: 'none'，禁用模块 → 不出门版。
+      return nandByModules('teach-s1-nand', '与非门（门版）', family);
+    case 's1-nor':
+      return norByModules('teach-s1-nor', '或非门（门版）', family);
     case 's1-xor':
-      return xorByModules('teach-s1-xor', '异或门（门版）');
+      return xorByModules('teach-s1-xor', '异或门（门版）', family);
     case 's1-xnor':
-      return xnorByModules('teach-s1-xnor', '同或门（门版）');
+      return xnorByModules('teach-s1-xnor', '同或门（门版）', family);
     case 's2-sr-latch':
-      return srLatchByModules('teach-s2-sr', 'SR锁存器（门版）');
+      return srLatchByModules('teach-s2-sr', 'SR锁存器（门版）', family);
     case 's2-d-latch':
-      return dLatchByModules('teach-s2-dl', 'D锁存器（门版）');
+      return dLatchByModules('teach-s2-dl', 'D锁存器（门版）', family);
     case 's2-dff':
     case 's2-dff-cost':
     case 's2-dff-fast':
-      return dffByModules(`teach-${levelId}`, 'D触发器（门版）');
+      return dffByModules(`teach-${levelId}`, 'D触发器（门版）', family);
     case 's3-half-adder':
-      return halfAdderByModules('teach-s3-ha', '半加器（门版）');
+      return halfAdderByModules('teach-s3-ha', '半加器（门版）', family);
     case 's3-full-adder':
-      return fullAdderByModules('teach-s3-fa', '全加器（门版）');
+      return fullAdderByModules('teach-s3-fa', '全加器（门版）', family);
     case 's3-adder-4':
-      return adderByModules(4, 'teach-s3-a4', '4位加法器（门版）');
+      return adderByModules(4, 'teach-s3-a4', '4位加法器（门版）', family);
     case 's3-adder-8':
-      return adderByModules(8, 'teach-s3-a8', '8位加法器（门版）');
+      return adderByModules(8, 'teach-s3-a8', '8位加法器（门版）', family);
     case 's3-alu':
-      return aluByModules('teach-s3-alu', '简易ALU（门版）');
+      return aluByModules('teach-s3-alu', '简易ALU（门版）', family);
     case 's3-bcd2bin':
-      return bcd2binByModules('teach-s3-bcd2bin', 'BCD→二进制（门版）');
+      return bcd2binByModules('teach-s3-bcd2bin', 'BCD→二进制（门版）', family);
     case 's3-bin2bcd':
-      return bin2bcdByModules('teach-s3-bin2bcd', '二进制→BCD（门版）');
+      return bin2bcdByModules('teach-s3-bin2bcd', '二进制→BCD（门版）', family);
     case 's3-reg-8':
-      return reg8ByModules('teach-s3-reg8', '8位寄存器（门版）');
+      return reg8ByModules('teach-s3-reg8', '8位寄存器（门版）', family);
     case 's3-calc':
-      return calcByModules('teach-s3-calc', '简易计算器（门版）');
+      return calcByModules('teach-s3-calc', '简易计算器（门版）', family);
     default:
       return null;
   }
@@ -327,11 +420,12 @@ export function teachingSolutionOf(levelId: string): Design | null {
  * 成本反而更低 64<84）。「元件版」唯一可能占优的场景是某关参考解用了更省/更快的
  * 晶体管结构而门版没跟上——目前内容里没有，将来若加了，这里会自动把选项亮出来。
  */
-export function elementEdgeOf(level: Level): 'cost' | 'delay' | null {
-  const ref = level.referenceSolution;
-  const teach = teachingSolutionOf(level.id);
+export function elementEdgeOf(level: Level, family: LogicFamily = 'rtl'): 'cost' | 'delay' | null {
+  const spec = familySpecOf(level, family);
+  const ref = spec.reference;
+  const teach = teachingSolutionOf(level.id, spec.family);
   if (!ref || !teach) return null;
-  const gateLib = new InMemoryModuleLibrary([...TEACHING_MODULES]);
+  const gateLib = new InMemoryModuleLibrary([...teachingModulesFor(spec.family)]);
   const emptyLib = new InMemoryModuleLibrary();
   const ec = computeCosts(ref, emptyLib).costHalf;
   const gc = computeCosts(teach, gateLib).costHalf;
@@ -358,8 +452,9 @@ function bcd2binModulesInto(
   t: string[],
   u: string[],
   bin: string[],
+  family: LogicFamily = 'rtl',
 ): void {
-  const fa = hashOf('全加器');
+  const fa = hashOf('全加器', family);
   // 2t：t 左移 1 位（bit i = t[i-1]；bit0 = 0）
   const t2 = Array.from({ length: 5 }, (_, i) => (i === 0 ? 'gnd' : (t[i - 1] as string)));
   // 第一级：s1 = u + t2（5 位）
@@ -396,11 +491,17 @@ function bcd2binModulesInto(
 }
 
 /** double-dabble「加 3」单元（门版拼装块）：等价 plus3Into，逻辑完全一致 */
-function plus3ModulesInto(b: DesignBuilder, p: string, a: string[], y: string[]): void {
-  const not = hashOf('非门');
-  const nand = hashOf('与非门');
-  const xor = hashOf('异或门');
-  const and = hashOf('与门');
+function plus3ModulesInto(
+  b: DesignBuilder,
+  p: string,
+  a: string[],
+  y: string[],
+  family: LogicFamily = 'rtl',
+): void {
+  const not = hashOf('非门', family);
+  const nand = hashOf('与非门', family);
+  const xor = hashOf('异或门', family);
+  const and = hashOf('与门', family);
   const na0 = `${p}na0`;
   const na1 = `${p}na1`;
   const na3 = `${p}na3`;
@@ -436,6 +537,7 @@ function bin2bcdModulesInto(
   bin: string[],
   t: string[],
   u: string[],
+  family: LogicFamily = 'rtl',
 ): void {
   let tens = Array.from({ length: 4 }, (_, i) => `${p}s0t${i}`);
   let ones = Array.from({ length: 4 }, (_, i) => `${p}s0u${i}`);
@@ -448,8 +550,8 @@ function bin2bcdModulesInto(
     const st = `${p}s${step + 1}`;
     const onesP = Array.from({ length: 4 }, (_, i) => `${st}u${i}`);
     const tensP = Array.from({ length: 4 }, (_, i) => `${st}t${i}`);
-    plus3ModulesInto(b, `${st}u`, ones, onesP);
-    plus3ModulesInto(b, `${st}t`, tens, tensP);
+    plus3ModulesInto(b, `${st}u`, ones, onesP, family);
+    plus3ModulesInto(b, `${st}t`, tens, tensP, family);
     const bit = bin[6 - step] as string;
     ones = [bit, onesP[0] as string, onesP[1] as string, onesP[2] as string];
     tens = [onesP[3] as string, tensP[0] as string, tensP[1] as string, tensP[2] as string];
@@ -461,10 +563,10 @@ function bin2bcdModulesInto(
 }
 
 /** 8 位寄存器（门版）：8 个主从 D 触发器共用时钟反相器 */
-function reg8ByModules(id: string, name: string): Design {
+function reg8ByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
-  const dff = hashOf('D锁存器');
-  const not = hashOf('非门');
+  const dff = hashOf('D锁存器', family);
+  const not = hashOf('非门', family);
   b.module(not, { a: 'clk', y: 'nclk' }, 'N0');
   for (let i = 0; i < 8; i++) {
     b.module(dff, { d: `d${i}`, en: 'nclk', q: `m${i}`, qn: `mqn${i}` }, `M${i}`);
@@ -485,14 +587,14 @@ function reg8ByModules(id: string, name: string): Design {
 }
 
 /** 两位 BCD → 二进制（门版参考解）：端口与 s3-bcd2bin 关卡一致（bcd[7:0] → bin[6:0]） */
-function bcd2binByModules(id: string, name: string): Design {
+function bcd2binByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
   b.gnd('gnd');
   const t = Array.from({ length: 4 }, (_, i) => `bcd${i + 4}`);
   const u = Array.from({ length: 4 }, (_, i) => `bcd${i}`);
   const bin = Array.from({ length: 7 }, (_, i) => `bin${i}`);
-  bcd2binModulesInto(b, 'x', t, u, bin);
+  bcd2binModulesInto(b, 'x', t, u, bin, family);
   b.port(
     'bcd',
     'in',
@@ -503,27 +605,27 @@ function bcd2binByModules(id: string, name: string): Design {
 }
 
 /** 二进制 → 两位 BCD（门版参考解）：端口与 s3-bin2bcd 关卡一致（bin[6:0] → bcd[7:0] 十位 + bcd[3:0] 个位） */
-function bin2bcdByModules(id: string, name: string): Design {
+function bin2bcdByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
   b.gnd('gnd');
   const bin = Array.from({ length: 7 }, (_, i) => `bin${i}`);
   const t = Array.from({ length: 4 }, (_, i) => `bcd${i + 4}`);
   const u = Array.from({ length: 4 }, (_, i) => `bcd${i}`);
-  bin2bcdModulesInto(b, 'x', bin, t, u);
+  bin2bcdModulesInto(b, 'x', bin, t, u, family);
   b.port('bin', 'in', bin);
   b.port('bcd', 'out', [...u, ...t]);
   return b.build();
 }
 
 /** 简易计算器（门版参考解）：端口与 s3-calc 关卡一致（a/b BCD、eq 按钮、disp_t/disp_u 十位/个位） */
-function calcByModules(id: string, name: string): Design {
+function calcByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
   b.gnd('gnd');
-  const fa = hashOf('全加器');
-  const dff = hashOf('D锁存器');
-  const not = hashOf('非门');
+  const fa = hashOf('全加器', family);
+  const dff = hashOf('D锁存器', family);
+  const not = hashOf('非门', family);
   // a、b（BCD）→ 二进制
   const aT = Array.from({ length: 4 }, (_, i) => `a${i + 4}`);
   const aU = Array.from({ length: 4 }, (_, i) => `a${i}`);
@@ -531,8 +633,8 @@ function calcByModules(id: string, name: string): Design {
   const bU = Array.from({ length: 4 }, (_, i) => `b${i}`);
   const aBin = Array.from({ length: 7 }, (_, i) => `aBin${i}`);
   const bBin = Array.from({ length: 7 }, (_, i) => `bBin${i}`);
-  bcd2binModulesInto(b, 'a', aT, aU, aBin);
-  bcd2binModulesInto(b, 'b', bT, bU, bBin);
+  bcd2binModulesInto(b, 'a', aT, aU, aBin, family);
+  bcd2binModulesInto(b, 'b', bT, bU, bBin, family);
   // 8 位二进制加法
   const sum = Array.from({ length: 8 }, (_, i) => `sum${i}`);
   let carry = 'gnd';
@@ -554,7 +656,7 @@ function calcByModules(id: string, name: string): Design {
   // sum → BCD
   const t = Array.from({ length: 4 }, (_, i) => `t${i}`);
   const u = Array.from({ length: 4 }, (_, i) => `u${i}`);
-  bin2bcdModulesInto(b, 'c', sum, t, u);
+  bin2bcdModulesInto(b, 'c', sum, t, u, family);
   // eq 上升沿锁存
   b.module(not, { a: 'eq', y: 'neq' }, 'N0');
   for (let i = 0; i < 8; i++) {

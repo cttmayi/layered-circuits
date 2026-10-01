@@ -60,6 +60,8 @@ export function computeCosts(design: Design, library: ModuleLibrary): CostResult
           counts.res = merged.res;
           counts.dio = merged.dio;
           counts.cap = merged.cap;
+          counts.nmos = merged.nmos;
+          counts.pmos = merged.pmos;
           break;
         }
       }

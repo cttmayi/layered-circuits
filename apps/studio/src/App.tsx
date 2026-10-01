@@ -3,10 +3,10 @@ import {
   ALL_LEVELS,
   elementEdgeOf,
   findLevel,
-  TEACHING_MODULES,
+  teachingModulesFor,
   teachingSolutionOf,
 } from '@lc/content';
-import { FAMILY_CONTRACTS, familySpecOf, type LogicFamily, levelViewOf } from '@lc/schema';
+import { familySpecOf, type LogicFamily, levelViewOf } from '@lc/schema';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emptyDoc, notGateDemo } from './editor/demos';
 import {
@@ -784,13 +784,13 @@ export function App(): React.JSX.Element {
     if (!currentLevel) return;
     // 元件版 = 按玩家契约的参考解（每个契约自己的工艺答案；缺省 rtl = 关卡参考解）
     const spec = familySpecOf(currentLevel, progress.family);
-    const ref = kind === 'gate' ? teachingSolutionOf(currentLevel.id) : spec.reference;
+    const ref = kind === 'gate' ? teachingSolutionOf(currentLevel.id, spec.family) : spec.reference;
     if (!ref) {
       setToast(kind === 'gate' ? '本关没有逻辑门版参考解' : '本关没有参考解，无法一键出答案');
       return;
     }
-    // 门版引用了教学门积木：并入画布库（同时出现在左侧「我的模块」，可直接拖用）
-    const extra = kind === 'gate' ? TEACHING_STORED : [];
+    // 门版引用了教学门积木（按玩家工艺）：并入画布库（同时出现在左侧「我的模块」，可直接拖用）
+    const extra = kind === 'gate' ? teachingStoredFor(spec.family) : [];
     const library = [...doc.library, ...extra];
     const next = fromDesign(ref, docForLevel(currentLevel, library));
     loadDoc({ ...next, library });
@@ -807,16 +807,16 @@ export function App(): React.JSX.Element {
       return;
     }
     const spec = familySpecOf(currentLevel, progress.family);
-    const teach = teachingSolutionOf(currentLevel.id);
+    const teach = teachingSolutionOf(currentLevel.id, spec.family);
     const candidates: { kind: 'element' | 'gate'; note?: string }[] = [];
-    // 门版 = RTL 晶体管积木，输出弱 1：强输出契约（TTL/CMOS）下会挂强度检查 → 只给契约元件版
-    const strongContract = FAMILY_CONTRACTS[progress.family].output === 'strong';
-    if (teach && !strongContract) candidates.push({ kind: 'gate' });
+    // 门版按玩家工艺取（TTL/CMOS 用强输出积木，判定能过强度检查）；无该工艺门版时
+    // 此处为空 → 只给契约元件版（spec.reference 一定是该契约能过的工艺答案）。
+    if (teach) candidates.push({ kind: 'gate' });
     if (spec.reference) {
-      const edge = elementEdgeOf(currentLevel);
+      const edge = elementEdgeOf(currentLevel, spec.family);
       if (edge)
         candidates.unshift({ kind: 'element', note: edge === 'cost' ? '造价更低' : '延迟更短' });
-      else if (!teach || strongContract) candidates.push({ kind: 'element' });
+      else if (!teach) candidates.push({ kind: 'element' });
     }
     if (candidates.length === 0) {
       setToast('本关没有参考解，无法一键出答案');
@@ -1528,19 +1528,20 @@ export function App(): React.JSX.Element {
   );
 }
 
-/** 教学用门级模块 → 画布库条目（hash 内容稳定，重复注入无害） */
-const TEACHING_STORED: StoredModule[] = TEACHING_MODULES.map((m) => ({
-  hash: m.hash,
-  name: m.name,
-  version: m.version,
-  stage: m.stage,
-  costHalf: m.costHalf,
-  isSequential: m.isSequential,
-  ports: m.ports,
-  template: m,
-  sources: [],
-  createdAt: 0,
-}));
+/** 教学用门级模块 → 画布库条目（按玩家工艺给对应工艺的积木，hash 内容稳定，重复注入无害） */
+const teachingStoredFor = (family: LogicFamily): StoredModule[] =>
+  teachingModulesFor(family).map((m) => ({
+    hash: m.hash,
+    name: m.name,
+    version: m.version,
+    stage: m.stage,
+    costHalf: m.costHalf,
+    isSequential: m.isSequential,
+    ports: m.ports,
+    template: m,
+    sources: [],
+    createdAt: 0,
+  }));
 
 /** 面板开合等 UI 偏好的持久化：刷新后保持用户上次的选择 */
 function usePersistentBool(key: string, def: boolean): [boolean, (v: boolean) => void] {

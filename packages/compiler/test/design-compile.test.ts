@@ -7,6 +7,7 @@ import { designToModulePorts, hashModule, verifyTemplate, wrapModule } from '../
 import {
   bufferDesign,
   busTopDesign,
+  cmosNandDesign,
   danglingPinDesign,
   notGateDesign,
   srLatchDesign,
@@ -77,6 +78,27 @@ describe('成本：递归到 4 种基础元件', () => {
     );
     expect(bufferModule.costHalf).toBe(40); // 2 × 非门(20)
     expect(bufferModule.costs).toEqual({ npn: 4, res: 6, dio: 0, cap: 0, nmos: 0, pmos: 0 });
+  });
+
+  it('CMOS 模块（含 MOS 元件）成本同样固化进模板并随实例累加', () => {
+    const library = new InMemoryModuleLibrary();
+    const cmos = cmosNandDesign();
+    const { template: cmosModule } = wrapModule(
+      {
+        name: 'CMOS与非门',
+        stage: 1,
+        kind: 'logic',
+        ports: designToModulePorts(cmos),
+        body: cmos,
+      },
+      library,
+    );
+    // 模板成本包含 MOS（回写 counts 时 nmos/pmos 不能丢）
+    expect(cmosModule.costs).toEqual({ npn: 0, res: 0, dio: 0, cap: 0, nmos: 2, pmos: 2 });
+    library.add(cmosModule);
+    const buffer = bufferDesign(cmosModule.hash);
+    const { counts } = computeCosts(buffer, library);
+    expect(counts).toEqual({ npn: 0, res: 0, dio: 0, cap: 0, nmos: 4, pmos: 4 });
   });
 
   it('溯源树能展开到基础元件并给出各分支成本', () => {
