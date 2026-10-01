@@ -11,6 +11,8 @@
 import type { Design, Instance, PinRef, Port } from '@lc/schema';
 
 export type UnitKind = 'npn' | 'res' | 'dio' | 'cap' | 'nmos' | 'pmos';
+/** 输出端口的显示形态（画布把输出端口画成对应图形） */
+export type SymDisplay = 'segment';
 export type SymKind = 'unit' | 'vcc' | 'gnd' | 'input' | 'output' | 'module';
 export type Rot = 0 | 1 | 2 | 3;
 /** 输入符号的驱动：0/1 = 高低，2 = X，3 = Z（与 sim-core 的 elemParam 一致） */
@@ -64,6 +66,10 @@ export interface Sym {
    * （由信号驱动状态：亮/响/开=1）。普通关卡没有 sprite，维持抽象端口。
    */
   sprite?: 'button' | 'lamp' | 'bell' | 'door' | 'battery';
+  /** input 端口瞬时按键：点击 = 电平 1，自动弹回 0（画成按钮 sprite） */
+  button?: boolean;
+  /** output 端口显示形态：画成七段数码管（按端口值 BCD 0-9 点亮段） */
+  display?: SymDisplay;
 }
 
 export interface Wire {

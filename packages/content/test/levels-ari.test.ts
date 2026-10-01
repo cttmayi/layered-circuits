@@ -42,11 +42,20 @@ function portWidthOf(levelId: string, name: string): number {
 describe('阶段 3 关卡内容（位宽/总线）', () => {
   it('五关按「半加器 → 全加器 → 4位 → 8位 → ALU」排列，位宽从 1 涨到 8', () => {
     const ids = STAGE3_LEVELS.map((l) => l.id);
-    expect(ids).toEqual(['s3-half-adder', 's3-full-adder', 's3-adder-4', 's3-adder-8', 's3-alu']);
+    expect(ids).toEqual([
+      's3-half-adder',
+      's3-full-adder',
+      's3-adder-4',
+      's3-adder-8',
+      's3-alu',
+      's3-bcd2bin',
+      's3-bin2bcd',
+      's3-reg-8',
+      's3-calc',
+    ]);
     expect(levelOrder('s3-half-adder')).toBeLessThan(levelOrder('s3-alu'));
     for (const l of STAGE3_LEVELS) {
       expect(l.stage).toBe(3);
-      expect(l.mode).toBe('logic');
       expect(l.unlock?.stage).toBe(3);
     }
     expect(portWidthOf('s3-adder-4', 'a')).toBe(4);
@@ -73,7 +82,7 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
       const sum = costHalfOf(counts);
       expect(sum, `${l.id} 参考解成本应等于 optimalHalf`).toBe(l.optimalHalf);
     }
-  });
+  }, 30_000); // calc/reg-8 是数百元件的大电路，时序行为探测较慢，放宽超时
 
   it('数值向量按端口位宽展开成 lane 键（a: 5 → a[0..3]），判定按位比对', () => {
     const l = level('s3-adder-4');

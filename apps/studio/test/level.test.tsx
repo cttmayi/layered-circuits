@@ -120,7 +120,8 @@ describe('关卡内容与进度', () => {
       expect(response.judge?.pass, `${level.id} 参考解应在硬核模式通关`).toBe(true);
       expect(response.judge?.score, `${level.id} 最优成本拿满分`).toBe(100);
     }
-  });
+    // 计算器链参考解（600+ 元件、10 输入）的时序行为探测较慢，放宽超时
+  }, 30_000);
 
   it('判定通道能识别失败：功能不符时给出具体行数与错误说明', () => {
     const level = findLevel('s1-not')!;

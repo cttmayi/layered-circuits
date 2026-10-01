@@ -41,6 +41,10 @@ export const PortSpecSchema = z.object({
   name: z.string().min(1),
   dir: z.enum(['in', 'out']),
   width: z.number().int().min(1).max(8).default(1),
+  /** 输入端口渲染成按钮：点击 = 电平 1，自动弹回 0（瞬时按键，如计算器等号键） */
+  button: z.boolean().optional(),
+  /** 输出端口渲染成七段数码管：按端口值（BCD 0-9）点亮段（如计算器屏幕） */
+  display: z.enum(['segment']).optional(),
 });
 export type PortSpec = z.infer<typeof PortSpecSchema>;
 

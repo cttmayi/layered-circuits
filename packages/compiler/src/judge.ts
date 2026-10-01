@@ -416,7 +416,14 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
   /** 每个输出端口的实测延迟（ps）；不做时序分析时为 null（纯成本判定） */
   let portDelayPs: Record<string, number> | null = null;
   if (needAnalysis) {
-    const analysis = analyzeTiming(net);
+    // 不评延迟档（无 timingBudgetPs、非 timing 关、无 clock/maxGlitches 约束）时
+    // 跳过传播延迟实测（输入数×2 次全仿真），只做「是否时序电路」判定。
+    const skipDelay =
+      effectiveTimingBudgetPs === undefined &&
+      level.kind !== 'timing' &&
+      checks.clockPort === undefined &&
+      checks.maxGlitches === undefined;
+    const analysis = analyzeTiming(net, { skipDelay });
     isSequential = analysis.isSequential;
     criticalPathPs = analysis.criticalPathPs;
     portDelayPs = analysis.portDelayPs;

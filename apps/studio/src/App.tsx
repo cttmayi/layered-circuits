@@ -95,6 +95,8 @@ export function App(): React.JSX.Element {
   const runner = useMemo(() => createRunner(), []);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  /** 上次仿真的节点信号 + 电路指纹（锁存器/寄存器状态跨仿真保持） */
+  const prevSimRef = useRef<{ key: string; signals: Record<string, number> } | null>(null);
   const dragRef = useRef<DragState>({
     mode: 'none',
     originX: 0,
@@ -211,6 +213,11 @@ export function App(): React.JSX.Element {
     if (runner.kind !== runnerKind) setRunnerKind(runner.kind);
     const timer = setTimeout(() => {
       const design = toDesign(doc);
+      // 电路指纹：只在拓扑/布线没变时复用上次信号（锁存器/寄存器状态跨仿真保持）；
+      // 拓扑一变就回到上电默认，避免用旧网的信号污染新电路。
+      const designKey = JSON.stringify(design);
+      const prev = prevSimRef.current;
+      const prevSignals = prev && prev.key === designKey ? prev.signals : undefined;
       runner
         .send({
           type: 'simulate',
@@ -218,6 +225,9 @@ export function App(): React.JSX.Element {
           library: doc.library.map((m) => m.template),
           mode,
           inputs: inputValues(doc),
+          // 瞬时按钮端口：仿真先按 0 稳定、再置 1（上升沿锁存正确值）
+          buttonPorts: doc.syms.filter((s) => s.kind === 'input' && s.button).map((s) => s.label),
+          prevSignals,
           withTiming: showTiming,
           withTruth: showTruth,
           maxTruthRows: 32,
@@ -230,6 +240,11 @@ export function App(): React.JSX.Element {
           if (response.snapshot) {
             setSnapshot(response.snapshot);
             setResultDoc(doc);
+            // 记住这次的信号与电路指纹，供下一次仿真续用
+            prevSimRef.current = {
+              key: designKey,
+              signals: Object.fromEntries(response.snapshot.netSignals),
+            };
           }
         })
         .catch((error: unknown) => setToast(`仿真失败：${String(error)}`));
@@ -677,6 +692,22 @@ export function App(): React.JSX.Element {
   };
 
   const toggleInput = (id: string): void => {
+    const sym = doc.syms.find((s) => s.id === id);
+    if (sym?.button) {
+      // 瞬时按键（按钮端口）：按下 = 1，400ms 后自动弹回 0
+      // 用函数式更新，避免闭包捕获旧 doc 导致弹回时覆盖玩家其它操作
+      setDoc((prev) => ({
+        ...prev,
+        syms: prev.syms.map((s) => (s.id === id ? { ...s, value: 1 as InputDrive } : s)),
+      }));
+      window.setTimeout(() => {
+        setDoc((prev) => ({
+          ...prev,
+          syms: prev.syms.map((s) => (s.id === id ? { ...s, value: 0 as InputDrive } : s)),
+        }));
+      }, 400);
+      return;
+    }
     commit({
       ...doc,
       syms: doc.syms.map((s) =>

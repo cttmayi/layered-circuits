@@ -831,6 +831,53 @@ function drawSprite(
   }
 }
 
+/**
+ * 七段数码管（计算器屏幕）：按 BCD 值（0-9）点亮段。
+ * 段编号（共阴极）：0 上横、1 右上竖、2 右下竖、3 下横、4 左下竖、5 左上竖、6 中横。
+ */
+const SEGMENTS: Record<number, number[]> = {
+  0: [0, 1, 2, 3, 4, 5],
+  1: [1, 2],
+  2: [0, 1, 6, 4, 3],
+  3: [0, 1, 6, 2, 3],
+  4: [5, 6, 1, 2],
+  5: [0, 5, 6, 2, 3],
+  6: [0, 5, 6, 4, 3, 2],
+  7: [0, 1, 2],
+  8: [0, 1, 2, 3, 4, 5, 6],
+  9: [0, 1, 6, 2, 3, 5],
+};
+
+function drawSegment(ctx: CanvasRenderingContext2D, value: number): void {
+  const d = value >= 0 && value <= 9 ? (SEGMENTS[value] ?? []) : [];
+  const on = new Set(d);
+  // 每个段一个「段条」：x/y 用世界坐标（原点在端口中心）
+  const seg = [
+    { s: 0, x1: -16, y1: -26, x2: 16, y2: -26 },
+    { s: 1, x1: 18, y1: -24, x2: 18, y2: 0 },
+    { s: 2, x1: 18, y1: 2, x2: 18, y2: 26 },
+    { s: 3, x1: -16, y1: 28, x2: 16, y2: 28 },
+    { s: 4, x1: -18, y1: 2, x2: -18, y2: 26 },
+    { s: 5, x1: -18, y1: -24, x2: -18, y2: 0 },
+    { s: 6, x1: -16, y1: 1, x2: 16, y2: 1 },
+  ];
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 4;
+  for (const g of seg) {
+    const lit = on.has(g.s);
+    ctx.strokeStyle = lit ? '#ffd479' : 'rgba(60,74,88,0.55)';
+    ctx.beginPath();
+    ctx.moveTo(g.x1, g.y1);
+    ctx.lineTo(g.x2, g.y2);
+    ctx.stroke();
+  }
+  // 外壳
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(90,112,132,0.6)';
+  ctx.strokeRect(-24, -32, 48, 64);
+}
+
 function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void {
   const { doc, camera, width, height } = scene;
   const p = worldToScreen(camera, width, height, sym.x, sym.y);
@@ -1049,6 +1096,17 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
       if (sym.sprite) {
         const sig = scene.pinSignals.get(pinKey({ inst: sym.id, pin: 'p', bit: 0 }));
         drawSprite(ctx, sym.sprite, sig ?? SIG_Z);
+        break;
+      }
+      // 七段数码管（输出端口 display: 'segment'）：按端口值（BCD 0-9）点亮段
+      if (!isIn && sym.display === 'segment') {
+        const width = sym.width ?? 1;
+        let value = 0;
+        for (let bit = 0; bit < Math.min(width, 4); bit++) {
+          const sig = scene.pinSignals.get(pinKey({ inst: sym.id, pin: 'p', bit }));
+          if (sig !== undefined && logicValueOf(sig) === 1) value |= 1 << bit;
+        }
+        drawSegment(ctx, value);
         break;
       }
       const width = sym.width ?? 1;

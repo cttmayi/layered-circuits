@@ -57,6 +57,10 @@ export type StudioRequest =
       library: unknown[];
       mode: SimMode;
       inputs: Record<string, DriveValue>;
+      /** 瞬时按钮端口：仿真时先按 0 稳定，再按目标值（组合链稳定后才出现上升沿，避免锁存中间态） */
+      buttonPorts?: string[];
+      /** 上次仿真的节点信号（顶层网 id → signal），用于锁存器/寄存器状态跨仿真保持 */
+      prevSignals?: Record<string, number>;
       withTiming?: boolean;
       withTruth?: boolean;
       maxTruthRows?: number;

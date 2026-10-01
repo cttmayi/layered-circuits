@@ -100,18 +100,33 @@ export function handleRequest(req: StudioRequest): StudioResponse {
     const { design, mode, inputs } = req;
     const { net, diagnostics: compileDiagnostics, netIds } = compileDesign(design, { library });
 
-    const sim = new Simulator(net, { mode, trace: false, maxEvents: 2_000_000 });
+    const sim = new Simulator(net, {
+      mode,
+      trace: false,
+      maxEvents: 2_000_000,
+      initialSignals: req.prevSignals,
+    });
     const values: Record<string, DriveValue> = {};
+    // 瞬时按钮端口：先按 0 驱动，让组合逻辑稳定后再置目标值。
+    // 否则冷启动仿真里 eq 的上升沿出现在 t=0，会锁存组合链尚未稳定的中间态
+    // （真实玩家是先设好 a/b、组合链早已稳定，再按下等号键）。
+    const buttonPorts = new Set(req.buttonPorts ?? []);
     for (const port of net.ports) {
       if (port.dir !== 'in') continue;
       const drive = inputs[port.name] ?? 3;
       values[port.name] = drive;
-      sim.setInput(port.name, paramToLogic(drive));
+      sim.setInput(port.name, buttonPorts.has(port.name) ? 0 : paramToLogic(drive));
     }
 
     let unstable = false;
     if (mode === 'timing') {
-      // 硬核模式：给一个足够大的等待窗口，让玩家能看到「延迟之后才变」的现象
+      // 先给组合链一个稳定窗口（含按钮端口为 0 时的状态）
+      if (!sim.advanceTo(sim.time + 1_000_000, 500_000)) unstable = true;
+      // 按钮端口在组合链稳定后才生效（上升沿锁存正确的组合输出）
+      for (const bp of buttonPorts) {
+        const drive = inputs[bp] ?? 0;
+        sim.setInput(bp, paramToLogic(drive));
+      }
       if (!sim.advanceTo(sim.time + 1_000_000, 500_000)) unstable = true;
     } else if (!sim.settle()) {
       unstable = true;

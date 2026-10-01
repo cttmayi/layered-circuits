@@ -42,7 +42,8 @@ describe('fromDesign 还原器（一键出答案）', () => {
       expect(r.score, `${level.id} 还原后应满分`).toBe(100);
     }
     expect(checked).toBeGreaterThanOrEqual(15);
-  });
+    // 计算器链大电路的时序行为探测较慢，放宽超时
+  }, 30_000);
 
   it('没有参考解的关返回空电路提示（不炸）', () => {
     const level = ALL_LEVELS[0]!;
@@ -140,7 +141,8 @@ describe('元件版布局：紧凑网格（不许回退成单列长条）', () =
         seen.add(key);
       }
     }
-  });
+    // 计算器链参考解（600+ 元件）布局较慢，放宽超时
+  }, 30_000);
 });
 
 describe('元件版 vs 门版：一键出答案的版本选择依据', () => {

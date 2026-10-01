@@ -28,6 +28,9 @@ export interface TimingAnalysisOptions {
   eventBudget?: number;
   /** 状态依赖探测的向量对数 */
   stateProbePairs?: number;
+  /** 跳过传播延迟测量（portDelayPs/criticalPathPs 返回 0）：只做「是否时序电路」判定。
+   *  判定不评延迟档（无 timingBudgetPs）时用它省掉 输入数×2 次全仿真。 */
+  skipDelay?: boolean;
 }
 
 export interface TimingAnalysis {
@@ -53,6 +56,118 @@ function sameVector(a: Record<string, Logic>, b: Record<string, Logic>): boolean
   return keys.every((k) => a[k] === b[k]);
 }
 
+/** 元件引脚号 → 是否「读」（信号依赖）引脚 */
+function isReadPin(kind: number, p: number): boolean {
+  switch (kind) {
+    case 0: // NPN [c, b, e]
+    case 7: // NMOS [d, g, s]
+    case 8: // PMOS [d, g, s]
+      return p === 1 || p === 2; // b/e 或 g/s
+    case 1: // RES [a, b]
+    case 2: // DIO [anode, cathode]
+      return p === 0; // a / anode
+    case 6: // OUTPUT
+      return p === 0;
+    default:
+      return false; // POWER / INPUT / CAP 不读
+  }
+}
+
+/** 元件「真正写」的引脚号（信号流方向：读端 → 写端） */
+function isWritePin(kind: number, p: number): boolean {
+  switch (kind) {
+    case 0: // NPN 集电极
+    case 7: // NMOS 漏极
+    case 8: // PMOS 漏极
+      return p === 0;
+    case 1: // RES b 端
+    case 2: // DIO 阴极
+      return p === 1;
+    case 4: // POWER
+    case 5: // INPUT
+      return p === 0;
+    default:
+      return false;
+  }
+}
+
+/**
+ * 反馈环检测（拓扑加速）：无反馈环 ⇒ 纯组合电路（isSequential 必为 false），
+ * 可直接跳过昂贵的「行为探测」。
+ * 走开关级模型自己的连接图：节点被元件「写」（isWritePin），元件「读」节点（isReadPin）。
+ * 注意不能直接用 net.driveStart：仿真器把电阻/二极管当双向通路（a、b 都算驱动），
+ * 用它会产出大量假环（VCC—电阻—输出 直接成团）。这里自己按信号流方向建单向写者索引。
+ */
+export function hasFeedbackLoop(net: FlatNet): boolean {
+  // 单向写者索引：节点 → 写它的元件
+  const writers = new Map<number, number[]>();
+  for (let e = 0; e < net.elemCount; e++) {
+    const base = e * 3;
+    for (let p = 0; p < 3; p++) {
+      if (!isWritePin(net.elemKind[e], p)) continue;
+      const node = net.elemPin[base + p];
+      if (node < 0) continue;
+      let arr = writers.get(node);
+      if (!arr) {
+        arr = [];
+        writers.set(node, arr);
+      }
+      arr.push(e);
+    }
+  }
+  const nodeColor = new Uint8Array(net.nodeCount); // 0 白 / 1 灰 / 2 黑
+  const elemColor = new Uint8Array(net.elemCount);
+  let loop = false;
+  const dfsElem = (e: number): void => {
+    if (loop || elemColor[e] === 2) return;
+    if (elemColor[e] === 1) {
+      loop = true;
+      return;
+    }
+    elemColor[e] = 1;
+    const ek = net.elemKind[e];
+    const base = e * 3;
+    for (let p = 0; p < 3; p++) {
+      const node = net.elemPin[base + p];
+      if (node < 0 || !isReadPin(ek, p)) continue;
+      if (nodeColor[node] === 2) continue;
+      if (nodeColor[node] === 1) {
+        loop = true;
+        return;
+      }
+      dfsNode(node);
+      if (loop) return;
+    }
+    elemColor[e] = 2;
+  };
+  const dfsNode = (n: number): void => {
+    if (loop || nodeColor[n] === 2) return;
+    if (nodeColor[n] === 1) {
+      loop = true;
+      return;
+    }
+    nodeColor[n] = 1;
+    const ws = writers.get(n);
+    if (ws) {
+      for (const e of ws) {
+        if (elemColor[e] === 2) continue;
+        if (elemColor[e] === 1) {
+          loop = true;
+          return;
+        }
+        dfsElem(e);
+        if (loop) return;
+      }
+    }
+    nodeColor[n] = 2;
+  };
+  for (let n = 0; n < net.nodeCount; n++) {
+    dfsNode(n);
+    if (loop) return true;
+  }
+  return false;
+}
+
 export function analyzeTiming(net: FlatNet, options: TimingAnalysisOptions = {}): TimingAnalysis {
   const windowPs = options.windowPs ?? DEFAULT_WINDOW_PS;
   const steadyPs = options.steadyPs ?? DEFAULT_STEADY_PS;
@@ -74,37 +189,39 @@ export function analyzeTiming(net: FlatNet, options: TimingAnalysisOptions = {})
     for (const p of inputs) sim.setInput(p.name, level);
   };
 
-  // ---- 1) 传播延迟 ----
-  for (const input of inputs) {
-    for (const [initial, flipped] of [
-      [0, 1],
-      [1, 0],
-    ] as Array<[Logic, Logic]>) {
-      const sim = newSim();
-      driveAll(sim, initial);
-      if (!sim.advanceTo(steadyPs, eventBudget)) {
-        uncertain = true;
-        continue;
-      }
-      const t0 = sim.time;
-      sim.setInput(input.name, flipped);
-      if (!sim.advanceTo(t0 + windowPs, eventBudget)) uncertain = true;
+  // ---- 1) 传播延迟（skipDelay 时跳过：判定不评延迟档，省 输入数×2 次全仿真） ----
+  if (!options.skipDelay) {
+    for (const input of inputs) {
+      for (const [initial, flipped] of [
+        [0, 1],
+        [1, 0],
+      ] as Array<[Logic, Logic]>) {
+        const sim = newSim();
+        driveAll(sim, initial);
+        if (!sim.advanceTo(steadyPs, eventBudget)) {
+          uncertain = true;
+          continue;
+        }
+        const t0 = sim.time;
+        sim.setInput(input.name, flipped);
+        if (!sim.advanceTo(t0 + windowPs, eventBudget)) uncertain = true;
 
-      const trace = sim.trace;
-      if (!trace) continue;
-      const lastChange = new Map<number, number>();
-      for (let i = 0; i < trace.times.length; i++) {
-        lastChange.set(trace.nodes[i] as number, trace.times[i] as number);
-      }
-      for (const out of outputs) {
-        const t = lastChange.get(out.node);
-        if (t === undefined || t <= t0) continue;
-        const delay = t - t0;
-        if (delay > (portDelayPs[out.name] as number)) portDelayPs[out.name] = delay;
-        if (delay > windowPs) uncertain = true;
-      }
-      if (sim.allDiagnostics.some((d) => d.kind === 'unstable' || d.kind === 'drive-conflict')) {
-        uncertain = true;
+        const trace = sim.trace;
+        if (!trace) continue;
+        const lastChange = new Map<number, number>();
+        for (let i = 0; i < trace.times.length; i++) {
+          lastChange.set(trace.nodes[i] as number, trace.times[i] as number);
+        }
+        for (const out of outputs) {
+          const t = lastChange.get(out.node);
+          if (t === undefined || t <= t0) continue;
+          const delay = t - t0;
+          if (delay > (portDelayPs[out.name] as number)) portDelayPs[out.name] = delay;
+          if (delay > windowPs) uncertain = true;
+        }
+        if (sim.allDiagnostics.some((d) => d.kind === 'unstable' || d.kind === 'drive-conflict')) {
+          uncertain = true;
+        }
       }
     }
   }
@@ -123,7 +240,10 @@ export function analyzeTiming(net: FlatNet, options: TimingAnalysisOptions = {})
   // 冷启动即处于非法态（Q=Qn=1）的电路，直接施加保持向量会因对称延迟产生竞争而不收敛，
   // 必须先进入稳定态再比较历史。
   let isSequential = false;
-  if (inputs.length > 0 && outputs.length > 0) {
+  // 拓扑快速路径：无反馈环 ⇒ 纯组合，直接跳过行为探测（探测对组合电路要跑满全部
+  // 历史组合才会失败，大电路上很贵；环检测是 O(元件+节点) 的一次遍历）
+  const acyclic = !hasFeedbackLoop(net);
+  if (inputs.length > 0 && outputs.length > 0 && !acyclic) {
     const allLow: Record<string, Logic> = {};
     const allHigh: Record<string, Logic> = {};
     const altA: Record<string, Logic> = {};

@@ -15,7 +15,7 @@
 import { type Design, DesignBuilder } from '@lc/schema';
 
 /** RTL 与非门：¬(a·c) → y（2 三极管 + 3 电阻 = 14，输出可级联） */
-function nandInto(b: DesignBuilder, p: string, a: string, c: string, y: string): void {
+export function nandInto(b: DesignBuilder, p: string, a: string, c: string, y: string): void {
   b.unit('res', { a, b: `${p}b1` }, `${p}R1`);
   b.unit('res', { a: c, b: `${p}b2` }, `${p}R2`);
   b.unit('npn', { c: y, b: `${p}b1`, e: `${p}m` }, `${p}Q1`);
@@ -24,7 +24,7 @@ function nandInto(b: DesignBuilder, p: string, a: string, c: string, y: string):
 }
 
 /** RTL 异或门：a⊕c → y（4 个与非门 = 56） */
-function xorInto(b: DesignBuilder, p: string, a: string, c: string, y: string): void {
+export function xorInto(b: DesignBuilder, p: string, a: string, c: string, y: string): void {
   const n1 = `${p}n1`;
   const n2 = `${p}n2`;
   const n3 = `${p}n3`;
@@ -40,7 +40,7 @@ function xorInto(b: DesignBuilder, p: string, a: string, c: string, y: string): 
  *   s=¬(¬(x·t4)·¬(cin·t4))=x⊕cin, cout=¬(t1·t4)=ab∨(x·cin)。
  * 成本 9×14 = 126。
  */
-function fullAdderInto(
+export function fullAdderInto(
   b: DesignBuilder,
   p: string,
   a: string,

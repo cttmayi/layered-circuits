@@ -41,6 +41,10 @@ export interface SimOptions {
   maxEvents?: number;
   /** 每类诊断最多保留多少条 */
   maxDiagnosticsPerKind?: number;
+  /** 用上次仿真的节点信号恢复初始态（键 = 顶层网 id）：GUI 连续仿真时，
+   *  锁存器/寄存器的「保持」跨仿真保留（否则每次冷启动都回到上电非法态）。
+   *  只恢复能对上的网，其余节点维持上电默认。 */
+  initialSignals?: Record<string, number>;
 }
 
 export type DiagnosticKind =
@@ -108,6 +112,7 @@ export class Simulator {
   private readonly maxIterations: number;
   private readonly maxEvents: number;
   private readonly maxDiagnosticsPerKind: number;
+  private readonly options: SimOptions;
   private readonly inPorts = new Map<string, FlatPort>();
   private readonly outPorts = new Map<string, FlatPort>();
   /** 三极管基极「曾处于悬空」的节点 → 元素下标（仿真停下时才判定并报告） */
@@ -120,6 +125,7 @@ export class Simulator {
   constructor(net: FlatNet, options: SimOptions) {
     this.net = net;
     this.mode = options.mode;
+    this.options = options;
     this.trace = options.trace ? { times: [], nodes: [], signals: [] } : undefined;
     this.maxIterations = options.maxIterations ?? Math.max(2000, net.elemCount * 50);
     this.maxEvents = options.maxEvents ?? 20_000_000;
@@ -197,6 +203,18 @@ export class Simulator {
     //   传播延迟逐级推进。这样波形上看到的建立过程是真实的（每一级各占自己的延迟），
     //   而不是全体挤在同一时刻 —— 竞争冒险/空翻才看得出来。
     this.powerUp();
+
+    // 用上次仿真的信号恢复初始态（键 = 顶层网 id）。恢复发生在队列排空之后：
+    // 后续 setInput 触发的求值会从恢复值继续演化（锁存器保持旧状态）。
+    if (this.options.initialSignals) {
+      const sig = this.options.initialSignals;
+      for (let node = 0; node < this.net.nodeCount; node++) {
+        const id = this.net.nodeLabel[node];
+        if (!id) continue;
+        const s = sig[id];
+        if (s !== undefined) this.nodeSig[node] = s & 0x0f;
+      }
+    }
   }
 
   /** 逻辑模式：迭代到收敛。返回是否收敛（false = 振荡/组合环）

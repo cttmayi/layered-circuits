@@ -257,12 +257,15 @@ export function docForLevel(level: Level, library: StoredModule[]): Doc {
   const { inputs, outputs } = requiredPortsOf(level);
   // 端口位宽：关卡声明优先（第三章总线），缺省 1 位
   const widthOf = new Map(level.ports.map((p) => [p.name, p.width]));
+  // 端口交互/显示形态：button（输入按钮）、display（输出数码管）
+  const portFlagOf = new Map(level.ports.map((p) => [p.name, p]));
   const syms: Sym[] = [
     // 电源轨：左上 VCC、右上 GND（避开中间 200 起排的信号端口）
     { id: 'rail-vcc', kind: 'vcc', x: 40, y: 60, rot: 0, label: 'VCC', locked: true },
     { id: 'rail-gnd', kind: 'gnd', x: 700, y: 60, rot: 0, label: 'GND', locked: true },
   ];
   inputs.forEach((name, i) => {
+    const declared = portFlagOf.get(name);
     syms.push({
       id: `in-${name}`,
       kind: 'input',
@@ -273,10 +276,12 @@ export function docForLevel(level: Level, library: StoredModule[]): Doc {
       label: name,
       width: widthOf.get(name) ?? 1,
       locked: true,
+      ...(declared?.button ? { button: true, sprite: 'button' as const } : {}),
     });
   });
   const outputTop = 200;
   outputs.forEach((name, i) => {
+    const declared = portFlagOf.get(name);
     const sym: Sym = {
       id: `out-${name}`,
       kind: 'output',
@@ -286,6 +291,7 @@ export function docForLevel(level: Level, library: StoredModule[]): Doc {
       label: name,
       width: widthOf.get(name) ?? 1,
       locked: true,
+      ...(declared?.display ? { display: declared.display } : {}),
     };
     syms.push(sym);
   });
