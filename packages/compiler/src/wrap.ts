@@ -28,6 +28,51 @@ function pinSortKey(inst: string, pin: string, bit: number): string {
   return `${inst}\u0000${pin}\u0000${bit}`;
 }
 
+/**
+ * 从 body 直接引用的模块出发，DFS 库内模块依赖图；若访问路径上重复遇到某模块
+ * （visiting 集合里再次出现）即为环，返回环的 hash 链（首尾相同）。无环返回 null。
+ */
+export function findDependencyCycle(body: Design, library: ModuleLibrary): string[] | null {
+  const depsOf = (hash: string): string[] => {
+    const tpl = library.get(hash);
+    if (!tpl) return [];
+    const out: string[] = [];
+    for (const inst of tpl.body.instances) {
+      if (inst.kind === 'module' && !out.includes(inst.module)) out.push(inst.module);
+    }
+    return out;
+  };
+
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const path: string[] = [];
+
+  const dfs = (hash: string): string[] | null => {
+    if (visiting.has(hash)) {
+      const start = path.indexOf(hash);
+      return [...path.slice(start), hash];
+    }
+    if (visited.has(hash)) return null;
+    visiting.add(hash);
+    path.push(hash);
+    for (const dep of depsOf(hash)) {
+      const cycle = dfs(dep);
+      if (cycle) return cycle;
+    }
+    path.pop();
+    visiting.delete(hash);
+    visited.add(hash);
+    return null;
+  };
+
+  for (const inst of body.instances) {
+    if (inst.kind !== 'module') continue;
+    const cycle = dfs(inst.module);
+    if (cycle) return cycle;
+  }
+  return null;
+}
+
 /** 规范化端口声明（排序 + 去噪） */
 export function canonicalPorts(ports: readonly ModulePort[]): ModulePort[] {
   return [...ports]
@@ -110,6 +155,21 @@ export function wrapModule(input: WrapModuleInput, library: ModuleLibrary): Wrap
 
   const { net, diagnostics } = compileDesign(input.body, { library });
   const timing = analyzeTiming(net);
+
+  // 模块循环依赖检测（用户封装时最常见的不合法用法）：
+  //   非门 = 与非门（输入并接）是允许的（不同门互搭）；但不允许
+  //   与非门 = 与门 + 非门 与 与门 = 与非门 + 非门 同时成立（互相引用成环）。
+  // 从 body 引用的模块出发 DFS 依赖图，visiting 中再次遇到 = 环。
+  const cycle = findDependencyCycle(input.body, library);
+  if (cycle && cycle.length > 1) {
+    diagnostics.push({
+      kind: 'depth-exceeded',
+      severity: 'error',
+      message: `模块循环依赖：${cycle
+        .map((h) => library.get(h)?.name ?? h)
+        .join(' → ')}。模块定义不能互相引用（会无限展开），请把循环拆开`,
+    });
+  }
 
   const template = ModuleTemplateSchema.parse({
     schemaVersion: 1,

@@ -30,7 +30,6 @@ import {
   cmosInvRef,
   cmosNandRef,
   nandGateRef,
-  norFastRef,
   notGateRef,
   orGateRef,
   xnorGateRef,
@@ -39,13 +38,11 @@ import {
 import { fullAdderRef } from './references-ari.js';
 import {
   cmosAndRef,
-  cmosNorRef,
   cmosOrRef,
   cmosXnorRef,
   cmosXorRef,
   ttlAndRef,
   ttlNandRef,
-  ttlNorRef,
   ttlNotRef,
   ttlOrRef,
 } from './references-family.js';
@@ -104,9 +101,9 @@ function dLatchQnRef(id = 'ref-dlatch-qn'): Design {
 export const TEACHING_MODULES: readonly ModuleTemplate[] = [
   wrapGate('非门', notGateRef(), 'logic'),
   wrapGate('与非门', nandGateRef(), 'logic'),
+  wrapGate('或门', orGateRef(), 'logic'),
   wrapGate('异或门', xorGateRef(), 'logic'),
   wrapGate('与门', andGateRef(), 'logic'),
-  wrapGate('或非门', norFastRef(), 'logic'),
   wrapGate('D锁存器', dLatchQnRef(), 'seq'),
   wrapGate('全加器', fullAdderRef(), 'arith'),
 ];
@@ -122,7 +119,6 @@ const FAMILY_GATES: Record<string, Partial<Record<LogicFamily, GateRef>>> = {
   与非门: { rtl: nandGateRef, ttl: ttlNandRef, cmos: cmosNandRef },
   与门: { rtl: andGateRef, ttl: ttlAndRef, cmos: cmosAndRef },
   或门: { rtl: orGateRef, ttl: ttlOrRef, cmos: cmosOrRef },
-  或非门: { rtl: norFastRef, ttl: ttlNorRef, cmos: cmosNorRef },
   异或门: { rtl: xorGateRef, cmos: cmosXorRef },
   同或门: { rtl: xnorGateRef, cmos: cmosXnorRef },
   D锁存器: { rtl: dLatchQnRef },
@@ -132,9 +128,8 @@ const FAMILY_GATES: Record<string, Partial<Record<LogicFamily, GateRef>>> = {
 const GATE_KIND: Record<string, ModuleKind> = {
   非门: 'logic',
   与非门: 'logic',
-  与门: 'logic',
   或门: 'logic',
-  或非门: 'logic',
+  与门: 'logic',
   异或门: 'logic',
   同或门: 'logic',
   D锁存器: 'seq',
@@ -178,10 +173,22 @@ function halfAdderByModules(id: string, name: string, family: LogicFamily = 'rtl
   return b.build();
 }
 
-/** 与非门（门版）：1 枚【与非门】积木（本关 moduleAccess: 'all'，通关即解锁这枚积木） */
+/** 与非门（门版）：【与门】+【非门】——用其他门搭，不自引用、无循环依赖 */
 function nandByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
-  b.module(hashOf('与非门', family), { a: 'a', b: 'b', y: 'y' }, 'N1');
+  b.module(hashOf('与门', family), { a: 'a', b: 'b', y: 'm' }, 'A1');
+  b.module(hashOf('非门', family), { a: 'm', y: 'y' }, 'N1');
+  b.port('a', 'in', 'a');
+  b.port('b', 'in', 'b');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
+/** 或非门（门版）：【或门】+【非门】——本关 teaching 即「把或当一级再接反相器」，模块化组合思路 */
+function norByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
+  const b = new DesignBuilder(id, name);
+  b.module(hashOf('或门', family), { a: 'a', b: 'b', y: 'm' }, 'O1');
+  b.module(hashOf('非门', family), { a: 'm', y: 'y' }, 'N1');
   b.port('a', 'in', 'a');
   b.port('b', 'in', 'b');
   b.port('y', 'out', 'y');
@@ -353,16 +360,6 @@ function dffByModules(id: string, name: string, family: LogicFamily = 'rtl'): De
   return b.build();
 }
 
-/** 或非门（门版）：1 枚【或非门】积木（本关 moduleAccess: 'all'，与与非门关同待遇） */
-function norByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
-  const b = new DesignBuilder(id, name);
-  b.module(hashOf('或非门', family), { a: 'a', b: 'b', y: 'y' }, 'N1');
-  b.port('a', 'in', 'a');
-  b.port('b', 'in', 'b');
-  b.port('y', 'out', 'y');
-  return b.build();
-}
-
 /**
  * 某关卡有没有逻辑门版参考解；没有返回 null（此时退元件版即可）。
  * family = 按玩家工艺取对应工艺的门版（TTL/CMOS 强输出积木；缺失工艺回退 RTL）。
@@ -371,11 +368,13 @@ function norByModules(id: string, name: string, family: LogicFamily = 'rtl'): De
 export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl'): Design | null {
   switch (levelId) {
     case 's1-nand':
-      // 与非门关 moduleAccess: 'all'（通关解锁「与非门」积木）——门版就是这枚积木本身；
-      // 其余基础门关（非门/与门/或门）moduleAccess: 'none'，禁用模块 → 不出门版。
-      return nandByModules('teach-s1-nand', '与非门（门版）', family);
+      // 与非门 = 与门 + 非门（用其他门搭；答案绝不能是「与非门积木」——自引用/循环）。
+      // 仅 RTL 契约给门版：RTL 拼两门 20 = 满分线；TTL/CMOS 推挽单门即满分线（20/8），
+      // 拼两门必超预算 → 回退元件版（契约参考解本身就是该工艺的答案）。
+      return family === 'rtl' ? nandByModules('teach-s1-nand', '与非门（门版）', family) : null;
     case 's1-nor':
-      return norByModules('teach-s1-nor', '或非门（门版）', family);
+      // 或非门 = 或门 + 非门（本关 teaching 的「模块化组合」思路）；同样仅 RTL 契约。
+      return family === 'rtl' ? norByModules('teach-s1-nor', '或非门（门版）', family) : null;
     case 's1-xor':
       return xorByModules('teach-s1-xor', '异或门（门版）', family);
     case 's1-xnor':

@@ -3,7 +3,7 @@
  * 再导出必须仍是一份能通关、成本不变的电路。
  */
 
-import { judgeDesign } from '@lc/compiler';
+import { findDependencyCycle, judgeDesign } from '@lc/compiler';
 import {
   ALL_LEVELS,
   elementEdgeOf,
@@ -88,6 +88,8 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       const teaching = teachingSolutionOf(level.id);
       if (!teaching) continue;
       checked++;
+      // 门版不得有模块循环依赖（答案用其他门搭，绝不自引用/互相引用）
+      expect(findDependencyCycle(teaching, library), `${level.id} 门版不得循环依赖`).toBeNull();
       const r = judgeDesign(teaching, level, { library, hardcore: true });
       expect(r.pass, `${level.id} 门版应通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${level.id} 门版应满分`).toBe(100);
@@ -160,6 +162,12 @@ describe('元件版 vs 门版：一键出答案的版本选择依据', () => {
     for (const level of ALL_LEVELS) {
       if (!level.referenceSolution || !teachingSolutionOf(level.id)) continue;
       const edge = elementEdgeOf(level);
+      // s1-nor 例外：或非门门版 = 或门+非门（两级），参考解 = 并联下拉（一级），
+      // 元件版传播延迟必然更短 → 'delay'（弹窗二选一，符合「元件版占优才给选项」原则）
+      if (level.id === 's1-nor') {
+        expect(edge, 's1-nor 元件版（并联下拉）应延迟占优').toBe('delay');
+        continue;
+      }
       expect(edge, `${level.id} 元件版不应有优势（现在是 ${edge}）`).toBeNull();
     }
     // calc 门版是大电路（几百模块实例），analyzeTiming 较慢，放宽超时
