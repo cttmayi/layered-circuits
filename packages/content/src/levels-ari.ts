@@ -17,8 +17,8 @@ import {
   type ModulePort,
   parseLevel,
 } from '@lc/schema';
-import { adder4Ref, adder8Ref, aluRef, fullAdderRef, halfAdderRef } from './references-ari.js';
-import { bcd2binRef, bin2bcdRef, calcRef, displayRef, reg8Ref } from './references-calc.js';
+import { adder4Ref, adder8Ref, aluRef, fullAdderRef, halfAdderRef, seg7Ref } from './references-ari.js';
+import { bcd2binRef, bin2bcdRef, calcRef, reg8Ref } from './references-calc.js';
 
 /** 阶段 3 允许的元件：仍只用 npn/res/dio（电容留给时钟/存储章节） */
 const STAGE3_UNITS = ['npn', 'res', 'dio'] as const;
@@ -330,7 +330,7 @@ const BIN2BCD: Level = parseLevel({
   referenceSolution: bin2bcdRef('ref-s3-bin2bcd'),
 });
 
-/** 数码管显示关：把 0-99 的二进制值直接「显示」成两位十进制（两个七段数码管端口）。 */
+/** 数码管显示关（译码器）：bcd[3:0]（0-9）→ 7 根段信号（a-g）。七段数码管有 7 根线，每根点亮一段。 */
 const S3_DISPLAY: Level = parseLevel({
   schemaVersion: 1,
   id: 's3-display',
@@ -338,37 +338,43 @@ const S3_DISPLAY: Level = parseLevel({
   kind: 'main',
   title: '数码管显示',
   brief:
-    '七段数码管是计算器的屏幕：给它 BCD 值，它就把数字点亮给你看。这一关把 0-99 的二进制结果直接显示成两位十进制。',
+    '七段数码管是计算器的屏幕，它有 7 根线（a-g），每根点亮一段。这一关把 0-9 的 BCD 码译成 7 段信号，亲手搭一个 BCD→七段译码器。',
   teaching:
-    '屏幕只会显示 BCD，不会理解二进制。所以先把二进制换算成两位 BCD（double-dabble，s3-bin2bcd 那套），' +
-    '再把十位/个位接到数码管端口。显示本身是渲染层的活，你要解决的是「二进制 → 十进制编码」这一步。',
-  hint: '拖一个【二进制→BCD】积木：val[6:0] 接输入，十位/个位 BCD 分别接到 disp_t / disp_u。参考解约 7872 半单位。',
+    '数码管不理解数字，只认 7 根线：a 是顶横、b 是右上竖、c 是右下竖、d 是底横、e 是左下竖、f 是左上竖、g 是中横。' +
+    '每个数字 = 点亮其中几段（0 亮 a-f、1 亮 b-c、2 亮 a,b,g,e,d……）。译码器就是查这张表：' +
+    'bcd[3:0] 是 4 位输入，7 根段线是输出，每根都是一个 4 输入布尔函数，用与非门搭出它的最简与或式。',
+  hint:
+    '先写 0-9 的段码表，逐段求最简与或式，再全部用与非门搭（与非门输出可级联不会衰减）。' +
+    '参考解 43 个与非门（共享中间项），成本 860 半单位。',
   ports: [
-    port('val', 'in', 7),
-    { id: 'disp_t', name: 'disp_t', dir: 'out', width: 4, display: 'segment' },
-    { id: 'disp_u', name: 'disp_u', dir: 'out', width: 4, display: 'segment' },
+    port('bcd', 'in', 4),
+    { id: 'seg', name: 'seg', dir: 'out', width: 7, display: 'segment' },
   ],
   mode: 'logic',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
-  budgetHalf: budgetFromOptimal(7872, MAIN_OVERHEAD),
-  optimalHalf: 7872,
+  budgetHalf: budgetFromOptimal(860, MAIN_OVERHEAD),
+  optimalHalf: 860,
   checks: {},
   vectors: [
-    { inputs: { val: 0 }, expect: { disp_t: 0, disp_u: 0 }, note: '0 → 数码管 00' },
-    { inputs: { val: 5 }, expect: { disp_t: 0, disp_u: 5 }, note: '5 → 数码管 05' },
-    { inputs: { val: 23 }, expect: { disp_t: 2, disp_u: 3 }, note: '23 → 数码管 23' },
-    { inputs: { val: 56 }, expect: { disp_t: 5, disp_u: 6 }, note: '56 → 数码管 56' },
-    { inputs: { val: 99 }, expect: { disp_t: 9, disp_u: 9 }, note: '99 → 数码管 99' },
+    { inputs: { bcd: 0 }, expect: { seg: 0x3f }, note: '0 → 亮 a-f' },
+    { inputs: { bcd: 1 }, expect: { seg: 0x06 }, note: '1 → 亮 b-c' },
+    { inputs: { bcd: 2 }, expect: { seg: 0x5b }, note: '2 → 亮 a,b,g,e,d' },
+    { inputs: { bcd: 3 }, expect: { seg: 0x4f }, note: '3 → 亮 a,b,c,d,g' },
+    { inputs: { bcd: 4 }, expect: { seg: 0x66 }, note: '4 → 亮 f,g,b,c' },
+    { inputs: { bcd: 5 }, expect: { seg: 0x6d }, note: '5 → 亮 a,f,g,c,d' },
+    { inputs: { bcd: 6 }, expect: { seg: 0x7d }, note: '6 → 亮 a,f,e,d,c,g' },
+    { inputs: { bcd: 7 }, expect: { seg: 0x07 }, note: '7 → 亮 a,b,c' },
+    { inputs: { bcd: 8 }, expect: { seg: 0x7f }, note: '8 → 全亮' },
+    { inputs: { bcd: 9 }, expect: { seg: 0x6f }, note: '9 → 亮 a,b,c,d,f,g' },
   ] satisfies LevelVector[],
   unlock: {
-    name: '数码管显示',
+    name: '七段译码器',
     kind: 'logic',
     stage: 3,
-    ports: [port('val', 'in', 7), port('disp_t', 'out', 4), port('disp_u', 'out', 4)],
+    ports: [port('bcd', 'in', 4), port('seg', 'out', 7)],
   },
-  // 应用关：复用【二进制→BCD】积木，解锁「数码管显示」封装
-  referenceSolution: displayRef('ref-s3-display'),
+  referenceSolution: seg7Ref('ref-s3-display'),
 });
 
 /** 计算器链的锁存台阶：8 个 D 触发器并排共用 clk，数据「存下来」。 */
@@ -441,82 +447,82 @@ const CALC: Level = parseLevel({
     '两个七段数码管亮出结果。23+5=28、81+16=97。',
   teaching:
     '整条流水线：a、b（BCD）→ bcd2bin 转二进制 → 8 位二进制加法 → bin2bcd 转回十进制 →' +
-    '8 位寄存器在等号上升沿锁存 → 十位/个位数码管显示。每一步都是前面关卡练过的模块。',
+    '8 位寄存器在等号上升沿锁存 → 两个【七段译码器】把十位/个位 BCD 点亮成数码管。每一步都是前面关卡练过的模块。',
   hint:
-    '把上一关的 bcd2bin、bin2bcd、八位寄存器当成模块拖出来拼：两个 bcd2bin 接 a/b，' +
-    '结果进 8 位加法器，再进 bin2bcd，最后寄存器在 eq 上升沿锁存；显示端就是两个数码管端口。',
+    '把上一关的 bcd2bin、bin2bcd、七段译码器、八位寄存器当成模块拖出来拼：两个 bcd2bin 接 a/b，' +
+    '结果进 8 位加法器，再进 bin2bcd，寄存器在 eq 上升沿锁存，最后两个七段译码器点亮数码管。',
   ports: [
     port('a', 'in', 8),
     port('b', 'in', 8),
     { id: 'eq', name: 'eq', dir: 'in', button: true },
-    { id: 'disp_t', name: 'disp_t', dir: 'out', width: 4, display: 'segment' },
-    { id: 'disp_u', name: 'disp_u', dir: 'out', width: 4, display: 'segment' },
+    { id: 'disp_t', name: 'disp_t', dir: 'out', width: 7, display: 'segment' },
+    { id: 'disp_u', name: 'disp_u', dir: 'out', width: 7, display: 'segment' },
   ],
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
-  budgetHalf: budgetFromOptimal(15200, MAIN_OVERHEAD),
-  optimalHalf: 15200,
+  budgetHalf: budgetFromOptimal(16920, MAIN_OVERHEAD),
+  optimalHalf: 16920,
   checks: {},
   vectors: [
     { inputs: { a: 0x00, b: 0x00, eq: 0 }, settlePs: 1_000_000, note: '0+0 待命' },
     {
       inputs: { a: 0x00, b: 0x00, eq: 1 },
-      expect: { disp_t: 0, disp_u: 0 },
+      expect: { disp_t: 0x3f, disp_u: 0x3f },
       settlePs: 1_000_000,
       note: '按下等号：0+0=00',
     },
     {
       inputs: { a: 0x23, b: 0x05, eq: 0 },
-      expect: { disp_t: 0, disp_u: 0 },
+      expect: { disp_t: 0x3f, disp_u: 0x3f },
       settlePs: 1_000_000,
       note: '改 23+5，不按等号显示不变',
     },
     {
       inputs: { a: 0x23, b: 0x05, eq: 1 },
-      expect: { disp_t: 2, disp_u: 8 },
+      expect: { disp_t: 0x5b, disp_u: 0x7f },
       settlePs: 1_000_000,
       note: '按下等号：23+5=28',
     },
     {
       inputs: { a: 0x51, b: 0x10, eq: 0 },
-      expect: { disp_t: 2, disp_u: 8 },
+      expect: { disp_t: 0x5b, disp_u: 0x7f },
       settlePs: 1_000_000,
       note: '改 51+16，显示保持 28',
     },
     {
       inputs: { a: 0x51, b: 0x10, eq: 1 },
-      expect: { disp_t: 6, disp_u: 1 },
+      expect: { disp_t: 0x7d, disp_u: 0x06 },
       settlePs: 1_000_000,
       note: '按下等号：51+10=61',
     },
     {
       inputs: { a: 0x51, b: 0x10, eq: 0 },
-      expect: { disp_t: 6, disp_u: 1 },
+      expect: { disp_t: 0x7d, disp_u: 0x06 },
       settlePs: 1_000_000,
       note: '松开等号，61 保持',
     },
     {
       inputs: { a: 0x50, b: 0x19, eq: 0 },
-      expect: { disp_t: 6, disp_u: 1 },
+      expect: { disp_t: 0x7d, disp_u: 0x06 },
       settlePs: 1_000_000,
       note: '改 50+19，显示保持 61',
     },
     {
       inputs: { a: 0x50, b: 0x19, eq: 1 },
-      expect: { disp_t: 6, disp_u: 9 },
+      expect: { disp_t: 0x7d, disp_u: 0x6f },
       settlePs: 1_000_000,
       note: '按下等号：50+19=69',
     },
     {
       inputs: { a: 0x12, b: 0x34, eq: 0 },
-      expect: { disp_t: 6, disp_u: 9 },
+      expect: { disp_t: 0x7d, disp_u: 0x6f },
       settlePs: 1_000_000,
       note: '改 12+34，显示保持 69',
     },
     {
       inputs: { a: 0x12, b: 0x34, eq: 1 },
-      expect: { disp_t: 4, disp_u: 6 },
+      expect: { disp_t: 0x66, disp_u: 0x7d },
       settlePs: 1_000_000,
       note: '按下等号：12+34=46',
     },
@@ -529,8 +535,8 @@ const CALC: Level = parseLevel({
       port('a', 'in', 8),
       port('b', 'in', 8),
       port('eq', 'in'),
-      port('disp_t', 'out', 4),
-      port('disp_u', 'out', 4),
+      port('disp_t', 'out', 7),
+      port('disp_u', 'out', 7),
     ],
   },
   referenceSolution: calcRef('ref-s3-calc'),

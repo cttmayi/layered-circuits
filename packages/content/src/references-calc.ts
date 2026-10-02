@@ -15,7 +15,7 @@
  */
 
 import { type Design, DesignBuilder } from '@lc/schema';
-import { fullAdderInto, nandInto, xorInto } from './references-ari.js';
+import { fullAdderInto, nandInto, seg7Into, xorInto } from './references-ari.js';
 
 /**
  * 主从 D 触发器（无 rail 拼装块）：clk 上升沿把 d 搬到 q。
@@ -263,22 +263,10 @@ export function bin2bcdRef(id = 'ref-bin2bcd'): Design {
   return b.build();
 }
 
-/** 数码管显示参考解：val[6:0]（0-99 二进制）→ 十位/个位两位 BCD，喂给七段数码管端口。成本与 bin2bcd 相同（7872）。 */
-export function displayRef(id = 'ref-display'): Design {
-  const b = new DesignBuilder(id, '数码管显示');
-  b.vcc('vcc');
-  b.gnd('gnd');
-  const val = Array.from({ length: 7 }, (_, i) => `val${i}`);
-  const t = Array.from({ length: 4 }, (_, i) => `t${i}`);
-  const u = Array.from({ length: 4 }, (_, i) => `u${i}`);
-  bin2bcdInto(b, 'x', val, t, u);
-  b.port('val', 'in', val);
-  b.port('disp_t', 'out', t);
-  b.port('disp_u', 'out', u);
-  return b.build();
-}
-
-/** 简易计算器参考解（高成本版）：eq 上升沿把 a+b（BCD）锁存到显示 */
+/**
+ * 简易计算器参考解（高成本版）：eq 上升沿把 a+b（BCD）锁存，经 2×【七段译码器】
+ * 点亮十位/个位数码管（disp_t/disp_u 各 7 位段码）。
+ */
 export function calcRef(id = 'ref-calc'): Design {
   const b = new DesignBuilder(id, '简易计算器');
   b.vcc('vcc');
@@ -330,15 +318,12 @@ export function calcRef(id = 'ref-calc'): Design {
     Array.from({ length: 8 }, (_, i) => `b${i}`),
   );
   b.port('eq', 'in', 'eq');
-  b.port(
-    'disp_t',
-    'out',
-    Array.from({ length: 4 }, (_, i) => `q${i + 4}`),
-  );
-  b.port(
-    'disp_u',
-    'out',
-    Array.from({ length: 4 }, (_, i) => `q${i}`),
-  );
+  // 锁存后的 BCD 十位/个位 → 各一个七段译码器 → 7 位段码显示
+  const segT = Array.from({ length: 7 }, (_, i) => `segT${i}`);
+  const segU = Array.from({ length: 7 }, (_, i) => `segU${i}`);
+  seg7Into(b, 'T', `q4`, `q5`, `q6`, `q7`, segT);
+  seg7Into(b, 'U', `q0`, `q1`, `q2`, `q3`, segU);
+  b.port('disp_t', 'out', segT);
+  b.port('disp_u', 'out', segU);
   return b.build();
 }

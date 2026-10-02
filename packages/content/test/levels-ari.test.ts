@@ -22,6 +22,7 @@ import { describe, expect, it } from 'vitest';
 import { computeCosts } from '../../../packages/compiler/src/cost.js';
 import { findLevel, levelOrder } from '../src/levels.js';
 import { STAGE3_LEVELS } from '../src/levels-ari.js';
+import { teachingModulesFor, teachingSolutionOf } from '../src/teachings.js';
 
 const level = (id: string) => {
   const found = findLevel(id);
@@ -148,6 +149,28 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
     const run = runVectors(net, expandVectors(vectors, portWidthsOf(l)), { mode: 'logic' });
     expect(run.pass).toBe(true);
     expect(run.rows.every((r) => r.ok)).toBe(true);
+  });
+
+  it('七段译码器真值表：bcd 0-9 → 段码（单元参考解与门版一致）', () => {
+    // 段码（bit0=a..bit6=g）：0→3F 1→06 2→5B 3→4F 4→66 5→6D 6→7D 7→07 8→7F 9→6F
+    const ON = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f];
+    const l = level('s3-display');
+    const widths = portWidthsOf(l);
+    const vs = ON.map((seg, v) => ({ inputs: { bcd: v }, expect: { seg } }));
+    const lib = new InMemoryModuleLibrary();
+    const runRef = runVectors(
+      compileDesign(l.referenceSolution!, { library: lib }).net,
+      expandVectors(vs, widths),
+      { mode: 'logic' },
+    );
+    expect(runRef.pass, `单元参考解：${JSON.stringify(runRef.rows?.map((r) => (r.ok ? 'ok' : `mismatch:${JSON.stringify(r.mismatches)}`)))}`).toBe(true);
+    const gateLib = new InMemoryModuleLibrary([...teachingModulesFor('rtl')]);
+    const runGate = runVectors(
+      compileDesign(teachingSolutionOf('s3-display', 'rtl')!, { library: gateLib }).net,
+      expandVectors(vs, widths),
+      { mode: 'logic' },
+    );
+    expect(runGate.pass, `门版：${JSON.stringify(runGate.rows?.map((r) => (r.ok ? 'ok' : `mismatch:${JSON.stringify(r.mismatches)}`)))}`).toBe(true);
   });
 
   it('玩家风格解法：封装【全加器】+【异或门】拼出 ALU（多 bit 模块实例化）', () => {

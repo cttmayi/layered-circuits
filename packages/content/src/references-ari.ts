@@ -14,7 +14,7 @@
 
 import { type Design, DesignBuilder } from '@lc/schema';
 
-/** RTL 与非门：¬(a·c) → y（2 三极管 + 3 电阻 = 14，输出可级联） */
+/** RTL 与非门：¬(a·c) → y（2 三极管 + 3 电阻；半分记账 npn=4/res=4 → 20，输出可级联） */
 export function nandInto(b: DesignBuilder, p: string, a: string, c: string, y: string): void {
   b.unit('res', { a, b: `${p}b1` }, `${p}R1`);
   b.unit('res', { a: c, b: `${p}b2` }, `${p}R2`);
@@ -168,5 +168,92 @@ export function aluRef(id = 'ref-s3-alu'): Design {
   b.port('a', 'in', aNets);
   b.port('b', 'in', bNets);
   b.port('y', 'out', yNets);
+  return b.build();
+}
+
+/**
+ * BCD→七段译码器（单数字）：bcd[3:0]（bcd0=LSB）→ seg[6:0]（bit0=a..bit6=g）。
+ * 43 个与非门的共享结构（2 级 SOP + 共享积项，全部与非门保证信号强度可级联）：
+ *   a = A'C' + AC + B + D     b = A'B' + AB + C'    c = A + B' + C
+ *   d = A'B + A'C' + AB'C + BC' + D    e = A'B + A'C'
+ *   f = A'B' + A'C + B'C + D   g = A'B + B'C + BC' + D
+ * 段码（0-9 → 0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F）。
+ * 成本 43×20 = 860（半分记账，RTL 与非门 = 2npn+3res = 20；
+ * QM 最小化 + 共享，已在测试里对 0-9 全真值表验证）。
+ */
+export function seg7Into(
+  b: DesignBuilder,
+  p: string,
+  a: string,
+  bb: string,
+  c: string,
+  d: string,
+  seg: string[], // [a..g]
+): void {
+  // 输入补（每路一个反相器）
+  const nA = `${p}nA`;
+  const nB = `${p}nB`;
+  const nC = `${p}nC`;
+  const nD = `${p}nD`;
+  nandInto(b, `${p}iA`, a, a, nA);
+  nandInto(b, `${p}iB`, bb, bb, nB);
+  nandInto(b, `${p}iC`, c, c, nC);
+  nandInto(b, `${p}iD`, d, d, nD);
+  // 共享积项（输出即 ¬p）
+  const t1 = `${p}t1`;
+  const t2 = `${p}t2`;
+  const t3 = `${p}t3`;
+  const t4 = `${p}t4`;
+  const t5 = `${p}t5`;
+  const t6 = `${p}t6`;
+  const t7 = `${p}t7`;
+  const t8 = `${p}t8`;
+  const t9 = `${p}t9`;
+  nandInto(b, `${p}1`, nA, bb, t1); // ¬(A'·B)
+  nandInto(b, `${p}2`, nA, nC, t2); // ¬(A'·C')
+  nandInto(b, `${p}3`, nB, c, t3); // ¬(B'·C)
+  nandInto(b, `${p}4`, bb, nC, t4); // ¬(B·C')
+  nandInto(b, `${p}5`, a, c, t5); // ¬(A·C)
+  nandInto(b, `${p}6`, nA, nB, t6); // ¬(A'·B')
+  nandInto(b, `${p}7`, a, bb, t7); // ¬(A·B)
+  nandInto(b, `${p}8a`, t3, t3, `${p}t3n`); // B'·C
+  nandInto(b, `${p}8`, a, `${p}t3n`, t8); // ¬(A·B'·C)
+  nandInto(b, `${p}9`, nA, c, t9); // ¬(A'·C)
+  // OR 链：NAND(¬p1,¬p2)=p1+p2，后续每项 NOT(累加)+NAND
+  // 内部网名必须逐条链唯一（计数器），否则不同段的链会串线
+  let orn = 0;
+  const orN = (out: string, terms: string[]): void => {
+    if (terms.length === 2) {
+      nandInto(b, `${p}or${orn++}`, terms[0], terms[1], out);
+      return;
+    }
+    let s = `${p}or${orn++}`;
+    nandInto(b, `${p}or${orn++}`, terms[0], terms[1], s);
+    for (let i = 2; i < terms.length; i++) {
+      const inv = `${p}or${orn++}`;
+      nandInto(b, `${p}or${orn++}`, s, s, inv);
+      const nxt = i === terms.length - 1 ? out : `${p}or${orn++}`;
+      nandInto(b, `${p}or${orn++}`, inv, terms[i], nxt);
+      s = nxt;
+    }
+  };
+  orN(seg[0], [t2, t5, nB, nD]); // a
+  orN(seg[1], [t6, t7, c]); // b（¬p for C' = C 输入直连）
+  orN(seg[2], [nA, bb, nC]); // c
+  orN(seg[3], [t1, t2, t8, t4, nD]); // d
+  orN(seg[4], [t1, t2]); // e
+  orN(seg[5], [t6, t9, t3, nD]); // f
+  orN(seg[6], [t1, t3, t4, nD]); // g
+}
+
+/** 七段译码器参考解：bcd[3:0] → seg[6:0]（成本 860） */
+export function seg7Ref(id = 'ref-s3-seg7'): Design {
+  const b = new DesignBuilder(id, '七段译码器');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  const seg = Array.from({ length: 7 }, (_, i) => `seg${i}`);
+  seg7Into(b, 'x', 'bcd0', 'bcd1', 'bcd2', 'bcd3', seg);
+  b.port('bcd', 'in', ['bcd0', 'bcd1', 'bcd2', 'bcd3']);
+  b.port('seg', 'out', seg);
   return b.build();
 }

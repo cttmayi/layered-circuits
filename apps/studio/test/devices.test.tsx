@@ -36,7 +36,7 @@ describe('按钮 / 七段数码管器件', () => {
     const seg = createDeviceSym(withBtn, 'segment', 200, 100);
     expect(seg.kind).toBe('output');
     expect(seg.display).toBe('segment');
-    expect(seg.width).toBe(4);
+    expect(seg.width).toBe(7);
     expect(seg.label).toBe('seg1');
 
     // 第二个按钮不得与第一个重名（端口名就是判定接口，重名会被 inPorts 覆盖）
@@ -44,7 +44,7 @@ describe('按钮 / 七段数码管器件', () => {
     expect(btn2.label).toBe('btn2');
   });
 
-  it('toDesign 导出：按钮 = 1 位输入端口，数码管 = 4 位输出端口', () => {
+  it('toDesign 导出：按钮 = 1 位输入端口，数码管 = 7 位输出端口', () => {
     const doc = {
       ...EMPTY_DOC,
       syms: [
@@ -58,10 +58,10 @@ describe('按钮 / 七段数码管器件', () => {
     expect(btn?.width).toBe(1);
     const seg = design.ports.find((p) => p.name === 'seg1');
     expect(seg?.dir).toBe('out');
-    expect(seg?.width).toBe(4);
+    expect(seg?.width).toBe(7);
   });
 
-  it('docForLevel：s2-btn-latch 的 btn 端口 → 锁定按钮符号；s3-display 的 disp_t/disp_u → 锁定数码管符号', () => {
+  it('docForLevel：s2-btn-latch 的 btn 端口 → 锁定按钮符号；s3-display 的 seg 端口 → 锁定 7 位数码管符号', () => {
     const btnDoc = docForLevel(findLevel('s2-btn-latch')!, []);
     const btn = btnDoc.syms.find((s) => s.label === 'btn');
     expect(btn?.kind).toBe('input');
@@ -70,13 +70,11 @@ describe('按钮 / 七段数码管器件', () => {
     expect(btn?.locked).toBe(true);
 
     const dispDoc = docForLevel(findLevel('s3-display')!, []);
-    for (const name of ['disp_t', 'disp_u']) {
-      const sym = dispDoc.syms.find((s) => s.label === name);
-      expect(sym?.kind).toBe('output');
-      expect(sym?.display).toBe('segment');
-      expect(sym?.width).toBe(4);
-      expect(sym?.locked).toBe(true);
-    }
+    const seg = dispDoc.syms.find((s) => s.label === 'seg');
+    expect(seg?.kind).toBe('output');
+    expect(seg?.display).toBe('segment');
+    expect(seg?.width).toBe(7);
+    expect(seg?.locked).toBe(true);
   });
 });
 
@@ -114,7 +112,7 @@ describe('沙盒：放置按钮器件并点击（瞬时按键自动弹回）', (
         expect(btn?.value).toBe(0);
         expect(seg?.kind).toBe('output');
         expect(seg?.display).toBe('segment');
-        expect(seg?.width).toBe(4);
+        expect(seg?.width).toBe(7);
       },
       { timeout: 5000 },
     );

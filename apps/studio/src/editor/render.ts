@@ -858,25 +858,13 @@ function drawSprite(
 }
 
 /**
- * 七段数码管（计算器屏幕）：按 BCD 值（0-9）点亮段。
+ * 七段数码管（计算器屏幕）：按 7 位段码位图点亮段（bit0=a..bit6=g）。
  * 段编号（共阴极）：0 上横、1 右上竖、2 右下竖、3 下横、4 左下竖、5 左上竖、6 中横。
+ * 数码管 7 位化后不再内部译码——电路自己把 BCD 译成 7 根段信号（s3-display 搭译码器）。
  */
-const SEGMENTS: Record<number, number[]> = {
-  0: [0, 1, 2, 3, 4, 5],
-  1: [1, 2],
-  2: [0, 1, 6, 4, 3],
-  3: [0, 1, 6, 2, 3],
-  4: [5, 6, 1, 2],
-  5: [0, 5, 6, 2, 3],
-  6: [0, 5, 6, 4, 3, 2],
-  7: [0, 1, 2],
-  8: [0, 1, 2, 3, 4, 5, 6],
-  9: [0, 1, 6, 2, 3, 5],
-};
-
-function drawSegment(ctx: CanvasRenderingContext2D, value: number): void {
-  const d = value >= 0 && value <= 9 ? (SEGMENTS[value] ?? []) : [];
-  const on = new Set(d);
+function drawSegment(ctx: CanvasRenderingContext2D, bitmap: number): void {
+  const on = new Set<number>();
+  for (let s = 0; s < 7; s++) if ((bitmap >> s) & 1) on.add(s);
   // 每个段一个「段条」：x/y 用世界坐标（原点在端口中心）
   const seg = [
     { s: 0, x1: -16, y1: -26, x2: 16, y2: -26 },
@@ -1129,15 +1117,15 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
         drawSprite(ctx, sym.sprite, sig ?? SIG_Z);
         break;
       }
-      // 七段数码管（输出端口 display: 'segment'）：按端口值（BCD 0-9）点亮段
+      // 七段数码管（输出端口 display: 'segment'）：7 位段码位图，每根线点亮对应段（bit0=a..bit6=g）
       if (!isIn && sym.display === 'segment') {
         const width = sym.width ?? 1;
-        let value = 0;
-        for (let bit = 0; bit < Math.min(width, 4); bit++) {
+        let bitmap = 0;
+        for (let bit = 0; bit < Math.min(width, 7); bit++) {
           const sig = scene.pinSignals.get(pinKey({ inst: sym.id, pin: 'p', bit }));
-          if (sig !== undefined && logicValueOf(sig) === 1) value |= 1 << bit;
+          if (sig !== undefined && logicValueOf(sig) === 1) bitmap |= 1 << bit;
         }
-        drawSegment(ctx, value);
+        drawSegment(ctx, bitmap);
         break;
       }
       const width = sym.width ?? 1;

@@ -102,9 +102,12 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
 
   it('门版答案顶层盒数 ≤ 15（关卡设计规范：画布顶层可见盒子数上限）', () => {
     // 元件版（性能隐藏解）、教学关、模块详情弹窗内部电路豁免；门版答案必须 ≤ 15 盒。
+    // 已批准例外：s3-display（七段译码器关）= 43 盒，答案即教学内容（docs §一例外）。
+    const EXEMPT = new Set(['s3-display']);
     for (const level of ALL_LEVELS) {
       const teaching = teachingSolutionOf(level.id);
       if (!teaching) continue;
+      if (EXEMPT.has(level.id)) continue;
       const boxes = teaching.instances.filter(
         (i) => i.kind === 'unit' || i.kind === 'module',
       ).length;

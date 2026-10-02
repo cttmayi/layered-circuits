@@ -112,7 +112,7 @@ describe('计算器关 GUI 仿真通道（按钮 + 状态保持）', () => {
     const du = doc.syms.find((s) => s.kind === 'output' && s.label === 'disp_u');
     expect(dt?.display).toBe('segment');
     expect(du?.display).toBe('segment');
-    expect(dt?.width).toBe(4);
-    expect(du?.width).toBe(4);
+    expect(dt?.width).toBe(7);
+    expect(du?.width).toBe(7);
   });
 });

@@ -386,7 +386,7 @@ function nextDeviceLabel(doc: Doc, prefix: string): string {
 /**
  * 放置「按钮」/「七段数码管」器件：
  * - 按钮 = 输入端口 + button 标志 + sprite 'button'（点击 = 电平 1，400ms 自动弹回 0）；
- * - 数码管 = 输出端口 + display 'segment' + 4 位位宽（按端口值 BCD 0-9 点亮段）。
+ * - 数码管 = 输出端口 + display 'segment' + 7 位位宽（bit0=a..bit6=g，每根线点亮对应段）。
  * 与关卡锁定端口同构（同一个 Sym 字段），导出后就是普通端口，判定侧零改动。
  */
 export function createDeviceSym(doc: Doc, kind: 'button' | 'segment', x: number, y: number): Sym {
@@ -395,7 +395,7 @@ export function createDeviceSym(doc: Doc, kind: 'button' | 'segment', x: number,
     return { ...sym, label: nextDeviceLabel(doc, 'btn'), button: true, sprite: 'button' };
   }
   const sym = createSym(doc, 'output', undefined, x, y);
-  return { ...sym, label: nextDeviceLabel(doc, 'seg'), display: 'segment', width: 4 };
+  return { ...sym, label: nextDeviceLabel(doc, 'seg'), display: 'segment', width: 7 };
 }
 
 /**

@@ -159,13 +159,15 @@ function gateTemplateFor(name: string, family: LogicFamily = 'rtl'): ModuleTempl
 /**
  * 复合积木（基于基础门/更早的复合积木封装）——关卡设计规范 §二.4：同一单元 ≥3 次必须封装。
  * 目前服务计算器链：加3单元（bin2bcd 的 14 个重复单元）、主从D触发器（reg-8/calc 复用）、
- * BCD↔二进制转换器与八位寄存器（calc 组装关的粗粒度积木）。内部可经「双击模块」下钻查看。
+ * 七段译码器（display 的译码器，calc 复用 2 次）、BCD↔二进制转换器与八位寄存器
+ * （calc 组装关的粗粒度积木）。内部可经「双击模块」下钻查看。
  */
 const COMPOSITE_ORDER = [
   '加3单元',
   '主从D触发器',
   'BCD→二进制',
   '二进制→BCD',
+  '七段译码器',
   '八位寄存器',
 ] as const;
 const COMPOSITE_KIND: Record<string, ModuleKind> = {
@@ -173,6 +175,7 @@ const COMPOSITE_KIND: Record<string, ModuleKind> = {
   主从D触发器: 'seq',
   'BCD→二进制': 'arith',
   '二进制→BCD': 'arith',
+  七段译码器: 'arith',
   八位寄存器: 'seq',
 };
 const compositeCache = new Map<string, ModuleTemplate>();
@@ -188,6 +191,8 @@ function compositeBodyOf(name: string, family: LogicFamily): Design {
       return bcd2binByModules(`brick-bcd2bin-${family}`, 'BCD→二进制', family);
     case '二进制→BCD':
       return bin2bcdByModules(`brick-bin2bcd-${family}`, '二进制→BCD', family);
+    case '七段译码器':
+      return seg7ByModules(`brick-seg7-${family}`, '七段译码器', family);
     case '八位寄存器':
       return reg8ByModules(`brick-reg8-${family}`, '八位寄存器', family);
     default:
@@ -533,7 +538,7 @@ export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl')
     case 's3-bin2bcd':
       return bin2bcdByModules('teach-s3-bin2bcd', '二进制→BCD（门版）', family);
     case 's3-display':
-      return displayByModules('teach-s3-display', '数码管显示（门版）', family);
+      return seg7ByModules('teach-s3-display', '七段译码器（门版）', family);
     case 's3-reg-8':
       return reg8ByModules('teach-s3-reg8', '8位寄存器（门版）', family);
     case 's3-calc':
@@ -573,6 +578,8 @@ export function elementEdgeOf(level: Level, family: LogicFamily = 'rtl'): 'cost'
 //   - bcd2bin：12 个【全加器】积木（×8/×2 移位加权 + 两级行波进位）
 //   - bin2bcd：14 个「加 3」单元（【非门】+【与非门】+【与门】+【异或门】积木）
 //   - reg8：8 个主从 D 触发器（【非门】时钟反相 + 2×【D锁存器】）
+//   - seg7：43 个【与非门】（七段译码器，s3-display 本关门版）
+//   - calc：bcd2bin×2 → 8×【全加器】加法 → bin2bcd → 8 个主从 D 触发器锁存 → 2×seg7
 //   - calc：bcd2bin×2 → 8×【全加器】加法 → bin2bcd → 8 个主从 D 触发器锁存
 // 结构相同 → 成本与元件版一致或更低（教学积木里与门是二极管版更省），
 // 因此 elementEdgeOf 对新 4 关都为 null → 一键出答案直接出门版（符合既定原则）。
@@ -762,23 +769,59 @@ function bin2bcdByModules(id: string, name: string, family: LogicFamily = 'rtl')
   return b.build();
 }
 
-/** 数码管显示（门版）：与 s3-display 关卡端口一致（val[6:0] → disp_t/disp_u 十位/个位数码管） */
-function displayByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
+/** 七段译码器（门版）：bcd[3:0] → seg[6:0]，43 个【与非门】积木，结构与单元参考解一致（共享积项） */
+function seg7ByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
   b.gnd('gnd');
-  const val = Array.from({ length: 7 }, (_, i) => `val${i}`);
-  const t = Array.from({ length: 4 }, (_, i) => `t${i}`);
-  const u = Array.from({ length: 4 }, (_, i) => `u${i}`);
-  bin2bcdModulesInto(b, 'x', val, t, u, family);
-  b.port('val', 'in', val);
-  b.port('disp_t', 'out', t);
-  b.port('disp_u', 'out', u);
+  const nand = hashOf('与非门', family);
+  let n = 0;
+  const g = (a: string, c: string): string => {
+    b.module(nand, { a, b: c, y: `t${n}` }, `G${n}`);
+    return `t${n++}`;
+  };
+  // 输入补
+  const nA = g('bcd0', 'bcd0');
+  const nB = g('bcd1', 'bcd1');
+  const nC = g('bcd2', 'bcd2');
+  const nD = g('bcd3', 'bcd3');
+  // 共享积项 ¬p
+  const t1 = g(nA, 'bcd1'); // ¬(A'·B)
+  const t2 = g(nA, nC); // ¬(A'·C')
+  const t3 = g(nB, 'bcd2'); // ¬(B'·C)
+  const t4 = g('bcd1', nC); // ¬(B·C')
+  const t5 = g('bcd0', 'bcd2'); // ¬(A·C)
+  const t6 = g(nA, nB); // ¬(A'·B')
+  const t7 = g('bcd0', 'bcd1'); // ¬(A·B)
+  const t3n = g(t3, t3); // B'·C
+  const t8 = g('bcd0', t3n); // ¬(A·B'·C)
+  const t9 = g(nA, 'bcd2'); // ¬(A'·C)
+  // OR 链（与单元版 orN 一致）
+  const orN = (terms: string[]): string => {
+    if (terms.length === 2) return g(terms[0], terms[1]);
+    let s = g(terms[0], terms[1]);
+    for (let i = 2; i < terms.length; i++) {
+      const inv = g(s, s);
+      s = g(inv, terms[i]);
+    }
+    return s;
+  };
+  const seg = [
+    orN([t2, t5, nB, nD]),
+    orN([t6, t7, 'bcd2']),
+    orN([nA, 'bcd1', nC]),
+    orN([t1, t2, t8, t4, nD]),
+    orN([t1, t2]),
+    orN([t6, t9, t3, nD]),
+    orN([t1, t3, t4, nD]),
+  ];
+  b.port('bcd', 'in', ['bcd0', 'bcd1', 'bcd2', 'bcd3']);
+  b.port('seg', 'out', seg);
   return b.build();
 }
 
 /** 简易计算器（门版参考解）：端口与 s3-calc 关卡一致（a/b BCD、eq 按钮、disp_t/disp_u 十位/个位） */
-/** 简易计算器（门版参考解，组装关）：2×【BCD→二进制】+ 8×【全加器】+ 1×【二进制→BCD】+ 1×【八位寄存器】= 12 盒 */
+/** 简易计算器（门版参考解，组装关）：2×【BCD→二进制】+ 8×【全加器】+ 1×【二进制→BCD】+ 1×【八位寄存器】+ 2×【七段译码器】= 14 盒 */
 function calcByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
@@ -830,15 +873,20 @@ function calcByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
     Array.from({ length: 8 }, (_, i) => `b${i}`),
   );
   b.port('eq', 'in', 'eq');
-  b.port(
-    'disp_t',
-    'out',
-    Array.from({ length: 4 }, (_, i) => `q${i + 4}`),
+  // 锁存后的 BCD 十位/个位 → 2×【七段译码器】→ 7 位段码显示
+  const segT = Array.from({ length: 7 }, (_, i) => `segT${i}`);
+  const segU = Array.from({ length: 7 }, (_, i) => `segU${i}`);
+  b.module(
+    hashOf('七段译码器', family),
+    { bcd: [`q4`, `q5`, `q6`, `q7`], seg: segT },
+    'DEC_T',
   );
-  b.port(
-    'disp_u',
-    'out',
-    Array.from({ length: 4 }, (_, i) => `q${i}`),
+  b.module(
+    hashOf('七段译码器', family),
+    { bcd: [`q0`, `q1`, `q2`, `q3`], seg: segU },
+    'DEC_U',
   );
+  b.port('disp_t', 'out', segT);
+  b.port('disp_u', 'out', segU);
   return b.build();
 }
