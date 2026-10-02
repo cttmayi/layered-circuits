@@ -5,10 +5,10 @@
  * 组件库是全局的（GDD 铁律 2），切关卡时始终带上玩家已封装的所有模块。
  */
 
-import { ALL_LEVELS, findLevel } from '@lc/content';
+import { ALL_LEVELS, findLevel, teachingModulesFor } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { notGateDemo, teachingSeedDoc } from '../editor/demos';
-import type { Doc, StoredModule } from '../editor/model';
+import type { Doc, StoredModule, Sym } from '../editor/model';
 import { docForLevel, isLevelUnlocked, loadProgress, type Progress } from './progress';
 
 export type GameMode = 'level' | 'free';
@@ -40,6 +40,46 @@ export function readStoredDoc(key: string): Doc | null {
   return null;
 }
 
+/**
+ * 读档时把「存档引用了、但注入库（玩家自有 progress.library 或空库）里没有」的
+ * 教学模板补进 library。
+ *
+ * 背景：一键出答案（调试）会把教学模板（非门/与非门…，hash 按工艺族内容哈希）
+ * 直接搭进画布；存档按设计只存画布不背库（见 App 存档注释），读档时用玩家的
+ * 组件库重新注入 —— 玩家自有库没有这些教学 hash，于是模块在 pinOffsets 里查不到
+ * 模板返回空 → 模块引脚消失、导线（pinWorld 定位失败）也跟着消失，只剩空盒。
+ * 这里按需补上被引用的教学模板（跨工艺族按 hash 匹配），不背全量库。
+ */
+function resolveMissingModules(doc: Doc, library: readonly StoredModule[]): StoredModule[] {
+  const needed = doc.syms
+    .filter((s): s is Sym & { module: string } => s.kind === 'module' && Boolean(s.module))
+    .map((s) => s.module);
+  if (needed.length === 0) return [...library];
+  const byHash = new Set(library.map((m) => m.hash));
+  const missing = [...new Set(needed)].filter((h) => !byHash.has(h));
+  if (missing.length === 0) return [...library];
+  const teach = new Map<string, StoredModule>();
+  for (const family of ['rtl', 'ttl', 'cmos'] as const) {
+    for (const t of teachingModulesFor(family)) {
+      if (teach.has(t.hash)) continue;
+      teach.set(t.hash, {
+        hash: t.hash,
+        name: t.name,
+        version: t.version,
+        stage: t.stage,
+        costHalf: t.costHalf,
+        isSequential: t.isSequential,
+        ports: t.ports,
+        template: t,
+        sources: [],
+        createdAt: 0,
+      });
+    }
+  }
+  const extra = missing.map((h) => teach.get(h)).filter((m): m is StoredModule => Boolean(m));
+  return extra.length === 0 ? [...library] : [...library, ...extra];
+}
+
 /** 取某一关/自由模式的画布：优先玩家自己的存档，否则关卡初始画布 */
 export function docFor(mode: GameMode, levelId: string, library: StoredModule[]): Doc {
   const stored = readStoredDoc(storageKeyFor(mode, levelId));
@@ -53,7 +93,7 @@ export function docFor(mode: GameMode, levelId: string, library: StoredModule[])
     // 有全量组件库，读档恢复时也不背（否则一个非门关卡会带着十几个无关模块）。
     return {
       ...stored,
-      library: level.moduleAccess === 'none' ? [] : library,
+      library: resolveMissingModules(stored, level.moduleAccess === 'none' ? [] : library),
       name: level.title,
     };
   }
