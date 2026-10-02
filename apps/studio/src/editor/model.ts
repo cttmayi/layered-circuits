@@ -724,6 +724,23 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
       posOf.set(inst.id, { x: col0x + ci * 130, y });
     });
   });
+  // 端口防遮挡：元件带放不下（多列答案比端口跨度宽）时，模块会把端口盖住。
+  // 把会被盖住的输入/输出端口移到带外两侧（输入左、输出右），其余保留关卡原位置。
+  const PORT_MARGIN = 60;
+  const bandLeft = col0x;
+  const bandRight = col0x + (balanced.length - 1) * 130 + 92;
+  const portShift = new Map<string, number>(); // 端口 label -> 新 x
+  for (const p of design.ports) {
+    const sym = portByLabel.get(p.name);
+    if (!sym) continue;
+    let nx = sym.x;
+    if (sym.kind === 'input' && sym.x > bandLeft - PORT_MARGIN) {
+      nx = bandLeft - PORT_MARGIN; // 贴带左缘，避免被最左列盖住
+    } else if (sym.kind === 'output' && sym.x < bandRight + PORT_MARGIN) {
+      nx = bandRight + PORT_MARGIN; // 贴带右缘，避免被最右列盖住
+    }
+    if (nx !== sym.x) portShift.set(p.name, nx);
+  }
   // 电源轨：VCC 顶行、GND 底行，横排；多了就分行（每行 MAX_RAIL 个）
   const MAX_RAIL = 10;
   const rails = sorted.filter((i) => i.kind === 'vcc' || i.kind === 'gnd');
@@ -746,7 +763,9 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
   for (const p of design.ports) {
     const sym = portByLabel.get(p.name);
     if (sym) {
-      syms.push(sym);
+      // 被移位调整过的端口要克隆，不能改 baseDoc 里的原对象
+      const nx = portShift.get(p.name);
+      syms.push(nx === undefined ? sym : { ...sym, x: nx });
       matchedPorts.add(p.name);
     }
   }

@@ -138,6 +138,41 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
   });
 });
 
+describe('门版端口防遮挡', () => {
+  /** 教学门积木 → 画布库条目（与 App 注入 doc.library 的方式一致） */
+  const stored = TEACHING_MODULES.map((m) => ({
+    hash: m.hash,
+    name: m.name,
+    version: m.version,
+    stage: m.stage,
+    costHalf: m.costHalf,
+    isSequential: m.isSequential,
+    ports: m.ports,
+    template: m,
+    sources: [],
+    createdAt: 0,
+  }));
+  it('一键答案的输入/输出端口不被元件盖住（贴带外缘，留间距）', () => {
+    for (const level of ALL_LEVELS) {
+      const teaching = teachingSolutionOf(level.id);
+      if (!teaching) continue;
+      const doc = fromDesign(teaching, docForLevel(level, stored));
+      const insts = doc.syms.filter((s) => s.kind === 'module' || s.kind === 'unit');
+      if (!insts.length) continue;
+      const xs = insts.map((s) => s.x);
+      const bandL = Math.min(...xs);
+      const bandR = Math.max(...xs) + 92;
+      for (const p of doc.syms.filter((s) => s.kind === 'input' || s.kind === 'output')) {
+        // 端口必须在元件带外（带 [bandL-10, bandR+10] 之外），否则会被模块盖住
+        expect(
+          p.x <= bandL - 10 || p.x >= bandR + 10,
+          `${level.id} 端口 ${p.label} 被元件盖住或贴边（端口 x=${p.x}，元件带 ${bandL}..${bandR}）`,
+        ).toBe(true);
+      }
+    }
+  });
+});
+
 describe('元件版布局：同深度同列（不许回退成单列长条）', () => {
   it('每列最多 10 个元件；同深度同列，超一屏的深度组拆多列并均分', () => {
     for (const level of ALL_LEVELS) {
