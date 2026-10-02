@@ -7,11 +7,12 @@
  * 十位/个位（q[4..7]/q[0..3]）。
  */
 
-import { ALL_LEVELS } from '@lc/content';
+import { ALL_LEVELS, teachingModulesFor, teachingSolutionOf } from '@lc/content';
 import { describe, expect, it } from 'vitest';
 import { docForLevel } from '../src/level/progress';
 import { handleRequest } from '../src/sim/handle';
 import type { DriveValue } from '../src/sim/protocol';
+import { fromDesign, inputValues, toDesign } from '../src/editor/model';
 
 const level = ALL_LEVELS.find((l) => l.id === 's3-calc')!;
 const design = level.referenceSolution!;
@@ -114,5 +115,52 @@ describe('计算器关 GUI 仿真通道（按钮 + 状态保持）', () => {
     expect(du?.display).toBe('segment');
     expect(dt?.width).toBe(7);
     expect(du?.width).toBe(7);
+  });
+});
+
+describe('s3-display：点击 bcd 输入走 0-9，seg 数码管显示对应段码（7 位按位）', () => {
+  // 回归：多 bit 输入端口点击 = 驱动值 +1，且按位展开到各 lane（修复前 bcd 只能 0x0/0xF，
+  // 0xF 的译码输出恰好与「9」同形，导致玩家看到"显示 9 后不变"）。
+  it('一键出答案后，value 0-9 → seg 段码 0x3F..0x6F', () => {
+    const ON = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f];
+    const lv = ALL_LEVELS.find((l) => l.id === 's3-display')!;
+    const stored = teachingModulesFor('rtl').map((m) => ({
+      hash: m.hash,
+      name: m.name,
+      version: m.version,
+      stage: m.stage,
+      costHalf: m.costHalf,
+      isSequential: m.isSequential,
+      ports: m.ports,
+      template: m,
+      sources: [],
+      createdAt: 0,
+    }));
+    let doc = fromDesign(teachingSolutionOf('s3-display', 'rtl')!, docForLevel(lv, stored));
+    for (let v = 0; v < 10; v++) {
+      // 模拟点击：驱动值 +1（与 App 的 stepInput 语义一致）
+      doc = {
+        ...doc,
+        syms: doc.syms.map((s) => (s.kind === 'input' ? { ...s, value: v } : s)),
+      };
+      const design = toDesign(doc);
+      const resp = handleRequest({
+        id: 1,
+        type: 'simulate',
+        design,
+        library: doc.library.map((m) => m.template),
+        mode: 'logic',
+        inputs: inputValues(doc),
+        buttonPorts: [],
+      });
+      expect(resp.error).toBeUndefined();
+      const sig = Object.fromEntries(resp.snapshot.netSignals as [string, number][]);
+      const segNets = design.ports.find((p) => p.name === 'seg')!.nets;
+      let seg = 0;
+      segNets.forEach((n, i) => {
+        if ((sig[n] & 0x03) === 1) seg |= 1 << i;
+      });
+      expect(seg, `bcd=${v} 应显示段码 ${ON[v].toString(16)}`).toBe(ON[v]);
+    }
   });
 });

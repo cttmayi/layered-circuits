@@ -550,7 +550,7 @@ export function App(): React.JSX.Element {
     if (target?.kind === 'sym') {
       const sym = findSym(doc, target.id);
       if (sym?.kind === 'input') {
-        if (event.altKey) cycleInput(sym.id);
+        if (event.altKey) stepInput(sym.id, -1);
         else toggleInput(sym.id);
       }
       if (!event.shiftKey && !selection.includes(target.id)) setSelection([target.id]);
@@ -739,19 +739,22 @@ export function App(): React.JSX.Element {
       }, 400);
       return;
     }
-    commit({
-      ...doc,
-      syms: doc.syms.map((s) =>
-        s.id === id ? { ...s, value: ((s.value ?? 0) === 1 ? 0 : 1) as InputDrive } : s,
-      ),
-    });
+    // 普通输入端口：点击 = 驱动值 +1（1 bit 下等价 0↔1 切换；多 bit 走 0,1,2,…2^width-1）
+    stepInput(id, 1);
   };
 
-  const cycleInput = (id: string): void => {
+  /** 输入端口驱动值步进：click/+1、Alt/-1（按位宽取模环绕） */
+  const stepInput = (id: string, delta: number): void => {
+    const sym = doc.syms.find((s) => s.id === id);
+    if (!sym) return;
+    const width = sym.width ?? 1;
+    const max = width >= 31 ? 2 ** 31 : 1 << width;
     commit({
       ...doc,
       syms: doc.syms.map((s) =>
-        s.id === id ? { ...s, value: (((s.value ?? 0) + 1) % 4) as InputDrive } : s,
+        s.id === id
+          ? { ...s, value: ((((s.value ?? 0) + delta) % max) + max) % max as InputDrive }
+          : s,
       ),
     });
   };

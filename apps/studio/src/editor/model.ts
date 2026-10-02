@@ -16,7 +16,8 @@ export type SymDisplay = 'segment';
 export type SymKind = 'unit' | 'vcc' | 'gnd' | 'input' | 'output' | 'module';
 export type Rot = 0 | 1 | 2 | 3;
 /** 输入符号的驱动：0/1 = 高低，2 = X，3 = Z（与 sim-core 的 elemParam 一致） */
-export type InputDrive = 0 | 1 | 2 | 3;
+/** kind === 'input' 的当前驱动值：0..2^width-1（多 bit 端口按位展开到各 lane；1 bit 时等价 0/1 开关） */
+export type InputDrive = number;
 
 export interface StoredPort {
   id: string;
@@ -534,10 +535,12 @@ export function inputValues(doc: Doc): Record<string, 0 | 1 | 2 | 3> {
     if (sym.kind !== 'input') continue;
     const width = sym.width ?? 1;
     if (width <= 1) {
-      out[sym.label] = sym.value ?? 0;
+      out[sym.label] = ((sym.value ?? 0) & 1) as 0 | 1;
     } else {
-      // 多 bit 输入端口：整个端口共用一个驱动值，展开成逐位 lane 键（与编译器命名一致）
-      for (let bit = 0; bit < width; bit++) out[`${sym.label}[${bit}]`] = sym.value ?? 0;
+      // 多 bit 输入端口：整个端口共用一个驱动值（0..2^width-1），按位展开成逐位 lane 键（与编译器命名一致）
+      const v = sym.value ?? 0;
+      for (let bit = 0; bit < width; bit++)
+        out[`${sym.label}[${bit}]`] = ((v >> bit) & 1) as 0 | 1;
     }
   }
   return out;
