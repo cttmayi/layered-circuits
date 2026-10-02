@@ -164,7 +164,10 @@ const PIN_OFFSETS: Record<string, Array<{ name: string; x: number; y: number }>>
 };
 
 const MODULE_PORT_SPACING = 24;
-const MODULE_HALF_WIDTH = 46;
+/** 模块方框半宽（绘制引线起点用） */
+export const MODULE_HALF_WIDTH = 46;
+/** 模块引脚从方框边缘向外引出的长度（导线接在引线外端） */
+export const MODULE_PIN_LEAD = 12;
 /** 多 bit 端口每个 lane 的纵向间距（8 位 ≈ 7×14 = 98px 高） */
 const LANE_PITCH = 14;
 
@@ -263,21 +266,26 @@ export function pinOffsets(
     }
     return out;
   };
+  // 模块引脚从方框边缘向外引出（导线接引线外端），并随 sym.rot 旋转 ——
+  // 与 input/output/unit 分支一致（绘制侧统一走 rot:0 + ctx.rotate，见 render.ts）。
   const inPins = ins.flatMap((port, i) =>
     lane(port).map((p) => ({
       ...p,
-      x: -MODULE_HALF_WIDTH,
+      x: -(MODULE_HALF_WIDTH + MODULE_PIN_LEAD),
       y: p.y + i * MODULE_PORT_SPACING - height / 2,
     })),
   );
   const outPins = outs.flatMap((port, i) =>
     lane(port).map((p) => ({
       ...p,
-      x: MODULE_HALF_WIDTH,
+      x: MODULE_HALF_WIDTH + MODULE_PIN_LEAD,
       y: p.y + i * MODULE_PORT_SPACING - height / 2,
     })),
   );
-  return [...inPins, ...outPins];
+  return [...inPins, ...outPins].map((p) => {
+    const r = rotate(p.x, p.y, sym.rot);
+    return { ...p, x: r.x, y: r.y };
+  });
 }
 
 export function moduleBox(sym: Sym, library: StoredModule[] = []): { w: number; h: number } {

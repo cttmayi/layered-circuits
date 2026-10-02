@@ -11,6 +11,7 @@
 import { logicValueOf, S_STRONG, SIG_Z, strengthOf } from '@lc/sim-core';
 import {
   type Doc,
+  MODULE_HALF_WIDTH,
   moduleBox,
   pinKey,
   pinNames,
@@ -947,7 +948,12 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
     ctx.lineWidth = (signal === undefined ? 1.6 : style.width) / camera.scale;
     ctx.setLineDash(style.dash.map((d) => d / camera.scale));
     ctx.beginPath();
-    ctx.moveTo(off.x * stub, off.y * stub);
+    // 模块：引线从方框边缘（±半宽）画到外端引脚；其余元件保持原内缩短引线
+    const start =
+      key === 'module'
+        ? { x: Math.sign(off.x) * MODULE_HALF_WIDTH, y: off.y }
+        : { x: off.x * stub, y: off.y * stub };
+    ctx.moveTo(start.x, start.y);
     ctx.lineTo(off.x, off.y);
     ctx.stroke();
     ctx.restore();
@@ -1190,11 +1196,11 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
         ctx.textBaseline = 'top';
         ctx.fillStyle = PALETTE.textDim;
         ctx.fillText(glyph.text, box.w / 2 - 4, -box.h / 2 + 4);
-        // 反相气泡：输出侧引脚
+        // 反相气泡：输出侧引脚（画布已按 sym.rot 旋转，引脚偏移强制 rot:0 与引线绘制一致）
         if (glyph.bubble) {
           ctx.strokeStyle = PALETTE.body;
           ctx.lineWidth = 1.6 / camera.scale;
-          for (const off of pinOffsets(sym, doc.library)) {
+          for (const off of pinOffsets({ ...sym, rot: 0 }, doc.library)) {
             if (off.x <= 0) continue; // 反相气泡画在输出侧（x > 0 的引脚）
             ctx.beginPath();
             ctx.arc(off.x, off.y, 5.2, 0, Math.PI * 2);
