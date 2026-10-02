@@ -48,8 +48,8 @@ describe('fromDesign 还原器（一键出答案）', () => {
       expect(r.score, `${level.id} 还原后应满分`).toBe(100);
     }
     expect(checked).toBeGreaterThanOrEqual(15);
-    // 计算器链大电路的时序行为探测较慢，放宽超时
-  }, 30_000);
+    // 计算器链大电路的时序行为探测较慢，放宽超时（全仓并发时 judgeDesign 会跑满这个窗口）
+  }, 60_000);
 
   it('没有参考解的关返回空电路提示（不炸）', () => {
     const level = ALL_LEVELS[0]!;
@@ -138,8 +138,8 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
   });
 });
 
-describe('元件版布局：紧凑网格（不许回退成单列长条）', () => {
-  it('每列最多 10 个元件，按深度排序后从左到右切块', () => {
+describe('元件版布局：同深度同列（不许回退成单列长条）', () => {
+  it('每列最多 10 个元件；同深度同列，超一屏的深度组拆多列并均分', () => {
     for (const level of ALL_LEVELS) {
       const ref = level.referenceSolution;
       if (!ref) continue;

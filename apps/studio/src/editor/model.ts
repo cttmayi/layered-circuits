@@ -575,6 +575,38 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
   }
 
   const netById = new Map(design.nets.map((n) => [n.id, n]));
+  const instById = new Map(design.instances.map((i) => [i.id, i]));
+
+  // 各实例的「输出侧引脚」：模块 out 端口；npn/nmos/pmos 的集电极/漏极；电源 p。
+  // 电阻/二极管/电容是过流元件（信号穿过），两端都算可传播深度的驱动方。
+  const outPinsCache = new Map<string, Set<string>>();
+  const outputPinsOf = (inst: Instance): Set<string> => {
+    let s = outPinsCache.get(inst.id);
+    if (s) return s;
+    if (inst.kind === 'module') {
+      s = new Set(
+        (baseDoc.library
+          .find((m) => m.hash === inst.module)
+          ?.ports.filter((p) => p.dir === 'out')
+          .map((p) => p.name) ?? []),
+      );
+    } else if (inst.kind === 'unit') {
+      s = new Set(
+        inst.unit === 'npn' ? ['c'] : inst.unit === 'nmos' || inst.unit === 'pmos' ? ['d'] : ['a', 'b'],
+      );
+    } else {
+      s = new Set(['p']); // vcc / gnd
+    }
+    outPinsCache.set(inst.id, s);
+    return s;
+  };
+  /** 实例在网 N 上是否有输出侧引脚（即 N 是否由它驱动） */
+  const drivesNet = (instId: string, net: { pins: Array<{ inst: string; pin: string }> }): boolean => {
+    const inst = instById.get(instId);
+    if (!inst) return false;
+    const outs = outputPinsOf(inst);
+    return net.pins.some((p) => p.inst === instId && outs.has(p.pin));
+  };
 
   // 2) 信号流深度：端口与电源（depth 0）出发松弛；含反馈环的电路最多迭代 128 轮。
   //    关键约束：**深度必须封顶**（MAX_DEPTH）——carry 链这类共享网/回环会让"最长路径"
@@ -619,6 +651,12 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
         if (!net) continue;
         for (const pin of net.pins) {
           if (pin.inst === inst.id) continue;
+          // 端口直连网（如 ALU 的 op 共享网）上可能有多个「同吃一个输入」的消费方
+          // （模块输入脚、基极），它们不驱动这个网——跳过，否则共享输入会让整条链
+          // 虚涨到封顶深度（反馈假象），把没有反馈的电路也排成一列。
+          // 电阻等过流元件与真正的输出侧引脚（集电极/漏极/模块 out 端口）仍计入，
+          // 与上面的 R/Q 约定保持一致。
+          if (portFedNets.has(netId) && !drivesNet(pin.inst, net)) continue;
           const other = prev.get(pin.inst);
           if (other !== undefined) d = Math.max(d, Math.min(other + 1, MAX_DEPTH));
         }
@@ -632,36 +670,60 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
     if (!changed) break;
   }
 
-  // 3) 布局（只算坐标，syms 顺序另行决定）：按深度排序后**顺序切块**——
-  //    每列固定 MAX_ROWS 个，列 = 块，整体从左到右 = 从浅到深（输入在左输出在右）。
-  //    用「切块」而不是「每深度一列」：深度分布往往极不均匀（大电路 80% 元件挤在封顶层），
-  //    按深度分列会让某一列排几百个；切块则每列恰好 MAX_ROWS，天然均匀紧凑。
+  // 3) 布局（只算坐标，syms 顺序另行决定）：**同深度同列**——深度相同的实例
+  //    放同一列，列从左到右 = 从浅到深（输入在左输出在右）。单列超过 MAX_ROWS
+  //    （≈ 一屏）时，把超深的深度组**拆成多列并尽量均分**（每列 ≤ MAX_ROWS），
+  //    避免大电路排成一条竖长龙；拆分/合并不改变左→右的深度单调性。
+  //    注意：深度只作分组依据，不追求精确最长路径（封顶 MAX_DEPTH，见上）。
   const MAX_ROWS = 10;
-  let slot = 0;
-  let bottomY = 0;
-  const posOf = new Map<string, { x: number; y: number }>();
-  // 元件列起点：取左右端口 x 的中点偏左，让元件区落在端口之间（输入左、输出右），
-  // 而不是挤在最左列导致输出端的长线横跨整幅画布。
-  const portXs = baseDoc.syms
-    .filter((s) => s.kind === 'input' || s.kind === 'output')
-    .map((s) => s.x);
-  const col0x = portXs.length
-    ? Math.round((Math.min(...portXs) + Math.max(...portXs)) / 2) - 60
-    : 320;
   const sorted = [...design.instances].sort((a, b) => {
     const da = depthOf.get(a.id) ?? 0;
     const db = depthOf.get(b.id) ?? 0;
     return da !== db ? da - db : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
+  // 按深度分组（保持组内 id 序）；同深度组 = 一列（或拆成几列）
+  const columns: Instance[][] = [];
+  let lastDepth = Number.NaN;
   for (const inst of sorted) {
     if (inst.kind === 'vcc' || inst.kind === 'gnd') continue; // 电源单独排
-    const block = Math.floor(slot / MAX_ROWS);
-    const row = slot % MAX_ROWS;
-    slot++;
-    const y = 90 + row * 92;
-    bottomY = Math.max(bottomY, y);
-    posOf.set(inst.id, { x: col0x + block * 130, y });
+    const d = depthOf.get(inst.id) ?? 0;
+    if (d !== lastDepth) {
+      columns.push([]);
+      lastDepth = d;
+    }
+    columns[columns.length - 1]!.push(inst);
   }
+  // 超一屏的深度组：拆成 k 列、尽量均分（每列 ≤ MAX_ROWS）
+  const balanced: Instance[][] = [];
+  for (const g of columns) {
+    if (g.length <= MAX_ROWS) {
+      balanced.push(g);
+      continue;
+    }
+    const k = Math.ceil(g.length / MAX_ROWS);
+    const base = Math.ceil(g.length / k);
+    for (let i = 0; i < k; i++) {
+      const slice = g.slice(i * base, Math.min((i + 1) * base, g.length));
+      if (slice.length) balanced.push(slice);
+    }
+  }
+  // 元件区列起点：把整个元件带（balanced.length 列）居中在左右端口之间，
+  // 而不是挤在最左列导致输出端的长线横跨整幅画布。
+  const portXs = baseDoc.syms
+    .filter((s) => s.kind === 'input' || s.kind === 'output')
+    .map((s) => s.x);
+  const midX = portXs.length ? (Math.min(...portXs) + Math.max(...portXs)) / 2 : 320;
+  const bandW = (balanced.length - 1) * 130 + 92;
+  const col0x = Math.round(midX - bandW / 2);
+  const posOf = new Map<string, { x: number; y: number }>();
+  let bottomY = 0;
+  balanced.forEach((col, ci) => {
+    col.forEach((inst, ri) => {
+      const y = 90 + ri * 92;
+      bottomY = Math.max(bottomY, y);
+      posOf.set(inst.id, { x: col0x + ci * 130, y });
+    });
+  });
   // 电源轨：VCC 顶行、GND 底行，横排；多了就分行（每行 MAX_RAIL 个）
   const MAX_RAIL = 10;
   const rails = sorted.filter((i) => i.kind === 'vcc' || i.kind === 'gnd');
