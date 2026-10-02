@@ -211,7 +211,12 @@ export class Simulator {
 
     // 用上次仿真的信号恢复初始态（键 = 顶层网 id）。恢复发生在队列排空之后：
     // 后续 setInput 触发的求值会从恢复值继续演化（锁存器保持旧状态）。
-    if (this.options.initialSignals) {
+    // 注意：信号必须与贡献（initialContribs）成对出现 —— 两者出自同一次仿真的终态，
+    // 单独恢复信号会让 contrib 停留在上电旧值，下一次求值经 resolveExcluding 读到
+    // 陈旧贡献，把恢复态「毒化」（状态电路在输入变化时卡死/误翻转）。只给信号不给
+    // 贡献的调用方视为「不要状态保持」：跳过恢复，维持上电默认（宁可丢状态也不产出
+    // 错误结果）。
+    if (this.options.initialSignals && this.options.initialContribs) {
       const sig = this.options.initialSignals;
       for (let node = 0; node < this.net.nodeCount; node++) {
         const id = this.net.nodeLabel[node];
@@ -225,21 +230,19 @@ export class Simulator {
       // （例：rst 复位后松开，锁存器因上电态三极管贡献而弹回置位）。
       // 所以快照同时携带 contrib（上一次仿真的终态贡献），这里按网还原到对应槽位；
       // 信号与贡献出自同一终态，恢复后完全一致，无需任何重收敛。
-      const ic = this.options.initialContribs;
-      if (ic) {
-        for (let node = 0; node < this.net.nodeCount; node++) {
-          const id = this.net.nodeLabel[node];
-          if (!id) continue;
-          const vals = ic[id];
-          if (!vals) continue;
-          const start = this.net.driveStart[node] as number;
-          const end = this.net.driveStart[node + 1] as number;
-          const n = Math.min(end - start, vals.length);
-          for (let i = 0; i < n; i++) {
-            const de = this.net.driveElem[start + i] as number;
-            const ds = this.net.driveSlot[start + i] as number;
-            this.contrib[de * PIN_STRIDE + ds] = vals[i] ?? SIG_Z;
-          }
+      const ic = this.options.initialContribs as Record<string, number[]>;
+      for (let node = 0; node < this.net.nodeCount; node++) {
+        const id = this.net.nodeLabel[node];
+        if (!id) continue;
+        const vals = ic[id];
+        if (!vals) continue;
+        const start = this.net.driveStart[node] as number;
+        const end = this.net.driveStart[node + 1] as number;
+        const n = Math.min(end - start, vals.length);
+        for (let i = 0; i < n; i++) {
+          const de = this.net.driveElem[start + i] as number;
+          const ds = this.net.driveSlot[start + i] as number;
+          this.contrib[de * PIN_STRIDE + ds] = vals[i] ?? SIG_Z;
         }
       }
     }
