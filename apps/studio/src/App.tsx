@@ -82,6 +82,7 @@ import { WorkshopPanel } from './panels/WorkshopPanel';
 import { WorldMap } from './panels/WorldMap';
 import type { SimSnapshot, StudioResponse } from './sim/protocol';
 import { createRunner } from './sim/runner';
+import { shouldReuseSimState } from './sim/sim-policy';
 
 interface DragState {
   mode: 'pan' | 'move' | 'none';
@@ -103,6 +104,8 @@ export function App(): React.JSX.Element {
     signals: Record<string, number>;
     contribs: Record<string, number[]>;
   } | null>(null);
+  /** 「重新计算」触发计数：+1 强制全量重算（丢弃上次终态） */
+  const [recomputeNonce, setRecomputeNonce] = useState(0);
   const dragRef = useRef<DragState>({
     mode: 'none',
     originX: 0,
@@ -227,8 +230,11 @@ export function App(): React.JSX.Element {
       // 拓扑一变就回到上电默认，避免用旧网的信号污染新电路。
       const designKey = JSON.stringify(design);
       const prev = prevSimRef.current;
-      const prevSignals = prev && prev.key === designKey ? prev.signals : undefined;
-      const prevContribs = prev && prev.key === designKey ? prev.contribs : undefined;
+      // 组合关卡（logic 模式、非时序）没有记忆：不复用终态，每次全量重算
+      // （部分恢复只覆盖顶层网，输入一变再收敛会得到错误状态 —— 数码管关的根因）。
+      const reuseState = shouldReuseSimState(currentLevel, gameMode);
+      const prevSignals = prev && prev.key === designKey && reuseState ? prev.signals : undefined;
+      const prevContribs = prev && prev.key === designKey && reuseState ? prev.contribs : undefined;
       runner
         .send({
           type: 'simulate',
@@ -264,7 +270,7 @@ export function App(): React.JSX.Element {
         .catch((error: unknown) => setToast(`仿真失败：${String(error)}`));
     }, 40);
     return () => clearTimeout(timer);
-  }, [doc, mode, showTruth, showTiming, runner, runnerKind]);
+  }, [doc, mode, showTruth, showTiming, runner, runnerKind, recomputeNonce]);
 
   // ---- 本地自动存档（按模式 + 关卡分开存） ----
   const storageKey = storageKeyFor(gameMode, levelId);
@@ -843,6 +849,14 @@ export function App(): React.JSX.Element {
     }
   };
 
+  /** 重新计算：丢弃上次仿真终态，全量重算所有门逻辑（组合电路每次本来就会全量算；
+   *  这里给时序电路/沙盒一个「状态复位、从头算」的手动出口）。 */
+  const recompute = (): void => {
+    prevSimRef.current = null;
+    setRecomputeNonce((n) => n + 1);
+    setToast('已重新计算：全部门逻辑重新求值');
+  };
+
   const solveOneKey = (): void => {
     if (!currentLevel) {
       setToast('调试模式的「一键出答案」只在关卡模式有效');
@@ -1189,14 +1203,23 @@ export function App(): React.JSX.Element {
             调试模式
           </button>
           {debugMode && (
-            <button
-              type="button"
-              className="primary"
-              onClick={solveOneKey}
-              title="把本关参考解直接搭到画布上（调试用）。优先逻辑门版；元件版仅在造价/延迟占优时才会弹窗让你选"
-            >
-              一键出答案
-            </button>
+            <>
+              <button
+                type="button"
+                className="primary"
+                onClick={solveOneKey}
+                title="把本关参考解直接搭到画布上（调试用）。优先逻辑门版；元件版仅在造价/延迟占优时才会弹窗让你选"
+              >
+                一键出答案
+              </button>
+              <button
+                type="button"
+                onClick={recompute}
+                title="丢弃上次仿真终态，从头重新计算全部门逻辑（组合电路每次本来就会全量算）"
+              >
+                重新计算
+              </button>
+            </>
           )}
         </div>
         {gameMode === 'level' && (
