@@ -152,22 +152,29 @@ describe('门版端口防遮挡', () => {
     sources: [],
     createdAt: 0,
   }));
-  it('一键答案的输入/输出端口不被元件盖住（贴带外缘，留间距）', () => {
+  it('一键答案的端口视觉不落入任何元件盒子（防遮挡）', () => {
     for (const level of ALL_LEVELS) {
       const teaching = teachingSolutionOf(level.id);
       if (!teaching) continue;
       const doc = fromDesign(teaching, docForLevel(level, stored));
-      const insts = doc.syms.filter((s) => s.kind === 'module' || s.kind === 'unit');
-      if (!insts.length) continue;
-      const xs = insts.map((s) => s.x);
-      const bandL = Math.min(...xs);
-      const bandR = Math.max(...xs) + 92;
+      const mods = doc.syms.filter((s) => s.kind === 'module' || s.kind === 'unit');
+      if (!mods.length) continue;
       for (const p of doc.syms.filter((s) => s.kind === 'input' || s.kind === 'output')) {
-        // 端口必须在元件带外（带 [bandL-10, bandR+10] 之外），否则会被模块盖住
-        expect(
-          p.x <= bandL - 10 || p.x >= bandR + 10,
-          `${level.id} 端口 ${p.label} 被元件盖住或贴边（端口 x=${p.x}，元件带 ${bandL}..${bandR}）`,
-        ).toBe(true);
+        // 端口视觉范围：输入矩形 [-20,26]、输出 [-26,20]，垂直 ±13（+标签到 +40）；
+        // 元件盒子按最坏情况 ±46（模块半宽）× ±44（全加器半高）
+        const xL = p.x + (p.kind === 'input' ? -20 : -26);
+        const xR = p.x + (p.kind === 'input' ? 26 : 20);
+        for (const m of mods) {
+          const overlap =
+            xR > m.x - 46 + 2 &&
+            xL < m.x + 46 - 2 &&
+            p.y + 40 > m.y - 44 + 2 &&
+            p.y - 13 < m.y + 44 - 2;
+          expect(
+            overlap,
+            `${level.id} 端口 ${p.label}@${p.x},${p.y} 视觉落入元件 ${m.label}@${m.x},${m.y} 盒子`,
+          ).toBe(false);
+        }
       }
     }
   });

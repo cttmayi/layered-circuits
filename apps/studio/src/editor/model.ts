@@ -724,22 +724,28 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
       posOf.set(inst.id, { x: col0x + ci * 130, y });
     });
   });
-  // 端口防遮挡：元件带放不下（多列答案比端口跨度宽）时，模块会把端口盖住。
-  // 把会被盖住的输入/输出端口移到带外两侧（输入左、输出右），其余保留关卡原位置。
-  const PORT_MARGIN = 60;
-  const bandLeft = col0x;
-  const bandRight = col0x + (balanced.length - 1) * 130 + 92;
+  // 端口防遮挡：用模块盒子的实际边界（中心 ± MODULE_HALF_WIDTH）而不是中心线。
+  // 端口有自己的视觉宽度——输入端口矩形 + 引线伸到 x+26、输出伸到 x-26——
+  // 必须让引线端点也离开盒子边界（留 PORT_MARGIN），否则端口会戳进模块（简易ALU 的
+  // op/a/b 此前就贴着异或门盒子）。只在端口会被盖住时移动，其余保留关卡原位置。
   const portShift = new Map<string, number>(); // 端口 label -> 新 x
-  for (const p of design.ports) {
-    const sym = portByLabel.get(p.name);
-    if (!sym) continue;
-    let nx = sym.x;
-    if (sym.kind === 'input' && sym.x > bandLeft - PORT_MARGIN) {
-      nx = bandLeft - PORT_MARGIN; // 贴带左缘，避免被最左列盖住
-    } else if (sym.kind === 'output' && sym.x < bandRight + PORT_MARGIN) {
-      nx = bandRight + PORT_MARGIN; // 贴带右缘，避免被最右列盖住
+  if (balanced.length > 0) {
+    const PORT_MARGIN = 24;
+    const boxLeft = col0x - MODULE_HALF_WIDTH;
+    const boxRight = col0x + (balanced.length - 1) * 130 + MODULE_HALF_WIDTH;
+    for (const p of design.ports) {
+      const sym = portByLabel.get(p.name);
+      if (!sym) continue;
+      let nx = sym.x;
+      if (sym.kind === 'input') {
+        const need = boxLeft - PORT_MARGIN - 26; // 输入端口视觉右端（引线端点 x+26）不碰盒子
+        if (sym.x > need) nx = need;
+      } else if (sym.kind === 'output') {
+        const need = boxRight + PORT_MARGIN + 26; // 输出端口视觉左端（引线端点 x-26）不碰盒子
+        if (sym.x < need) nx = need;
+      }
+      if (nx !== sym.x) portShift.set(p.name, nx);
     }
-    if (nx !== sym.x) portShift.set(p.name, nx);
   }
   // 电源轨：VCC 顶行、GND 底行，横排；多了就分行（每行 MAX_RAIL 个）
   const MAX_RAIL = 10;
