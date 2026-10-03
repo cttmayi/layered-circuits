@@ -115,6 +115,8 @@ export function App(): React.JSX.Element {
     moved: false,
     startSyms: new Map(),
   });
+  /** 当前按住的按钮端口（按住 = 1，onMouseUp 松开归 0） */
+  const heldButtonRef = useRef<string | null>(null);
 
   // 会话（模式 / 当前关卡 / 存档）一次性装载
   const session = useMemo(() => initialSession(), []);
@@ -649,6 +651,15 @@ export function App(): React.JSX.Element {
   };
 
   const onMouseUp = (): void => {
+    // 松开按住的按钮 → 归 0（按住 = 1、松开 = 0）
+    const held = heldButtonRef.current;
+    if (held) {
+      heldButtonRef.current = null;
+      setDoc((prev) => ({
+        ...prev,
+        syms: prev.syms.map((s) => (s.id === held ? { ...s, value: 0 as InputDrive } : s)),
+      }));
+    }
     const drag = dragRef.current;
     if (drag.mode === 'move' && drag.moved) {
       // 拖动结束后把「拖动前」的状态压入撤销栈
@@ -731,18 +742,13 @@ export function App(): React.JSX.Element {
   const toggleInput = (id: string): void => {
     const sym = doc.syms.find((s) => s.id === id);
     if (sym?.button) {
-      // 瞬时按键（按钮端口）：按下 = 1，400ms 后自动弹回 0
-      // 用函数式更新，避免闭包捕获旧 doc 导致弹回时覆盖玩家其它操作
+      // 瞬时按键（按钮端口）：按住 = 1，松开（onMouseUp）归 0——真实计算器手感，
+      // 不是点击后 400ms 自动弹回。用函数式更新，避免闭包捕获旧 doc 覆盖其它操作。
+      heldButtonRef.current = id;
       setDoc((prev) => ({
         ...prev,
         syms: prev.syms.map((s) => (s.id === id ? { ...s, value: 1 as InputDrive } : s)),
       }));
-      window.setTimeout(() => {
-        setDoc((prev) => ({
-          ...prev,
-          syms: prev.syms.map((s) => (s.id === id ? { ...s, value: 0 as InputDrive } : s)),
-        }));
-      }, 400);
       return;
     }
     // 普通输入端口：点击 = 驱动值 +1（1 bit 下等价 0↔1 切换；多 bit 走 0,1,2,…2^width-1）

@@ -104,10 +104,10 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
 
   it('门版答案顶层盒数 ≤ 15（关卡设计规范：画布顶层可见盒子数上限）', () => {
     // 元件版（性能隐藏解）、教学关、模块详情弹窗内部电路豁免；门版答案必须 ≤ 15 盒。
-    // 已批准例外：s3-display（七段译码器关）= 43 盒、s3-encoder（键盘编码器关）= 45 盒，
-    // 答案即教学内容（docs §一例外）；s3-calc（终局组装关）= 29 盒（8 位 ALU + 控制 + 显示，
-    // 架构决定，docs §一豁免）。
-    const EXEMPT = new Set(['s3-display', 's3-encoder', 's3-calc']);
+    // 已批准例外：s3-display（七段译码器关）= 43 盒（答案即教学内容，docs §一例外）；
+    // s3-calc（终局组装关）= 29 盒（8 位 ALU + 控制 + 显示，架构决定，docs §一豁免）。
+    // s3-encoder 门版为 or 矩阵（8 盒）≤ 15，不再豁免。
+    const EXEMPT = new Set(['s3-display', 's3-calc']);
     for (const level of ALL_LEVELS) {
       const teaching = teachingSolutionOf(level.id);
       if (!teaching) continue;

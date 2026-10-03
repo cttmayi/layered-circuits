@@ -7,8 +7,8 @@
  */
 
 import { findLevel } from '@lc/content';
-import { act, fireEvent, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createDeviceSym, EMPTY_DOC, toDesign } from '../src/editor/model';
 import { docForLevel } from '../src/level/progress';
 import { FREE_STORAGE_KEY } from '../src/level/session';
@@ -89,58 +89,58 @@ describe('沙盒：放置按钮器件并点击（瞬时按键自动弹回）', (
   });
 
   it(
-    '组件库放置 按钮 + 七段数码管 → 导出形态正确；点击按钮 = 1 并 400ms 自动弹回 0',
+    '组件库放置 按钮 + 七段数码管 → 导出形态正确；按住 = 1、松开 = 0',
     { timeout: 30_000 },
-    () => {
-      vi.useFakeTimers();
-      try {
-        renderApp();
-        // 主菜单 → 自由搭建（沙盒不锁器件）
-        fireEvent.click(screen.getByText('自由搭建'));
+    async () => {
+      renderApp();
+      // 主菜单 → 自由搭建（沙盒不锁器件）
+      fireEvent.click(screen.getByText('自由搭建'));
 
-        // 从组件库点「按钮」，再在画布 (100,100) 落点
-        fireEvent.click(screen.getByText('按钮').closest('button') as HTMLButtonElement);
-        fireEvent.mouseDown(canvas(), { button: 0, ...screenOf(100, 100) });
+      // 从组件库点「按钮」，再在画布 (100,100) 落点
+      fireEvent.click(screen.getByText('按钮').closest('button') as HTMLButtonElement);
+      fireEvent.mouseDown(canvas(), { button: 0, ...screenOf(100, 100) });
 
-        // 从组件库点「七段数码管」，在画布 (300,100) 落点
-        fireEvent.click(screen.getByText('七段数码管').closest('button') as HTMLButtonElement);
-        fireEvent.mouseDown(canvas(), { button: 0, ...screenOf(300, 100) });
+      // 从组件库点「七段数码管」，在画布 (300,100) 落点
+      fireEvent.click(screen.getByText('七段数码管').closest('button') as HTMLButtonElement);
+      fireEvent.mouseDown(canvas(), { button: 0, ...screenOf(300, 100) });
 
-        // 刷掉放置的防抖存档（保存 effect 400ms 防抖）
-        act(() => {
-          vi.advanceTimersByTime(1_000);
-        });
+      // 导出形态断言（存档 400ms 防抖，waitFor 等落盘）
+      await waitFor(
+        () => {
+          const doc = readFreeDoc();
+          const btn = doc.syms.find((s) => s.label === 'btn1');
+          const seg = doc.syms.find((s) => s.label === 'seg1');
+          expect(btn?.kind).toBe('input');
+          expect(btn?.button).toBe(true);
+          expect(btn?.sprite).toBe('button');
+          expect(btn?.value).toBe(0);
+          expect(seg?.kind).toBe('output');
+          expect(seg?.display).toBe('segment');
+          expect(seg?.width).toBe(7);
+        },
+        { timeout: 5000 },
+      );
 
-        // 导出形态断言（存档已落盘，确定性读取）
-        const doc = readFreeDoc();
-        const btn = doc.syms.find((s) => s.label === 'btn1');
-        const seg = doc.syms.find((s) => s.label === 'seg1');
-        expect(btn?.kind).toBe('input');
-        expect(btn?.button).toBe(true);
-        expect(btn?.sprite).toBe('button');
-        expect(btn?.value).toBe(0);
-        expect(seg?.kind).toBe('output');
-        expect(seg?.display).toBe('segment');
-        expect(seg?.width).toBe(7);
+      // 按住按钮 → 电平 1（按下期间保持；按住 = 1、松开 = 0，无自动弹回定时器，
+      // 存档 400ms 防抖一定能捕获到稳定的 1 态——不存在旧版「弹回 vs 存档」竞态）
+      fireEvent.mouseDown(canvas(), { button: 0, ...screenOf(100, 100) });
+      await waitFor(
+        () => {
+          const btn = readFreeDoc().syms.find((s) => s.label === 'btn1') as { value?: number };
+          expect(btn?.value).toBe(1);
+        },
+        { timeout: 5000 },
+      );
 
-        // 点击按钮本体 → 电平 1（按下）。注意：存档是 400ms 防抖、按钮也是 400ms 自动弹回，
-        // 真实时钟下两者的竞态会让「1 态」在重负载时来不及落盘（防抖保存被弹回更新取消）。
-        // 用假时钟把两个 400ms 定时器放在同一个 act 里推进：自动弹回的 setState 被 act
-        // 延迟到边界提交，存档闭包（捕获 doc(1)）先写入 localStorage → 确定性读到 1。
-        fireEvent.mouseDown(canvas(), { button: 0, ...screenOf(100, 100) });
-        act(() => {
-          vi.advanceTimersByTime(400);
-        });
-        expect(readFreeDoc().syms.find((s) => s.label === 'btn1')?.value).toBe(1);
-
-        // 再推进：自动弹回已提交，存档写入 0（瞬时按键弹回）
-        act(() => {
-          vi.advanceTimersByTime(500);
-        });
-        expect(readFreeDoc().syms.find((s) => s.label === 'btn1')?.value).toBe(0);
-      } finally {
-        vi.useRealTimers();
-      }
+      // 松开 → 归 0（瞬时按键）
+      fireEvent.mouseUp(canvas());
+      await waitFor(
+        () => {
+          const btn = readFreeDoc().syms.find((s) => s.label === 'btn1') as { value?: number };
+          expect(btn?.value).toBe(0);
+        },
+        { timeout: 5000 },
+      );
     },
   );
 });

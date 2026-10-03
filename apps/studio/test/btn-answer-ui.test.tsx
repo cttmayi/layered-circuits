@@ -72,6 +72,10 @@ function clickWorld(wx: number, wy: number): void {
     clientY: wy - CAMERA.y + SIZE / 2,
   });
 }
+/** 松开：按钮端口按住 = 1、松开归 0 */
+function releaseWorld(): void {
+  fireEvent.mouseUp(canvas());
+}
 
 /** 进按钮锁存关：清存档 → 教学关通关 → 前置关全通关 → render → 点关 */
 function enterBtnLatch(): void {
@@ -113,7 +117,7 @@ describe('一键出答案后点按钮（端到端）', () => {
     const beforeSig = sigOf(before.resp, notNet!.id);
     expect(beforeSig).toBe(5); // 松开按钮：非门输出弱 1
 
-    // 点按钮：必须发出 btn=1 的新仿真，且非门输出翻到强 0
+    // 点按钮（按住）：必须发出 btn=1 的新仿真，且非门输出翻到强 0
     clickWorld(btnSym.x, btnSym.y);
     await waitFor(
       () => expect(responses.some((x) => x.req.inputs['btn'] === 1)).toBe(true),
@@ -123,9 +127,13 @@ describe('一键出答案后点按钮（端到端）', () => {
     expect(press).toBeDefined();
     expect(sigOf(press?.resp, notNet!.id)).toBe(8); // 非门输出强 0
 
-    // 400ms 后按钮自动弹回 0：非门输出回到弱 1
-    await new Promise((r) => setTimeout(r, 600));
-    const release = [...responses].reverse().find((x) => x.req.inputs['btn'] === 0);
+    // 松开按钮 → 归 0：非门输出回到弱 1
+    releaseWorld();
+    await waitFor(
+      () => expect(responses.some((x) => x.req.inputs['btn'] === 0)).toBe(true),
+      { timeout: 4000 },
+    );
+    const release = responses.find((x) => x.req.inputs['btn'] === 0);
     expect(release).toBeDefined();
     expect(sigOf(release?.resp, notNet!.id)).toBe(5);
   });

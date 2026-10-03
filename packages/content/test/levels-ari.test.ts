@@ -53,6 +53,7 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
       's3-bin2bcd',
       's3-display',
       's3-reg-8',
+      's3-or-chain',
       's3-encoder',
       's3-digit-entry',
       's3-calc',

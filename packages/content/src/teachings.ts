@@ -37,6 +37,7 @@ import {
   cmosNandRef,
   nandGateRef,
   notGateRef,
+  or4Ref,
   orGateRef,
   xnorGateRef,
   xorGateRef,
@@ -108,6 +109,7 @@ const TEACHING_MODULES_BASE: readonly ModuleTemplate[] = [
   wrapGate('非门', notGateRef(), 'logic'),
   wrapGate('与非门', nandGateRef(), 'logic'),
   wrapGate('或门', orGateRef(), 'logic'),
+  wrapGate('多输入或门', or4Ref(), 'logic'), // s3-or-chain 产出；编码器 or 矩阵的砖块
   wrapGate('异或门', xorGateRef(), 'logic'),
   wrapGate('与门', andGateRef(), 'logic'),
   wrapGate('D锁存器', dLatchQnRef(), 'seq'),
@@ -125,6 +127,7 @@ const FAMILY_GATES: Record<string, Partial<Record<LogicFamily, GateRef>>> = {
   与非门: { rtl: nandGateRef, ttl: ttlNandRef, cmos: cmosNandRef },
   与门: { rtl: andGateRef, ttl: ttlAndRef, cmos: cmosAndRef },
   或门: { rtl: orGateRef, ttl: ttlOrRef, cmos: cmosOrRef },
+  多输入或门: { rtl: or4Ref }, // 二极管并联扩展；TTL/CMOS 契约回退 RTL（encoder 关为 rtl 契约）
   异或门: { rtl: xorGateRef, cmos: cmosXorRef },
   同或门: { rtl: xnorGateRef, cmos: cmosXnorRef },
   D锁存器: { rtl: dLatchQnRef },
@@ -135,6 +138,7 @@ const GATE_KIND: Record<string, ModuleKind> = {
   非门: 'logic',
   与非门: 'logic',
   或门: 'logic',
+  多输入或门: 'logic',
   与门: 'logic',
   异或门: 'logic',
   同或门: 'logic',
@@ -763,39 +767,48 @@ function reg8ByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
   return b.build();
 }
 
-/** 数字键盘编码器（门版）：d0-d9 → code[3:0]、any，45 个【与非门】，结构与单元参考解一致 */
+/** 数字键盘编码器（门版）：d0-d9 → code[3:0]、any——8 个或门积木（or 矩阵）。
+ *  教学点 = 编码器 = 或门矩阵（对偶 s3-display 译码器）；一次只按一键，无需仲裁。
+ *  code0 = d1∨d3∨d5∨d7∨d9（5 输入 = or4+or2）、code1/2 = or4、code3 = or2、
+ *  any = or10（or4+or4+or2）。与 45 与非门元件版同功能，但顶层一眼看懂 or 矩阵。 */
 function encoderByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
   b.gnd('gnd');
-  const nand = hashOf('与非门', family);
+  const or2 = hashOf('或门', family);
+  const or4 = hashOf('多输入或门', family);
   const d = Array.from({ length: 10 }, (_, i) => `d${i}`);
-  // 每键一个反相器
-  const nd = d.map((_, i) => {
-    b.module(nand, { a: `d${i}`, b: `d${i}`, y: `nd${i}` }, `I${i}`);
-    return `nd${i}`;
-  });
   let n = 0;
-  const g = (a: string, c: string): string => {
-    b.module(nand, { a, b: c, y: `t${n}` }, `G${n}`);
-    return `t${n++}`;
-  };
   const orN = (terms: string[]): string => {
-    if (terms.length === 2) return g(terms[0], terms[1]);
-    let s = g(terms[0], terms[1]);
-    for (let i = 2; i < terms.length; i++) {
-      const inv = g(s, s);
-      s = g(inv, terms[i]);
+    if (terms.length === 1) return terms[0] as string;
+    if (terms.length === 2) {
+      const o = `o${n}`;
+      b.module(or2, { a: terms[0] as string, b: terms[1] as string, y: o }, `OR${n++}`);
+      return o;
     }
-    return s;
+    if (terms.length === 3) {
+      const mid = orN(terms.slice(0, 2));
+      return orN([mid, terms[2] as string]);
+    }
+    if (terms.length === 4) {
+      const o = `o${n}`;
+      b.module(
+        or4,
+        { a: terms[0] as string, b: terms[1] as string, c: terms[2] as string, d: terms[3] as string, y: o },
+        `OR${n++}`,
+      );
+      return o;
+    }
+    // >4：or4 吃前 4 个，再与其余级联
+    return orN([orN(terms.slice(0, 4)), ...terms.slice(4)]);
   };
   const code = [
-    orN([nd[1], nd[3], nd[5], nd[7], nd[9]]),
-    orN([nd[2], nd[3], nd[6], nd[7]]),
-    orN([nd[4], nd[5], nd[6], nd[7]]),
-    orN([nd[8], nd[9]]),
+    orN([d[1], d[3], d[5], d[7], d[9]]),
+    orN([d[2], d[3], d[6], d[7]]),
+    orN([d[4], d[5], d[6], d[7]]),
+    orN([d[8], d[9]]),
   ];
-  const any = orN(nd);
+  const any = orN(d);
   b.port('d0', 'in', d[0]);
   b.port('d1', 'in', d[1]);
   b.port('d2', 'in', d[2]);

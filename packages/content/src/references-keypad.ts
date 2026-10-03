@@ -1,10 +1,12 @@
 /**
  * 计算器键盘部件参考解（GDD 阶段 3.5 计算器链新增）：
- *  - encoder：数字键盘编码器 —— 10 个数字键（d0..d9，一次按一个）→ 4 位 BCD 码 +
- *    任意键脉冲（any = d0∨…∨d9）。纯组合，全与非门（输出可级联），
+ *  - encoderOr：数字键盘编码器参考解（s3-encoder 关）——10 个数字键（d0..d9，一次按一个）
+ *    → 4 位 BCD 码 + 任意键脉冲（any = d0∨…∨d9）。纯组合 or 矩阵（教学正道）：
  *    bit0 = d1∨d3∨d5∨d7∨d9、bit1 = d2∨d3∨d6∨d7、bit2 = d4∨d5∨d6∨d7、
  *    bit3 = d8∨d9（一次只按一键 → 无需优先仲裁，直接 OR）。
- *    成本 45×20 = 900（半分记账：10 个输入反相器 + 35 个 OR 链与非门）。
+ *    结构 = 6 个 or4 单元 + 2 个 or2 单元（每单元 = N 个二极管 + 1 下拉），与门版
+ *    【多输入或门】【或门】积木同构：成本 8×res + 28×dio = 88 半分。
+ *  - encoderInto：calcRef 内部用的 45 与非门版（输出可级联、纯元件），成本 900。
  *  - digitEntry：数字输入寄存器 —— wr 上升沿把 4 位 BCD 数字码「左移一位插入」：
  *    q ← {旧个位, 新数字}（q = (q<<4 & 0xFF) | d，两位封顶滚动）。8 个主从 D 触发器，
  *    十位 D = 旧个位 Q（回接），个位 D = 数字码。成本 8×196 = 1568。
@@ -64,26 +66,37 @@ export function encoderInto(
   orNInto(b, `${p}A`, nd, any);
 }
 
-/** 数字键盘编码器参考解：d0..d9 → code[3:0]、any（成本 900） */
-export function encoderRef(id: string): Design {
+/**
+ * or 矩阵版编码器参考解（s3-encoder 关）：d0..d9 → code[3:0]、any。
+ * 结构 = 6 个 or4 单元 + 2 个 or2 单元（每单元 N 个二极管 + 1 下拉），与门版
+ * 【多输入或门】【或门】积木完全同构：成本 8×res + 28×dio = 88 半分。
+ */
+export function encoderOrRef(id = 'ref-s3-encoder'): Design {
   const b = new DesignBuilder(id, '数字键盘编码器');
-  b.vcc('vcc');
   b.gnd('gnd');
   const d = Array.from({ length: 10 }, (_, i) => `d${i}`);
-  const code = Array.from({ length: 4 }, (_, i) => `code${i}`);
-  encoderInto(b, 'E', d, code, 'any');
-  b.port('d0', 'in', d[0]);
-  b.port('d1', 'in', d[1]);
-  b.port('d2', 'in', d[2]);
-  b.port('d3', 'in', d[3]);
-  b.port('d4', 'in', d[4]);
-  b.port('d5', 'in', d[5]);
-  b.port('d6', 'in', d[6]);
-  b.port('d7', 'in', d[7]);
-  b.port('d8', 'in', d[8]);
-  b.port('d9', 'in', d[9]);
+  let n = 0;
+  const orN = (terms: string[]): string => {
+    if (terms.length === 1) return terms[0] as string;
+    if (terms.length <= 4) {
+      const o = `o${n}`;
+      b.unit('res', { a: o, b: 'gnd' }, `R${n}`);
+      terms.forEach((t, i) => b.unit('dio', { a: t, k: o }, `D${n}_${i}`));
+      n++;
+      return o;
+    }
+    return orN([orN(terms.slice(0, 4)), ...terms.slice(4)]);
+  };
+  const code = [
+    orN([d[1], d[3], d[5], d[7], d[9]]),
+    orN([d[2], d[3], d[6], d[7]]),
+    orN([d[4], d[5], d[6], d[7]]),
+    orN([d[8], d[9]]),
+  ];
+  const any = orN(d);
+  for (let i = 0; i < 10; i++) b.port(`d${i}`, 'in', d[i]);
   b.port('code', 'out', code);
-  b.port('any', 'out', 'any');
+  b.port('any', 'out', any);
   return b.build();
 }
 

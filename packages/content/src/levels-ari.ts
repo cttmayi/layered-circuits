@@ -18,8 +18,9 @@ import {
   parseLevel,
 } from '@lc/schema';
 import { adder4Ref, adder8Ref, aluRef, fullAdderRef, halfAdderRef, seg7Ref } from './references-ari.js';
+import { or4Ref } from './references.js';
 import { bcd2binRef, bin2bcdRef, calcRef, reg8Ref } from './references-calc.js';
-import { digitEntryRef, encoderRef } from './references-keypad.js';
+import { digitEntryRef, encoderOrRef } from './references-keypad.js';
 
 /** 阶段 3 允许的元件：仍只用 npn/res/dio（电容留给时钟/存储章节） */
 const STAGE3_UNITS = ['npn', 'res', 'dio'] as const;
@@ -437,6 +438,63 @@ const REG_8: Level = parseLevel({
  * 数字键盘编码器：10 个数字键（d0-d9，一次按一个）→ 4 位 BCD 码 + 任意键脉冲。
  * 与 s3-display 的译码器正好对称：译码器把 4 位码展开成 7 段，编码器把 10 根线缩成 4 位码。
  */
+/**
+ * 多输入或门：a+b+c+d → y。s3-or-chain 教「或门支持任意多输入」——或门 = 二极管并联，
+ * 多输入 = 更多二极管并联（或门原理的直接扩展）。编码器要把很多键「或」成一根线，
+ * 就是这种多输入或门；产出【多输入或门】积木供编码器拼 or 矩阵。
+ */
+const S3_OR_CHAIN: Level = parseLevel({
+  schemaVersion: 1,
+  id: 's3-or-chain',
+  stage: 3,
+  kind: 'main',
+  title: '多输入或门',
+  brief:
+    '或门你已经会了：a 或 b 为 1 输出就是 1。现在把它扩展成 4 输入：a、b、c、d 任意一个为 1，' +
+    'y 就是 1。多输入或门是编码器（键盘 → 4 位码）的砖块——每条输出码线都要把好几根键线「或」起来。',
+  teaching:
+    '或门的原理是二极管并联：每根输入接一个二极管、共用下拉电阻，任一输入为 1 就把输出拉高。' +
+    '多输入或门没有新知识——只是并联更多二极管（或把几个或门级联）。想一想：4 输入或门和 2 输入或门，' +
+    '电路差在哪里？',
+  hint:
+    '参考解就是 4 个二极管 + 1 个下拉电阻（和 s2 或门一模一样，只是二极管多两个）。成本 6 半单位。',
+  ports: [
+    { id: 'a', name: 'a', dir: 'in' },
+    { id: 'b', name: 'b', dir: 'in' },
+    { id: 'c', name: 'c', dir: 'in' },
+    { id: 'd', name: 'd', dir: 'in' },
+    { id: 'y', name: 'y', dir: 'out' },
+  ],
+  mode: 'logic',
+  allowedUnits: [...STAGE3_UNITS],
+  moduleAccess: 'all',
+  budgetHalf: budgetFromOptimal(12, MAIN_OVERHEAD),
+  optimalHalf: 12,
+  checks: {},
+  vectors: [
+    { inputs: { a: 0, b: 0, c: 0, d: 0 }, expect: { y: 0 }, note: '全 0 → 0' },
+    { inputs: { a: 1, b: 0, c: 0, d: 0 }, expect: { y: 1 }, note: 'a=1 → 1' },
+    { inputs: { a: 0, b: 1, c: 0, d: 0 }, expect: { y: 1 }, note: 'b=1 → 1' },
+    { inputs: { a: 0, b: 0, c: 1, d: 0 }, expect: { y: 1 }, note: 'c=1 → 1' },
+    { inputs: { a: 0, b: 0, c: 0, d: 1 }, expect: { y: 1 }, note: 'd=1 → 1' },
+    { inputs: { a: 1, b: 0, c: 1, d: 0 }, expect: { y: 1 }, note: 'a∨c → 1' },
+    { inputs: { a: 1, b: 1, c: 1, d: 1 }, expect: { y: 1 }, note: '全 1 → 1' },
+  ],
+  unlock: {
+    name: '多输入或门',
+    kind: 'logic',
+    stage: 3,
+    ports: [
+      port('a', 'in'),
+      port('b', 'in'),
+      port('c', 'in'),
+      port('d', 'in'),
+      port('y', 'out'),
+    ],
+  },
+  referenceSolution: or4Ref('ref-s3-or-chain'),
+});
+
 const S3_ENCODER: Level = parseLevel({
   schemaVersion: 1,
   id: 's3-encoder',
@@ -450,21 +508,21 @@ const S3_ENCODER: Level = parseLevel({
     '编码器和译码器正好相反：译码器把 4 位码展开成很多线，编码器把很多线缩成 4 位码。' +
     '一次只按一键，所以不用仲裁优先级——每根输出线直接是相关按键的「或」：' +
     'code0 = d1∨d3∨d5∨d7∨d9、code1 = d2∨d3∨d6∨d7、code2 = d4∨d5∨d6∨d7、code3 = d8∨d9，' +
-    'any = d0∨…∨d9。全部用与非门搭（输出可级联）。',
+    'any = d0∨…∨d9。这就是一张或门矩阵：拖【多输入或门】【或门】积木，把每条输出线相关的键线或起来。',
   hint:
-    '每根输出 = 几个按键的或。与非门的「先取反再与非」正好拼出多输入或：NOT(a) 与 NOT(b) 与非。' +
-    '参考解 45 个与非门（每个键一个反相器共享），成本 900 半单位。',
+    '每根输出 = 几个按键的或，用 or 积木拼（s3-or-chain 产出的【多输入或门】正好 4 输入）。' +
+    '参考解 8 个 or 积木：code0=or4+or2、code1/2=or4、code3=or2、any=or4+or4+or2。',
   ports: [
-    port('d7', 'in'),
-    port('d8', 'in'),
-    port('d9', 'in'),
-    port('d4', 'in'),
-    port('d5', 'in'),
-    port('d6', 'in'),
-    port('d1', 'in'),
-    port('d2', 'in'),
-    port('d3', 'in'),
-    port('d0', 'in'),
+    { id: 'd7', name: 'd7', dir: 'in', button: true },
+    { id: 'd8', name: 'd8', dir: 'in', button: true },
+    { id: 'd9', name: 'd9', dir: 'in', button: true },
+    { id: 'd4', name: 'd4', dir: 'in', button: true },
+    { id: 'd5', name: 'd5', dir: 'in', button: true },
+    { id: 'd6', name: 'd6', dir: 'in', button: true },
+    { id: 'd1', name: 'd1', dir: 'in', button: true },
+    { id: 'd2', name: 'd2', dir: 'in', button: true },
+    { id: 'd3', name: 'd3', dir: 'in', button: true },
+    { id: 'd0', name: 'd0', dir: 'in', button: true },
     { id: 'code', name: 'code', dir: 'out', width: 4 },
     { id: 'any', name: 'any', dir: 'out' },
   ],
@@ -472,8 +530,8 @@ const S3_ENCODER: Level = parseLevel({
   mode: 'logic',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
-  budgetHalf: budgetFromOptimal(900, MAIN_OVERHEAD),
-  optimalHalf: 900,
+  budgetHalf: budgetFromOptimal(88, MAIN_OVERHEAD),
+  optimalHalf: 88,
   checks: {},
   vectors: (() => {
     // 判定器只设置向量里列出的输入、其余默认 Z —— 组合关必须显式写全所有键位
@@ -507,7 +565,7 @@ const S3_ENCODER: Level = parseLevel({
       port('any', 'out'),
     ],
   },
-  referenceSolution: encoderRef('ref-s3-encoder'),
+  referenceSolution: encoderOrRef('ref-s3-encoder'),
 });
 
 /**
@@ -737,6 +795,7 @@ export const STAGE3_LEVELS: Level[] = [
   BIN2BCD,
   S3_DISPLAY,
   REG_8,
+  S3_OR_CHAIN,
   S3_ENCODER,
   S3_DIGIT_ENTRY,
   CALC,

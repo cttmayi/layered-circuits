@@ -142,6 +142,23 @@ export function orGateRef(id = 'ref-or'): Design {
   return b.build();
 }
 
+/** 多输入或门（4 输入）：a+b+c+d → y（成本 6）——或门原理直接扩展：更多二极管并联 */
+export function or4Ref(id = 'ref-or4'): Design {
+  const b = new DesignBuilder(id, '多输入或门');
+  b.gnd('gnd');
+  b.unit('res', { a: 'y', b: 'gnd' }, 'R1'); // 下拉：全低时输出才是低
+  b.unit('dio', { a: 'a', k: 'y' }, 'D1');
+  b.unit('dio', { a: 'b', k: 'y' }, 'D2');
+  b.unit('dio', { a: 'c', k: 'y' }, 'D3');
+  b.unit('dio', { a: 'd', k: 'y' }, 'D4');
+  b.port('a', 'in', 'a');
+  b.port('b', 'in', 'b');
+  b.port('c', 'in', 'c');
+  b.port('d', 'in', 'd');
+  b.port('y', 'out', 'y');
+  return b.build();
+}
+
 /** RTL 与非门：两个三极管串联下拉（成本 7） */
 export function nandGateRef(id = 'ref-nand'): Design {
   const b = new DesignBuilder(id, '与非门');
