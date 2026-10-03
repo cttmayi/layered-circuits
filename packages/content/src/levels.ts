@@ -586,35 +586,6 @@ export const STAGE1_LEVELS: Level[] = [
     freqHz: 100_000,
   }),
   gateLevel({
-    id: 's1-xor-retro',
-    kind: 'retro',
-    title: '异或门·复古版',
-    brief: '同样的异或门，但这一关**禁用【与非门】模块**：模拟早期版本还没把它封装出来。',
-    teaching:
-      '复古复用关考的是「被拿走顺手的积木之后还能不能做出来」：' +
-      '组件库的版本管理（M3）就是为了让你随时能回到早期版本重做一遍。',
-    hint: '手搭 4 个 RTL 与非门是标准解（成本 28）；也可以想想用与门/或门拼。',
-    inputs: 2,
-    fn: (a: 0 | 1, b: 0 | 1) => (a !== b ? 1 : 0),
-    optimalHalf: 80,
-    bestKnownHalf: 44,
-    timingBudgetPs: 13000,
-    allowedUnits: ['npn', 'res'],
-    moduleAccess: 'listed',
-    allowedModules: ['非门', '与门', '或门'],
-    bannedModules: ['与非门'],
-    reference: xorGateRef('ref-xor-retro'),
-    unlockName: '异或门（复古版）',
-    familyRefs: {
-      cmos: {
-        reference: cmosXorRef('ref-s1-xor-retro-cmos'),
-        optimalHalf: 32,
-        timingBudgetPs: 9800,
-      },
-    },
-    freqHz: 20_000_000,
-  }),
-  gateLevel({
     id: 's1-xnor',
     title: '同或门',
     brief: '异或门取反：两个输入相同时输出为高。',

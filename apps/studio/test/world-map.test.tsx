@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * 关卡地图（选关界面）：30 关都应在动态 viewBox 内、地图区可上下滚动。
+ * 关卡地图（选关界面）：27 关都应在动态 viewBox 内、地图区可上下滚动。
  * 防回归：加关后节点不再被裁剪（viewBox 高度随总行数增长）。
  */
 import { ALL_LEVELS } from '@lc/content';

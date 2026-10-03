@@ -66,13 +66,13 @@ describe('调试模式 · 一键出答案', () => {
   });
 
   it('一键出答案：半加器直接出逻辑门版（元件版无优势不弹窗），验收满分', async () => {
-    // 半加器是第三章关卡：预置前一关（s2-dff-fast）通关，解锁第三章
+    // 半加器是第三章关卡：预置前一关（s2-dff）通关，解锁第三章
     localStorage.setItem(
       'lc-studio-progress-v1',
       JSON.stringify({
         cleared: {
           ...teachCleared(),
-          's2-dff-fast': { score: 100, bestCostHalf: 48, clearedAt: Date.now() },
+          's2-dff': { score: 100, bestCostHalf: 196, clearedAt: Date.now() },
         },
         attempts: {},
         library: [],

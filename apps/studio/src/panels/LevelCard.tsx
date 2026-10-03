@@ -66,7 +66,7 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
       <div className="task-head">
         <h3>任务 · {level.title}</h3>
         <button type="button" className="task-detail-btn" onClick={() => setShowTask(true)}>
-          任务详情 · 真值表 ↗
+          任务详情 ↗
         </button>
       </div>
       <p className="task-brief">{level.brief}</p>

@@ -428,33 +428,6 @@ function xnorByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
   return b.build();
 }
 
-/**
- * 异或门·复古版（门版）：4【与门】+ 4【非门】= 8 盒，成本 80（恰等于满分线）。
- * 本关禁用【与非门】积木，只许用 非门/与门/或门。与门/或门是二极管逻辑（弱输出），
- * 二极管阳极若挂在「输出侧」会在强度对等时把电平反灌回输入（组合反馈 → 振荡），
- * 所以不能用 a·¬b / ¬a·b 再合并的结构；改用标准 4-与非门展开（每个与非门 = 与门+非门）：
- *   w1 = ¬(a·b)；w2 = ¬(a·w1)；w3 = ¬(b·w1)；y = ¬(w2·w3) = (a·¬b)∨(¬a·b)
- * 中间节点全是与非门输出（强 0 / 弱 1），二极管阴极接弱 1 被 cathodeHigh 挡住、接强 0 只把
- * 输出拉低，不会反灌 → 仿真稳定收敛。
- */
-function xorRetroByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
-  const b = new DesignBuilder(id, name);
-  const and = hashOf('与门', family);
-  const not = hashOf('非门', family);
-  b.module(and, { a: 'a', b: 'b', y: 'ab' }, 'A1');
-  b.module(not, { a: 'ab', y: 'w1' }, 'N1');
-  b.module(and, { a: 'a', b: 'w1', y: 'aw1' }, 'A2');
-  b.module(not, { a: 'aw1', y: 'w2' }, 'N2');
-  b.module(and, { a: 'b', b: 'w1', y: 'bw1' }, 'A3');
-  b.module(not, { a: 'bw1', y: 'w3' }, 'N3');
-  b.module(and, { a: 'w2', b: 'w3', y: 'w2w3' }, 'A4');
-  b.module(not, { a: 'w2w3', y: 'y' }, 'N4');
-  b.port('a', 'in', 'a');
-  b.port('b', 'in', 'b');
-  b.port('y', 'out', 'y');
-  return b.build();
-}
-
 /** 与非门 SR 锁存器（门版）：2 个【与非门】交叉耦合，低有效置位/复位 */
 function srLatchByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
@@ -528,9 +501,6 @@ export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl')
       return norByModules('teach-s1-nor', '或非门（门版）', family);
     case 's1-xor':
       return xorByModules('teach-s1-xor', '异或门（门版）', family);
-    case 's1-xor-retro':
-      // 复古复用关禁用【与非门】积木：用 非门/与门/或门 拼（5 盒，符合本关素材约束）
-      return xorRetroByModules('teach-s1-xor-retro', '异或门（复古版）', family);
     case 's1-xnor':
       return xnorByModules('teach-s1-xnor', '同或门（门版）', family);
     case 's2-sr-latch':
@@ -540,9 +510,7 @@ export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl')
     case 's2-d-latch':
       return dLatchByModules('teach-s2-dl', 'D锁存器（门版）', family);
     case 's2-dff':
-    case 's2-dff-cost':
-    case 's2-dff-fast':
-      return dffByModules(`teach-${levelId}`, 'D触发器（门版）', family);
+      return dffByModules('teach-s2-dff', 'D触发器（门版）', family);
     case 's3-half-adder':
       return halfAdderByModules('teach-s3-ha', '半加器（门版）', family);
     case 's3-full-adder':

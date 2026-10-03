@@ -222,7 +222,7 @@ describe('关卡界面', () => {
     // 关卡卡片：任务标题 + 直接需求（不做场景话术）；真值表放「任务详情」弹窗
     expect(screen.getByText(/任务 · 非门/)).toBeTruthy();
     expect(document.querySelector('.level-card .truth')).toBeNull();
-    fireEvent.click(screen.getByText(/任务详情 · 真值表/));
+    fireEvent.click(screen.getByText(/任务详情/));
     const targetTable = document.querySelector('.task-full .truth') as HTMLTableElement;
     expect(targetTable).toBeTruthy();
     const cells = [...targetTable.querySelectorAll('tbody tr')].map((tr) =>

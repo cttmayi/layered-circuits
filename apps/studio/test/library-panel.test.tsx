@@ -268,7 +268,7 @@ describe('地图与星级（P1）', () => {
     expect(screen.getByText('★★★')).toBeTruthy();
     // 1 单 + 1 元 → 还是学徒，提示升到维修铺师傅还差什么
     expect(screen.getByText(/称号 学徒/)).toBeTruthy();
-    expect(screen.getByText(/已通关 1\/30/)).toBeTruthy(); // 教学关不在关卡链：主线 30 关
+    expect(screen.getByText(/已通关 1\/27/)).toBeTruthy(); // 教学关不在关卡链：主线 27 关
   });
 });
 

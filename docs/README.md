@@ -92,7 +92,7 @@ docs/
   - **无 familyRefs** → 回退 `{ family: 'rtl', reference: level.referenceSolution }`（判定不查强度，RTL 积木即可）。
 - **强度检查**（judge.ts）：契约 `output === 'strong'` 时，对输出端口期望=1 的向量查 S_STRONG；弱 1 报错
   （如「TTL 推挽输出 契约要求推挽输出：y … 实际是弱 1（多半靠上拉电阻凑的）…」）。
-- **familyRefs 覆盖现状**：TTL 只 s1-not/and/or/nand/nor（5 基础门）；CMOS 覆盖 s1 全部（含 xor/xnor/xor-retro + 教学关）；
+- **familyRefs 覆盖现状**：TTL 只 s1-not/and/or/nand/nor（5 基础门）；CMOS 覆盖 s1 全部（含 xor/xnor + 教学关）；
   **s2/s3 无 familyRefs** → TTL/CMOS 契约下回退 RTL 判定，门版仍用 RTL 积木即可。
 - 教学关（classroom）：s1-npn / s1-dio / s1-float / s1-cmos-inv / s1-cmos-nand。**不评星、不设预算与延迟标准**（App 里 `classroom ? 0 : starsOf(...)`）。
 - **教学模式**：5 个教学关已从关卡链拆出（`TEACH_LEVELS`），与关卡模式并列 —— 主菜单独立入口 → 元件图鉴墙
@@ -113,7 +113,7 @@ unlockName（通关解锁的模块名）/ reference（空库可编译的参考�
 ```
 
 - **moduleAccess 语义**：`none`（禁模块，只能手搭）→ s1-not/and/or、教学关；`all` → s1-nand/nor、s2/s3；
-  `listed`（限定 allowedModules）→ s1-xor（非门/与非门）、s1-xnor（非门/与非门/异或门）、s1-xor-retro（非门/与门/或门，banned 与非门）。
+  `listed`（限定 allowedModules）→ s1-xor（非门/与非门）、s1-xnor（非门/与非门/异或门）。
 - **关卡数据即规格**：判定与 UI 从同一份数据派生，**改关卡不用改代码**。
 
 ### 4.4 参考解与门版（content/references*.ts + teachings.ts）
@@ -134,7 +134,7 @@ unlockName（通关解锁的模块名）/ reference（空库可编译的参考�
 
 - **Doc**（画布文档：syms/wires/nets/library）↔ **Design**（作者态 DTO）互转：`fromDesign(design, baseDoc)`（一键出答案/布局）、`toDesign(doc)`（交付/仿真）。
 - 存档键：进度 `lc-studio-progress-v1`（family/cleared/attempts/library/walletHalf/recon/equipment…）；关卡草稿 `lc-studio-level-<id>-v1`；自由模式 `lc-studio-doc-v1`。
-- 结算：`paymentOf` = 款项（budgetHalf；成本挑战关用 optimalHalf）；`profitOf` = 款项 − 材料费（可负）；`gradeOf`（S/A/B/C）；`starsOf`（成本/延迟各四档 0.5/0.75/1 倍预算线，取较差，教学关 0）。
+- 结算：`paymentOf` = 款项（budgetHalf）；`profitOf` = 款项 − 材料费（可负）；`gradeOf`（S/A/B/C）；`starsOf`（成本/延迟各四档 0.5/0.75/1 倍预算线，取较差，教学关 0）。
 
 ### 4.6 判定管道（compiler/judge.ts）
 
@@ -208,7 +208,7 @@ pnpm lc-level tools/level-editor/specs/s1-majority.json /tmp/x.ts  # 生成关�
 1. **蓝图 4 关未实现**：`docs/关卡循序渐进设计蓝图（待审核）.md` 里的 s1-mux2 / s2-gated-sr / s3-adder-2 / s3-sub-4（仅设计文档，未做关卡）。
 2. **门版答案规模**（已达标，见 `docs/关卡设计规范（规模与积木复用）.md` §四体检表）：规范要求门版顶层盒数 ≤ 15，
     s3-reg-8（8）、s3-bin2bcd（15）、s3-encoder（8）、s3-display2（2）等全部达标；仅 s3-calc（29）
-    超限但属文档批准的豁免（终局组装关，测试 EXEMPT 集登记）；s1-xor-retro 已有门版（8 盒）。
+    超限但属文档批准的豁免（终局组装关，测试 EXEMPT 集登记）。
     原七段译码器关（43 盒）已拆成 3 关（每段自包含）：s3-display 段码·abc（19）+ s3-seg-de（18）+ s3-seg-fg（19），
     超 15 但属「答案即教学内容」豁免（输入输出自包含可读：BCD → 段线；NAND 链 2N-3 门是下限）；
     【七段译码器】教学积木保持共享积项 43 门（成本 860）供 s3-display2 / calc 门版复用。

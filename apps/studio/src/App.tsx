@@ -192,7 +192,6 @@ export function App(): React.JSX.Element {
   const [showTiming, setShowTiming] = useState(false);
   const [snapshot, setSnapshot] = useState<SimSnapshot | null>(null);
   const [resultDoc, setResultDoc] = useState<Doc | null>(null);
-  const [runnerKind, setRunnerKind] = useState(runner.kind);
   const [toast, setToast] = useState<string | null>(null);
   /** 结算页：交付并封装之后出现（客户验收报告 + 钱 + 评级） */
   const [settlement, setSettlement] = useState<JudgeResult | null>(null);
@@ -235,7 +234,6 @@ export function App(): React.JSX.Element {
   // 必然产生新 doc，由 doc 依赖覆盖重跑。
   // biome-ignore lint/correctness/useExhaustiveDependencies: 见上（TDZ 限制，doc 依赖兜底）
   useEffect(() => {
-    if (runner.kind !== runnerKind) setRunnerKind(runner.kind);
     // recomputeNonce 只作「重新计算」按钮的触发信号：值本身不参与计算，仅靠它在依赖
     // 列表里变化来重跑仿真（读一下避免被判定为多余依赖——删除它会让按钮失效）。
     void recomputeNonce;
@@ -285,7 +283,7 @@ export function App(): React.JSX.Element {
         .catch((error: unknown) => setToast(`仿真失败：${String(error)}`));
     }, 40);
     return () => clearTimeout(timer);
-  }, [doc, mode, showTruth, showTiming, runner, runnerKind, recomputeNonce]);
+  }, [doc, mode, showTruth, showTiming, runner, recomputeNonce]);
 
   // ---- 本地自动存档（按模式 + 关卡分开存） ----
   const storageKey = storageKeyFor(gameMode, levelId);
@@ -1404,9 +1402,6 @@ export function App(): React.JSX.Element {
           />
           波形常显
         </label>
-        <span className="runner" title="纯 TS 内核跑在 Web Worker 里；file:// 打开时自动回退主线程">
-          {runnerKind === 'worker' ? 'Worker 仿真' : '主线程仿真'}
-        </span>
       </header>
 
       <div className="body">

@@ -38,10 +38,8 @@ describe('阶段 1 关卡内容', () => {
       's1-cmos-nand',
     ]);
     expect(nextLevelId('s1-npn')).toBeNull(); // 教学关不在关卡链上
-    // 主线最后一关之后是挑战关（成本挑战 / 高频挑战），挑战关之后才是终点
-    expect(nextLevelId('s2-dff')).toBe('s2-dff-cost');
     // 阶段 2 之后进入阶段 3（算术单元），压轴是简易计算器链
-    expect(nextLevelId('s2-dff-fast')).toBe('s3-half-adder');
+    expect(nextLevelId('s2-dff')).toBe('s3-half-adder');
     expect(nextLevelId('s3-alu')).toBe('s3-bcd2bin');
     expect(nextLevelId('s3-calc')).toBeNull();
   });

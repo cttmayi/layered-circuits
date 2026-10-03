@@ -60,7 +60,7 @@ describe('按契约参考解（familyRefs）', () => {
         expect(r.score).toBe(100);
       }
     }
-    expect(count).toBeGreaterThanOrEqual(16);
+    expect(count).toBeGreaterThanOrEqual(15);
   });
 
   it('一键答案按契约不一样：同一关不同契约的参考解成本/结构不同', () => {

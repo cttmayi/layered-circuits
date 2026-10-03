@@ -26,7 +26,6 @@ export function JudgePanel({
 
   return (
     <section className="panel judge">
-      <h3>验收台</h3>
       {result?.pass && (
         <p className="dim small">
           验收通过，正在自动封装为【{level.unlock?.name ?? level.title}】并结算…
