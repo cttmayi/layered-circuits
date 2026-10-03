@@ -247,8 +247,8 @@ export function seg7Into(
 }
 
 /**
- * 段码积项：输入反相 + 10 个共享积项（14 个与非门）。
- * 网名带前缀 p（nA..nD、t1..t9、t3n），可被段级子电路与完整译码器复用。
+ * 译码器公共部分：输入反相 + 共享项（14 个与非门）。
+ * 网名带前缀 p（nA..nD、t1..t9、t3n 内部），可被段级子电路与完整译码器复用。
  */
 export function segTermInto(
   b: DesignBuilder,
@@ -299,29 +299,14 @@ export function segChainInto(b: DesignBuilder, p: string, out: string, terms: st
   }
 }
 
-/** 段码积项参考解：bcd0..3 → nA..nD、t1..t9、t3n（14 个与非门，成本 280） */
+/** 译码器公共部分参考解：bcd0..3 → nA..nD、t1..t9（14 个与非门，成本 280） */
 export function segTermRef(id = 'ref-s3-seg-term'): Design {
-  const b = new DesignBuilder(id, '段码积项');
+  const b = new DesignBuilder(id, '译码器公共部分');
   b.vcc('vcc');
   b.gnd('gnd');
   segTermInto(b, '', 'bcd0', 'bcd1', 'bcd2', 'bcd3');
   for (const n of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(n, 'in', n);
-  for (const n of [
-    'nA',
-    'nB',
-    'nC',
-    'nD',
-    't1',
-    't2',
-    't3',
-    't4',
-    't5',
-    't6',
-    't7',
-    't8',
-    't9',
-    't3n',
-  ])
+  for (const n of ['nA', 'nB', 'nC', 'nD', 't1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9'])
     b.port(n, 'out', n);
   return b.build();
 }

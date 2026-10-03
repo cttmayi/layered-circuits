@@ -41,7 +41,7 @@ function portWidthOf(levelId: string, name: string): number {
 }
 
 describe('阶段 3 关卡内容（位宽/总线）', () => {
-  it('主线按「半加器 → 全加器 → 4位 → 8位 → ALU → BCD↔二进制 → 段码积项/段码×3 → 数码管 → 寄存器 → 计算器」排列，位宽从 1 涨到 8', () => {
+  it('主线按「半加器 → 全加器 → 4位 → 8位 → ALU → BCD↔二进制 → 译码器公共部分/段码×3 → 数码管 → 寄存器 → 计算器」排列，位宽从 1 涨到 8', () => {
     const ids = STAGE3_LEVELS.map((l) => l.id);
     expect(ids).toEqual([
       's3-half-adder',

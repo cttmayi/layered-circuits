@@ -342,24 +342,25 @@ const BIN2BCD: Level = parseLevel({
   referenceSolution: bin2bcdRef('ref-s3-bin2bcd'),
 });
 
-/** 段码积项：译码器第一步 = 4 个反相信号 + 10 个共享积项（14 个与非门，答案即教学内容） */
+/** 译码器公共部分：先搭 7 条段线共用的反相信号与共享项（14 个与非门），答案即教学内容 */
 const S3_DISPLAY: Level = parseLevel({
   schemaVersion: 1,
   id: 's3-display',
   stage: 3,
   kind: 'main',
-  title: '段码积项',
+  title: '译码器·公共部分',
   brief:
-    '七段译码器按 0-9 的 BCD 码点亮 7 根段线，直接用与非门搭要 43 个。先拆第一步：' +
-    '把 4 个输入反相信号和 10 个共享积项算出来——后面每条段线都从这 14 个中间信号取，这就是「化简靠共享中间项」。',
+    '七段译码器 = 7 个布尔函数，它们共用不少子表达式。这一关先把「公共部分」搭成模块：' +
+    '4 个反相信号 + 9 个共享项，封装成【译码器公共部分】；接下来 3 关每条段线只从它取数、只搭自己的小链。',
   teaching:
-    '7 条段线是 7 个布尔函数，它们共用很多子表达式。这一关先算 4 个反相信号（nA=¬bcd0…，' +
-    '与非门两输入接同一条线就是反相器：¬(x·x)=¬x）和 10 个共享积项（t1..t9、t3n）。' +
-    '下一关的每条段线都从这 14 个中间信号里挑几路做与非链。',
+    '7 条段线是 7 个函数，逐条单独算要用 70+ 个与非门。化简的诀窍是「提公因数」：把公共子表达式先算好、存成中间线，' +
+    '多处共用。这一关先搭 4 个反相信号（nA=¬bcd0…，与非门两输入接同一条线就是反相器：¬(x·x)=¬x）和 9 个共享项（t1..t9；' +
+    '其中 t8 内部还要用一个小反相 t3n=¬(t3·t3)，不出端口）。搭完封装成【译码器公共部分】，' +
+    '后面 3 关每条段线都从这里取数——总共 43 门，比逐条单独算省一半。',
   hint:
     '反相 4 个：nA=¬(bcd0·bcd0)、nB=¬(bcd1·bcd1)、nC=¬(bcd2·bcd2)、nD=¬(bcd3·bcd3)。' +
-    '积项 10 个：t1=¬(nA·bcd1)、t2=¬(nA·nC)、t3=¬(nB·bcd2)、t4=¬(bcd1·nC)、t5=¬(bcd0·bcd2)、' +
-    't6=¬(nA·nB)、t7=¬(bcd0·bcd1)、t3n=¬(t3·t3)、t8=¬(bcd0·t3n)、t9=¬(nA·bcd2)。' +
+    '共享项 9 个：t1=¬(nA·bcd1)、t2=¬(nA·nC)、t3=¬(nB·bcd2)、t4=¬(bcd1·nC)、t5=¬(bcd0·bcd2)、' +
+    't6=¬(nA·nB)、t7=¬(bcd0·bcd1)、t8=¬(bcd0·t3n)（t3n=¬(t3·t3) 是内部小反相）、t9=¬(nA·bcd2)。' +
     '参考解 14 个与非门，成本 280 半单位。',
   ports: [
     port('bcd0', 'in'),
@@ -379,7 +380,6 @@ const S3_DISPLAY: Level = parseLevel({
     port('t7', 'out'),
     port('t8', 'out'),
     port('t9', 'out'),
-    port('t3n', 'out'),
   ],
   mode: 'logic',
   allowedUnits: [...STAGE3_UNITS],
@@ -404,7 +404,6 @@ const S3_DISPLAY: Level = parseLevel({
         t7: 1,
         t8: 1,
         t9: 1,
-        t3n: 0,
       },
       note: '0',
     },
@@ -424,7 +423,6 @@ const S3_DISPLAY: Level = parseLevel({
         t7: 1,
         t8: 1,
         t9: 1,
-        t3n: 0,
       },
       note: '1',
     },
@@ -444,7 +442,6 @@ const S3_DISPLAY: Level = parseLevel({
         t7: 1,
         t8: 1,
         t9: 1,
-        t3n: 0,
       },
       note: '2',
     },
@@ -464,7 +461,6 @@ const S3_DISPLAY: Level = parseLevel({
         t7: 1,
         t8: 0,
         t9: 1,
-        t3n: 1,
       },
       note: '5',
     },
@@ -484,7 +480,6 @@ const S3_DISPLAY: Level = parseLevel({
         t7: 1,
         t8: 1,
         t9: 1,
-        t3n: 0,
       },
       note: '8',
     },
@@ -504,13 +499,12 @@ const S3_DISPLAY: Level = parseLevel({
         t7: 1,
         t8: 1,
         t9: 1,
-        t3n: 0,
       },
       note: '9',
     },
   ] satisfies LevelVector[],
   unlock: {
-    name: '段码积项',
+    name: '译码器公共部分',
     kind: 'logic',
     stage: 3,
     ports: [
@@ -531,13 +525,12 @@ const S3_DISPLAY: Level = parseLevel({
       port('t7', 'out'),
       port('t8', 'out'),
       port('t9', 'out'),
-      port('t3n', 'out'),
     ],
   },
   referenceSolution: segTermRef('ref-s3-seg-term'),
 });
 
-/** 段码·abc：BCD → a/b/c 三条段线（1×【段码积项】 + 链 11 = 12 盒） */
+/** 段码·abc：BCD → a/b/c 三条段线（1×【译码器公共部分】 + 链 11 = 12 盒） */
 const S3_SEG_ABC: Level = parseLevel({
   schemaVersion: 1,
   id: 's3-seg-abc',
@@ -549,7 +542,7 @@ const S3_SEG_ABC: Level = parseLevel({
   teaching:
     '每条段线 = 从中间信号里挑几路做「链式与非」：先两两与非，需要时中间反相，最后得到 ¬(几个信号的与)。' +
     '比如 a = ¬(t2·t5·nB·nD)、b = ¬(t6·t7·bcd2)、c = ¬(nA·bcd1·nC)。这就是「把多个条件合并成一个输出」的技巧。',
-  hint: '拖 1 个【段码积项】模块 + 11 个【与非门】：a=¬(t2·t5·nB·nD)、b=¬(t6·t7·bcd2)、c=¬(nA·bcd1·nC)。参考解 12 盒，成本 500 半单位。',
+  hint: '拖 1 个【译码器公共部分】模块 + 11 个【与非门】：a=¬(t2·t5·nB·nD)、b=¬(t6·t7·bcd2)、c=¬(nA·bcd1·nC)。参考解 12 盒，成本 500 半单位。',
   ports: [
     port('bcd0', 'in'),
     port('bcd1', 'in'),
@@ -594,7 +587,7 @@ const S3_SEG_ABC: Level = parseLevel({
   referenceSolution: segABCRef('ref-s3-seg-abc'),
 });
 
-/** 段码·de：BCD → d/e 两条段线（1×【段码积项】 + 链 8 = 9 盒） */
+/** 段码·de：BCD → d/e 两条段线（1×【译码器公共部分】 + 链 8 = 9 盒） */
 const S3_SEG_DE: Level = parseLevel({
   schemaVersion: 1,
   id: 's3-seg-de',
@@ -603,7 +596,7 @@ const S3_SEG_DE: Level = parseLevel({
   title: '段码·de',
   brief: '中段的 2 条段线（d 底横、e 左下竖）。和前两关同样的手法：挑中间信号做与非链。',
   teaching: 'd = ¬(t1·t2·t8·t4·nD)、e = ¬(t1·t2)。e 只要 2 路，一条链 2 个与非门就行。',
-  hint: '拖 1 个【段码积项】+ 8 个【与非门】：d=¬(t1·t2·t8·t4·nD)、e=¬(t1·t2)。参考解 9 盒，成本 440 半单位。',
+  hint: '拖 1 个【译码器公共部分】+ 8 个【与非门】：d=¬(t1·t2·t8·t4·nD)、e=¬(t1·t2)。参考解 9 盒，成本 440 半单位。',
   ports: [
     port('bcd0', 'in'),
     port('bcd1', 'in'),
@@ -646,7 +639,7 @@ const S3_SEG_DE: Level = parseLevel({
   referenceSolution: segDERef('ref-s3-seg-de'),
 });
 
-/** 段码·fg：BCD → f/g 两条段线（1×【段码积项】 + 链 10 = 11 盒） */
+/** 段码·fg：BCD → f/g 两条段线（1×【译码器公共部分】 + 链 10 = 11 盒） */
 const S3_SEG_FG: Level = parseLevel({
   schemaVersion: 1,
   id: 's3-seg-fg',
@@ -655,7 +648,7 @@ const S3_SEG_FG: Level = parseLevel({
   title: '段码·fg',
   brief: '低段的 2 条段线（f 左上竖、g 中横）。7 条段线全部搭完，译码器就齐了。',
   teaching: 'f = ¬(t6·t9·t3·nD)、g = ¬(t1·t3·t4·nD)。',
-  hint: '拖 1 个【段码积项】+ 10 个【与非门】：f=¬(t6·t9·t3·nD)、g=¬(t1·t3·t4·nD)。参考解 11 盒，成本 480 半单位。',
+  hint: '拖 1 个【译码器公共部分】+ 10 个【与非门】：f=¬(t6·t9·t3·nD)、g=¬(t1·t3·t4·nD)。参考解 11 盒，成本 480 半单位。',
   ports: [
     port('bcd0', 'in'),
     port('bcd1', 'in'),

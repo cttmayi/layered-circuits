@@ -167,7 +167,7 @@ function gateTemplateFor(name: string, family: LogicFamily = 'rtl'): ModuleTempl
  * （calc 组装关的粗粒度积木）。内部可经「双击模块」下钻查看。
  */
 const COMPOSITE_ORDER = [
-  '段码积项',
+  '译码器公共部分',
   '段码abc',
   '段码de',
   '段码fg',
@@ -183,7 +183,7 @@ const COMPOSITE_ORDER = [
   '显示控制',
 ] as const;
 const COMPOSITE_KIND: Record<string, ModuleKind> = {
-  段码积项: 'arith',
+  译码器公共部分: 'arith',
   段码abc: 'arith',
   段码de: 'arith',
   段码fg: 'arith',
@@ -203,8 +203,8 @@ const compositeCache = new Map<string, ModuleTemplate>();
 /** 复合积木的 body：按依赖顺序引用已存在的积木（绝不自引用/循环） */
 function compositeBodyOf(name: string, family: LogicFamily): Design {
   switch (name) {
-    case '段码积项':
-      return segTermByModules(`brick-segterm-${family}`, '段码积项', family);
+    case '译码器公共部分':
+      return segTermByModules(`brick-segterm-${family}`, '译码器公共部分', family);
     case '段码abc':
       return segABCByModules(`brick-segabc-${family}`, '段码abc', family);
     case '段码de':
@@ -574,7 +574,7 @@ export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl')
     case 's3-bin2bcd':
       return bin2bcdByModules('teach-s3-bin2bcd', '二进制→BCD（门版）', family);
     case 's3-display':
-      return segTermByModules('teach-s3-segterm', '段码积项（门版）', family);
+      return segTermByModules('teach-s3-segterm', '译码器公共部分（门版）', family);
     case 's3-seg-abc':
       return segABCByModules('teach-s3-segabc', '段码abc（门版）', family);
     case 's3-seg-de':
@@ -964,7 +964,7 @@ function seg7ByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
   return b.build();
 }
 
-/** 段码积项（门版）：bcd0..3 → nA..nD、t1..t9、t3n，14 个【与非门】积木（4 反相并接 + 10 共享积项） */
+/** 译码器公共部分（门版）：bcd0..3 → nA..nD、t1..t9，14 个【与非门】积木（4 反相并接 + 9 共享项 + t3n 内反相） */
 function segTermByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
@@ -978,7 +978,7 @@ function segTermByModules(id: string, name: string, family: LogicFamily = 'rtl')
   const nA = g('bcd0', 'bcd0', 'nA');
   const nB = g('bcd1', 'bcd1', 'nB');
   const nC = g('bcd2', 'bcd2', 'nC');
-  g('bcd3', 'bcd3', 'nD'); // nD 仅作输出（积项不含 D）
+  g('bcd3', 'bcd3', 'nD'); // nD 仅作输出（共享项不含 D）
   g(nA, 'bcd1', 't1'); // ¬(A'·B)
   g(nA, nC, 't2'); // ¬(A'·C')
   g(nB, 'bcd2', 't3'); // ¬(B'·C)
@@ -986,37 +986,22 @@ function segTermByModules(id: string, name: string, family: LogicFamily = 'rtl')
   g('bcd0', 'bcd2', 't5'); // ¬(A·C)
   g(nA, nB, 't6'); // ¬(A'·B')
   g('bcd0', 'bcd1', 't7'); // ¬(A·B)
-  const t3n = g('t3', 't3', 't3n'); // B'·C
+  const t3n = g('t3', 't3', 't3n'); // B'·C（内部信号，不出端口）
   g('bcd0', t3n, 't8'); // ¬(A·B'·C)
   g(nA, 'bcd2', 't9'); // ¬(A'·C)
   for (const p of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(p, 'in', p);
-  for (const p of [
-    'nA',
-    'nB',
-    'nC',
-    'nD',
-    't1',
-    't2',
-    't3',
-    't4',
-    't5',
-    't6',
-    't7',
-    't8',
-    't9',
-    't3n',
-  ])
+  for (const p of ['nA', 'nB', 'nC', 'nD', 't1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9'])
     b.port(p, 'out', p);
   return b.build();
 }
 
-/** 段码·高段（门版）：1×【段码积项】模块 + 链 a/b/c（12 盒，成本 500） */
+/** 段码·abc（门版）：1×【译码器公共部分】模块 + 链 a/b/c（12 盒，成本 500） */
 function segABCByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
   b.gnd('gnd');
   b.module(
-    hashOf('段码积项', family),
+    hashOf('译码器公共部分', family),
     {
       bcd0: 'bcd0',
       bcd1: 'bcd1',
@@ -1035,7 +1020,6 @@ function segABCByModules(id: string, name: string, family: LogicFamily = 'rtl'):
       t7: 't7',
       t8: 't8',
       t9: 't9',
-      t3n: 't3n',
     },
     'T',
   );
@@ -1066,13 +1050,13 @@ function segABCByModules(id: string, name: string, family: LogicFamily = 'rtl'):
   return b.build();
 }
 
-/** 段码·中段（门版）：1×【段码积项】模块 + 链 d/e（9 盒，成本 440） */
+/** 段码·de（门版）：1×【译码器公共部分】模块 + 链 d/e（9 盒，成本 440） */
 function segDEByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
   b.gnd('gnd');
   b.module(
-    hashOf('段码积项', family),
+    hashOf('译码器公共部分', family),
     {
       bcd0: 'bcd0',
       bcd1: 'bcd1',
@@ -1091,7 +1075,6 @@ function segDEByModules(id: string, name: string, family: LogicFamily = 'rtl'): 
       t7: 't7',
       t8: 't8',
       t9: 't9',
-      t3n: 't3n',
     },
     'T',
   );
@@ -1120,13 +1103,13 @@ function segDEByModules(id: string, name: string, family: LogicFamily = 'rtl'): 
   return b.build();
 }
 
-/** 段码·低段（门版）：1×【段码积项】模块 + 链 f/g（11 盒，成本 480） */
+/** 段码·fg（门版）：1×【译码器公共部分】模块 + 链 f/g（11 盒，成本 480） */
 function segFGByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
   b.gnd('gnd');
   b.module(
-    hashOf('段码积项', family),
+    hashOf('译码器公共部分', family),
     {
       bcd0: 'bcd0',
       bcd1: 'bcd1',
@@ -1145,7 +1128,6 @@ function segFGByModules(id: string, name: string, family: LogicFamily = 'rtl'): 
       t7: 't7',
       t8: 't8',
       t9: 't9',
-      t3n: 't3n',
     },
     'T',
   );
