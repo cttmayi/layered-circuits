@@ -162,8 +162,9 @@ function gateLevel(input: {
   });
 }
 
-export const STAGE1_LEVELS: Level[] = [
-  // ---- 三个「元件入门」教学关（面向高中生：大白话 + 生活类比，先建立元件直觉）----
+
+export const TEACH_LEVELS: Level[] = [
+  // ---- 元件教学模式：认识各个元件（教学关从关卡链拆出，5 关，点开引导搭建）----
   gateLevel({
     id: 's1-npn',
     title: '认识三极管',
@@ -380,6 +381,84 @@ export const STAGE1_LEVELS: Level[] = [
     freqHz: 100_000,
   }),
   gateLevel({
+    id: 's1-cmos-inv',
+    title: 'CMOS 反相器',
+    brief:
+      '告别上拉电阻——上 pMOS 下 nMOS 的「互补对」：一个导通另一个必截止，输出被直接钉到 VCC 或 GND（轨到轨强驱动），还没有电阻拖累。',
+    teaching:
+      'CMOS 是工业界的终极答案：无电阻、推挽强输出、不耗静态电。这一关把输入 a 同时接到两个栅极：a=0 时 pMOS 导通、nMOS 截止 → y 强 1；a=1 时反过来 → y 强 0。判定的 CMOS 契约会检查你的输出必须是强 1（弱上拉凑出来的过不了关）。',
+    hint: '把输入 a 分别接到 P1 的栅极和 N1 的栅极——两个栅极并在一起，就是互补对。',
+    inputs: 1,
+    fn: (a: 0 | 1) => (a ? 0 : 1),
+    optimalHalf: 4, // 1 pMOS + 1 nMOS = 2 + 2 半分（显示 2）
+    timingBudgetPs: 2800,
+    allowedUnits: ['nmos', 'pmos'],
+    requiredUnits: ['nmos', 'pmos'],
+    family: 'cmos',
+    classroom: {
+      title: 'CMOS：互补 MOS 工艺',
+      analogy:
+        '跷跷板两端各坐一个人——pMOS 管管「拉高」、nMOS 管管「拉低」，栅极一给信号，永远只有一边落地。',
+      points: [
+        '互补对：上 pMOS（栅低导通）下 nMOS（栅高导通），输入并接两个栅极',
+        '输出轨到轨：高 = 强 1（拉到 VCC）、低 = 强 0（拉到 GND），推挽驱动',
+        '没有电阻：CMOS 门不靠上拉凑电平，又便宜又不耗静态电——这就是它取代 RTL/DTL/TTL 的原因',
+      ],
+    },
+    seedDoc: cmosInvSeed(),
+    guideSteps: [
+      '第一步：看——两个管子都放好了，但栅极悬空、输入 a 没接，输出 y 谁也驱动不了',
+      '第二步：把输入 a 接到 P1 的栅极（pMOS 栅低才导通）',
+      '第三步：把输入 a 也接到 N1 的栅极（nMOS 栅高才导通）——两个栅极并在一起',
+      '第四步：点「交付验收」：a=0 亮、a=1 灭，且输出是强驱动（CMOS 契约检查）',
+    ],
+    moduleAccess: 'none',
+    reference: cmosInvRef('ref-cmos-inv'),
+    unlockName: 'CMOS 反相器',
+    freqHz: 100_000,
+  }),
+  gateLevel({
+    id: 's1-cmos-nand',
+    title: 'CMOS 与非门',
+    brief:
+      '上 pMOS 并联、下 nMOS 串联的互补结构：任一输入为 0 → 输出被强拉到 1；两个输入都为 1 → 下管串联导通，输出强拉到 0。4 个管子拼出与非门，比 2 三极管 + 3 电阻省一半。',
+    teaching:
+      'CMOS 门怎么搭：把「拉高网络」和「拉低网络」做成互补——与非门要「全 1 才拉低」，所以下管（拉低）串联、上管（拉高）并联。记住口诀：**串联导通 = 与，并联导通 = 或**；与非 = 拉低网络串联。',
+    hint: '两个 pMOS 并联接 VCC→y（任一输入 0 都拉高）；两个 nMOS 串联接 y→GND（两输入都为 1 才拉低）。把 a 接到 P1 和 N1 的栅极，b 接到 P2 和 N2 的栅极。',
+    inputs: 2,
+    fn: (a: 0 | 1, b: 0 | 1) => (a === 1 && b === 1 ? 0 : 1),
+    optimalHalf: 8, // 2 pMOS + 2 nMOS = 4 × 2 半分（显示 4）
+    timingBudgetPs: 4200,
+    allowedUnits: ['nmos', 'pmos'],
+    requiredUnits: ['nmos', 'pmos'],
+    family: 'cmos',
+    classroom: {
+      title: 'CMOS 与非门：互补结构',
+      analogy:
+        '两道闸门串联（下管）才能把水放掉，两条旁路并联（上管）只要开一条就把水位顶上去——串联导通 = 与，并联导通 = 或。',
+      points: [
+        '拉低网络（nMOS）串联：两个输入都为 1 才导通 → 输出才被拉低 = 与非',
+        '拉高网络（pMOS）并联：任一输入为 0 就拉高 → 高电平是强 1',
+        '4 个管子无电阻：CMOS 与非门成本 8 半分，比 RTL 的 20 省一半还多',
+      ],
+    },
+    seedDoc: cmosNandSeed(),
+    guideSteps: [
+      '第一步：看——四个管子摆好了但全悬空，输出 y 谁也驱动不了',
+      '第二步：把输入 a 接到 P1 和 N1 的栅极；输入 b 接到 P2 和 N2 的栅极',
+      '第三步：核对结构——上管 pMOS 并联（都接 VCC→y），下管 nMOS 串联（y→N1→N2→GND）',
+      '第四步：点「交付验收」：全 1 才灭，其余全亮',
+    ],
+    moduleAccess: 'none',
+    reference: cmosNandRef('ref-cmos-nand'),
+    unlockName: 'CMOS 与非门',
+    freqHz: 100_000,
+  }),
+];
+
+/** 第一章主线：基础门电路（教学关已拆入 TEACH_LEVELS 教学模式，s1-not 起） */
+export const STAGE1_LEVELS: Level[] = [
+  gateLevel({
     id: 's1-not',
     title: '非门',
     brief: '输入为高时输出低、输入为低时输出高。用最少的三极管搭出反相器，并让它稳定级联。',
@@ -508,7 +587,6 @@ export const STAGE1_LEVELS: Level[] = [
     },
     freqHz: 100_000,
   }),
-  // 复古复用关（GDD 4.4）：只能用早期手段重做异或门 —— 禁止调用后期封装的与非门模块
   gateLevel({
     id: 's1-xor-retro',
     kind: 'retro',
@@ -540,7 +618,6 @@ export const STAGE1_LEVELS: Level[] = [
     },
     freqHz: 20_000_000,
   }),
-
   gateLevel({
     id: 's1-xnor',
     title: '同或门',
@@ -564,87 +641,21 @@ export const STAGE1_LEVELS: Level[] = [
     },
     freqHz: 100_000,
   }),
-
-  // ---- 工艺升级：CMOS（决策 1：支持 CMOS 工艺，元件面板从此多出 N-MOS / P-MOS）----
-  gateLevel({
-    id: 's1-cmos-inv',
-    title: 'CMOS 反相器',
-    brief:
-      '告别上拉电阻——上 pMOS 下 nMOS 的「互补对」：一个导通另一个必截止，输出被直接钉到 VCC 或 GND（轨到轨强驱动），还没有电阻拖累。',
-    teaching:
-      'CMOS 是工业界的终极答案：无电阻、推挽强输出、不耗静态电。这一关把输入 a 同时接到两个栅极：a=0 时 pMOS 导通、nMOS 截止 → y 强 1；a=1 时反过来 → y 强 0。判定的 CMOS 契约会检查你的输出必须是强 1（弱上拉凑出来的过不了关）。',
-    hint: '把输入 a 分别接到 P1 的栅极和 N1 的栅极——两个栅极并在一起，就是互补对。',
-    inputs: 1,
-    fn: (a: 0 | 1) => (a ? 0 : 1),
-    optimalHalf: 4, // 1 pMOS + 1 nMOS = 2 + 2 半分（显示 2）
-    timingBudgetPs: 2800,
-    allowedUnits: ['nmos', 'pmos'],
-    requiredUnits: ['nmos', 'pmos'],
-    family: 'cmos',
-    classroom: {
-      title: 'CMOS：互补 MOS 工艺',
-      analogy:
-        '跷跷板两端各坐一个人——pMOS 管管「拉高」、nMOS 管管「拉低」，栅极一给信号，永远只有一边落地。',
-      points: [
-        '互补对：上 pMOS（栅低导通）下 nMOS（栅高导通），输入并接两个栅极',
-        '输出轨到轨：高 = 强 1（拉到 VCC）、低 = 强 0（拉到 GND），推挽驱动',
-        '没有电阻：CMOS 门不靠上拉凑电平，又便宜又不耗静态电——这就是它取代 RTL/DTL/TTL 的原因',
-      ],
-    },
-    seedDoc: cmosInvSeed(),
-    guideSteps: [
-      '第一步：看——两个管子都放好了，但栅极悬空、输入 a 没接，输出 y 谁也驱动不了',
-      '第二步：把输入 a 接到 P1 的栅极（pMOS 栅低才导通）',
-      '第三步：把输入 a 也接到 N1 的栅极（nMOS 栅高才导通）——两个栅极并在一起',
-      '第四步：点「交付验收」：a=0 亮、a=1 灭，且输出是强驱动（CMOS 契约检查）',
-    ],
-    moduleAccess: 'none',
-    reference: cmosInvRef('ref-cmos-inv'),
-    unlockName: 'CMOS 反相器',
-    freqHz: 100_000,
-  }),
-
-  gateLevel({
-    id: 's1-cmos-nand',
-    title: 'CMOS 与非门',
-    brief:
-      '上 pMOS 并联、下 nMOS 串联的互补结构：任一输入为 0 → 输出被强拉到 1；两个输入都为 1 → 下管串联导通，输出强拉到 0。4 个管子拼出与非门，比 2 三极管 + 3 电阻省一半。',
-    teaching:
-      'CMOS 门怎么搭：把「拉高网络」和「拉低网络」做成互补——与非门要「全 1 才拉低」，所以下管（拉低）串联、上管（拉高）并联。记住口诀：**串联导通 = 与，并联导通 = 或**；与非 = 拉低网络串联。',
-    hint: '两个 pMOS 并联接 VCC→y（任一输入 0 都拉高）；两个 nMOS 串联接 y→GND（两输入都为 1 才拉低）。把 a 接到 P1 和 N1 的栅极，b 接到 P2 和 N2 的栅极。',
-    inputs: 2,
-    fn: (a: 0 | 1, b: 0 | 1) => (a === 1 && b === 1 ? 0 : 1),
-    optimalHalf: 8, // 2 pMOS + 2 nMOS = 4 × 2 半分（显示 4）
-    timingBudgetPs: 4200,
-    allowedUnits: ['nmos', 'pmos'],
-    requiredUnits: ['nmos', 'pmos'],
-    family: 'cmos',
-    classroom: {
-      title: 'CMOS 与非门：互补结构',
-      analogy:
-        '两道闸门串联（下管）才能把水放掉，两条旁路并联（上管）只要开一条就把水位顶上去——串联导通 = 与，并联导通 = 或。',
-      points: [
-        '拉低网络（nMOS）串联：两个输入都为 1 才导通 → 输出才被拉低 = 与非',
-        '拉高网络（pMOS）并联：任一输入为 0 就拉高 → 高电平是强 1',
-        '4 个管子无电阻：CMOS 与非门成本 8 半分，比 RTL 的 20 省一半还多',
-      ],
-    },
-    seedDoc: cmosNandSeed(),
-    guideSteps: [
-      '第一步：看——四个管子摆好了但全悬空，输出 y 谁也驱动不了',
-      '第二步：把输入 a 接到 P1 和 N1 的栅极；输入 b 接到 P2 和 N2 的栅极',
-      '第三步：核对结构——上管 pMOS 并联（都接 VCC→y），下管 nMOS 串联（y→N1→N2→GND）',
-      '第四步：点「交付验收」：全 1 才灭，其余全亮',
-    ],
-    moduleAccess: 'none',
-    reference: cmosNandRef('ref-cmos-nand'),
-    unlockName: 'CMOS 与非门',
-    freqHz: 100_000,
-  }),
 ];
 
-/** 全部关卡（阶段 1 逻辑门 + 阶段 2 时序单元 + 阶段 3 算术单元），顺序即解锁顺序 */
+/** 全部关卡（阶段 1 逻辑门 + 阶段 2 时序单元 + 阶段 3 算术单元），顺序即解锁顺序。
+ *  不含教学关——教学关在 TEACH_LEVELS，走独立「教学模式」（认识元件，不评星不锁链）。 */
 export const ALL_LEVELS: Level[] = [...STAGE1_LEVELS, ...STAGE2_LEVELS, ...STAGE3_LEVELS];
+
+/** 元件教学模式：认识各个元件（5 关：三极管/二极管/悬空与默认电平/CMOS 反相器/CMOS 与非门）。
+ *  与关卡链并列：不评星、不参与解锁链，点开引导搭建，交付标「已掌握」。 */
+export function findTeachLevel(id: string): Level | undefined {
+  return TEACH_LEVELS.find((level) => level.id === id);
+}
+
+export function isTeachLevel(id: string): boolean {
+  return TEACH_LEVELS.some((level) => level.id === id);
+}
 
 /** 关卡要求的端口（判定与内容自检共用；实现见 @lc/compiler 的 requiredPorts） */
 export { requiredPorts as requiredPortsOf } from '@lc/compiler';

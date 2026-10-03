@@ -51,23 +51,25 @@ describe('关卡内容与进度', () => {
 
   it('解锁顺序：第一关开放，之后必须前一关真的通关（失败尝试不解锁）', () => {
     let progress = emptyProgress();
-    // 第一个教学关（认识三极管）开放，之后必须前一关真的通关
-    expect(isLevelUnlocked(progress, 's1-npn')).toBe(true);
-    expect(isLevelUnlocked(progress, 's1-dio')).toBe(false);
+    // 教学关不在关卡链上（走独立教学模式）：关卡链第一关是「非门」，总是开放
+    expect(isLevelUnlocked(progress, 's1-not')).toBe(true);
+    expect(isLevelUnlocked(progress, 's1-and')).toBe(false);
+    // 教学关不解锁、不在链上
+    expect(isLevelUnlocked(progress, 's1-npn')).toBe(false);
 
     // 失败尝试只累加次数，不解锁
-    progress = recordAttempt(progress, 's1-npn');
-    expect(progress.attempts['s1-npn']).toBe(1);
-    expect(isCleared(progress, 's1-npn')).toBe(false);
-    expect(isLevelUnlocked(progress, 's1-dio')).toBe(false);
+    progress = recordAttempt(progress, 's1-not');
+    expect(progress.attempts['s1-not']).toBe(1);
+    expect(isCleared(progress, 's1-not')).toBe(false);
+    expect(isLevelUnlocked(progress, 's1-and')).toBe(false);
 
     // 通关后解锁下一关，并记住最好成绩
-    progress = recordClear(progress, 's1-npn', 100, 6);
-    expect(isCleared(progress, 's1-npn')).toBe(true);
-    expect(isLevelUnlocked(progress, 's1-dio')).toBe(true);
-    progress = recordClear(progress, 's1-npn', 60, 8);
-    expect(progress.cleared['s1-npn']?.score).toBe(100); // 只保留最好成绩
-    expect(progress.cleared['s1-npn']?.bestCostHalf).toBe(6); // 保留最低成本
+    progress = recordClear(progress, 's1-not', 100, 6);
+    expect(isCleared(progress, 's1-not')).toBe(true);
+    expect(isLevelUnlocked(progress, 's1-and')).toBe(true);
+    progress = recordClear(progress, 's1-not', 60, 8);
+    expect(progress.cleared['s1-not']?.score).toBe(100); // 只保留最好成绩
+    expect(progress.cleared['s1-not']?.bestCostHalf).toBe(6); // 保留最低成本
   });
 
   it('组件库跨关卡保留：切关卡时玩家的模块始终在画布上下文里', () => {
@@ -234,7 +236,7 @@ describe('关卡界面', () => {
     const budgetText = document.querySelector('.budget-text')?.textContent ?? '';
     expect(budgetText).toContain('款项');
     expect(budgetText).toContain('12');
-    expect(screen.getByText(new RegExp(`已通关 3/${LEVEL_TOTAL}`))).toBeTruthy();
+    expect(screen.getByText(new RegExp(`已通关 0/${LEVEL_TOTAL}`))).toBeTruthy(); // 教学关不在关卡链：主线从零开始
 
     // 关卡地图：非门是进行中（已开工可继续），与门是锁定的灰态（不能点）
     fireEvent.click(screen.getByText('← 返回地图'));
@@ -287,7 +289,7 @@ describe('关卡界面', () => {
     await waitFor(() => expect(screen.getByText(/委托单 · 与门/)).toBeTruthy(), {
       timeout: 5000,
     });
-    expect(screen.getByText(new RegExp(`已通关 4/${LEVEL_TOTAL}`))).toBeTruthy();
+    expect(screen.getByText(new RegExp(`已通关 1/${LEVEL_TOTAL}`))).toBeTruthy(); // 只有非门在关卡链上
     // 地图：非门已通关，与门是进行中（已解锁可接）
     fireEvent.click(screen.getByText('← 返回地图'));
     const notNode = screen.getByText('非门').closest('button');

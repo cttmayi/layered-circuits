@@ -3,8 +3,14 @@
 import { fireEvent, type RenderResult, render, screen } from '@testing-library/react';
 import { App } from '../src/App';
 
-/** 三个「元件入门」教学关的 id（插在正式关卡之前） */
-export const TEACH_LEVEL_IDS = ['s1-npn', 's1-dio', 's1-float'] as const;
+/** 教学关 id（独立教学模式：认识元件，不在关卡链上） */
+export const TEACH_LEVEL_IDS = [
+  's1-npn',
+  's1-dio',
+  's1-float',
+  's1-cmos-inv',
+  's1-cmos-nand',
+] as const;
 
 /** 教学关通关记录片段：预置存档时与其它字段合并用（放在 cleared 里） */
 export function teachCleared(): Record<
@@ -17,9 +23,8 @@ export function teachCleared(): Record<
 }
 
 /**
- * 预置三个教学关已通关：让「非门」等正式关卡在地图上解锁。
- * 绝大多数 UI 测试测的是正式关卡流程，不用逐关搭教学关；
- * 教学关本身的解锁链与判定单独测。
+ * 预置教学关「已掌握」：教学模式里显示已掌握标记（教学关不在关卡链上，
+ * 不参与解锁）。绝大多数 UI 测试测的是正式关卡流程，不用逐关搭教学关。
  */
 export function seedTeachCleared(): void {
   const key = 'lc-studio-progress-v1';

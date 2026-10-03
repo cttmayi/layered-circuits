@@ -40,8 +40,8 @@ export function LevelMap({
   onPick,
 }: LevelMapProps): React.JSX.Element {
   const stages = [...new Set(ALL_LEVELS.map((level) => level.stage))].sort((a, b) => a - b);
-  // 教学关不评星：星总数只统计普通关
-  const ratedLevels = ALL_LEVELS.filter((level) => !level.classroom);
+  // 教学关不评星、也不在关卡链上：星总数与「已交付」只统计关卡（ALL_LEVELS）
+  const ratedLevels = ALL_LEVELS;
   const earned = ALL_LEVELS.reduce(
     (sum, level) => sum + (progress.cleared[level.id]?.stars ?? 0),
     0,
@@ -51,7 +51,8 @@ export function LevelMap({
     <section className="panel level-map">
       <h3>任务墙</h3>
       <p className="panel-note">
-        已交付 {Object.keys(progress.cleared).length}/{ALL_LEVELS.length} · 星 {earned}/
+        已交付 {ALL_LEVELS.filter((l) => (progress.cleared[l.id]?.clearedAt ?? 0) > 0).length}/
+        {ALL_LEVELS.length} · 星 {earned}/
         {ratedLevels.length * MAX_STARS_PER_LEVEL} · 自主测绘 {reconCount(progress)}
       </p>
       {stages.map((stage) => {

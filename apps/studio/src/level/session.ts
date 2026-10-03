@@ -5,18 +5,21 @@
  * 组件库是全局的（GDD 铁律 2），切关卡时始终带上玩家已封装的所有模块。
  */
 
-import { ALL_LEVELS, findLevel, teachingModulesFor } from '@lc/content';
+import { ALL_LEVELS, findLevel, findTeachLevel, teachingModulesFor } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { notGateDemo, teachingSeedDoc } from '../editor/demos';
 import type { Doc, StoredModule, Sym } from '../editor/model';
 import { docForLevel, isLevelUnlocked, loadProgress, type Progress } from './progress';
 
-export type GameMode = 'level' | 'free';
+/** 工作台模式：关卡（任务墙）/ 自由搭建（沙盒）/ 教学（认识元件，独立入口） */
+export type GameMode = 'level' | 'free' | 'teach';
 
 export const FREE_STORAGE_KEY = 'lc-studio-doc-v1';
 
 export function storageKeyFor(mode: GameMode, levelId: string): string {
-  return mode === 'free' ? FREE_STORAGE_KEY : `lc-studio-level-${levelId}-v1`;
+  if (mode === 'free') return FREE_STORAGE_KEY;
+  if (mode === 'teach') return `lc-studio-teach-${levelId}-v1`;
+  return `lc-studio-level-${levelId}-v1`;
 }
 
 /** 默认进入「已解锁且还没通关」的第一关；全通了就停在最后一关优化成绩 */
@@ -80,13 +83,13 @@ function resolveMissingModules(doc: Doc, library: readonly StoredModule[]): Stor
   return extra.length === 0 ? [...library] : [...library, ...extra];
 }
 
-/** 取某一关/自由模式的画布：优先玩家自己的存档，否则关卡初始画布 */
+/** 取某一关/自由模式/教学模式的画布：优先玩家自己的存档，否则初始画布 */
 export function docFor(mode: GameMode, levelId: string, library: StoredModule[]): Doc {
   const stored = readStoredDoc(storageKeyFor(mode, levelId));
   if (mode === 'free') {
     return stored ? { ...stored, library } : { ...notGateDemo(), library };
   }
-  const level = findLevel(levelId);
+  const level = mode === 'teach' ? findTeachLevel(levelId) : findLevel(levelId);
   if (!level) return { ...notGateDemo(), library };
   if (stored?.syms.some((sym) => sym.kind === 'input' || sym.kind === 'output')) {
     // 入门关（moduleAccess 'none'）用不到任何模块：即使玩家画过这关、即使存档里
@@ -129,9 +132,10 @@ export function initialSession(): Session {
   };
 }
 
-/** 当前关卡对象（自由模式为 null） */
+/** 当前关卡对象（自由模式为 null；教学模式返回教学关） */
 export function levelOf(mode: GameMode, levelId: string): Level | null {
   if (mode === 'free') return null;
+  if (mode === 'teach') return findTeachLevel(levelId) ?? null;
   return findLevel(levelId) ?? null;
 }
 

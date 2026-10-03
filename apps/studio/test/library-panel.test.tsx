@@ -269,7 +269,7 @@ describe('任务墙与星级（P1）', () => {
     expect(screen.getByText('★★★')).toBeTruthy();
     // 1 单 + 1 元 → 还是学徒，提示升到维修铺师傅还差什么
     expect(screen.getByText(/学徒/)).toBeTruthy();
-    expect(screen.getByText(/已交付 4\/32 · 星 3\/81/)).toBeTruthy(); // 教学关不评星：星上限 = 27 关 × 3
+    expect(screen.getByText(/已交付 1\/27 · 星 3\/81/)).toBeTruthy(); // 教学关不在关卡链：主线 27 关，星上限 = 27 关 × 3
   });
 });
 

@@ -8,7 +8,7 @@
 import { computeCosts, judgeDesign, wrapModule } from '@lc/compiler';
 import { costHalfOf, DesignBuilder, InMemoryModuleLibrary } from '@lc/schema';
 import { describe, expect, it } from 'vitest';
-import { findLevel, nextLevelId, requiredPortsOf, STAGE1_LEVELS } from '../src/index';
+import { findLevel, findTeachLevel, nextLevelId, requiredPortsOf, STAGE1_LEVELS, TEACH_LEVELS } from '../src/index';
 
 const emptyLibrary = new InMemoryModuleLibrary();
 
@@ -17,18 +17,20 @@ describe('阶段 1 关卡内容', () => {
     const ids = STAGE1_LEVELS.map((level) => level.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(STAGE1_LEVELS.every((level) => level.stage === 1)).toBe(true);
-    // 三个「元件入门」教学关打头，然后是正式逻辑门
-    expect(STAGE1_LEVELS[0]?.id).toBe('s1-npn');
-    expect(STAGE1_LEVELS[1]?.id).toBe('s1-dio');
-    expect(STAGE1_LEVELS[2]?.id).toBe('s1-float');
-    expect(nextLevelId('s1-npn')).toBe('s1-dio');
-    expect(nextLevelId('s1-dio')).toBe('s1-float');
-    expect(nextLevelId('s1-float')).toBe('s1-not');
+    // 主线从「非门」开始（教学关已拆入 TEACH_LEVELS 教学模式，不占关卡链）
+    expect(STAGE1_LEVELS[0]?.id).toBe('s1-not');
     expect(nextLevelId('s1-not')).toBe('s1-and');
     // 阶段 1 的最后一关之后进入阶段 2（时序单元），整条线是一个连续的教学顺序
-    expect(nextLevelId('s1-xnor')).toBe('s1-cmos-inv');
-    expect(nextLevelId('s1-cmos-inv')).toBe('s1-cmos-nand');
-    expect(nextLevelId('s1-cmos-nand')).toBe('s2-sr-latch');
+    expect(nextLevelId('s1-xnor')).toBe('s2-sr-latch');
+    // 教学关与关卡链并列：独立教学模式，不进关卡顺序
+    expect(TEACH_LEVELS.map((l) => l.id)).toEqual([
+      's1-npn',
+      's1-dio',
+      's1-float',
+      's1-cmos-inv',
+      's1-cmos-nand',
+    ]);
+    expect(nextLevelId('s1-npn')).toBeNull(); // 教学关不在关卡链上
     // 主线最后一关之后是挑战关（成本挑战 / 高频挑战），挑战关之后才是终点
     expect(nextLevelId('s2-dff')).toBe('s2-dff-cost');
     // 阶段 2 之后进入阶段 3（算术单元），压轴是简易计算器链
@@ -96,8 +98,8 @@ describe('阶段 1 关卡内容', () => {
   });
 
   it('教学关必用元件：直连导线（成本 0）会因缺元件被打回', () => {
-    for (const id of ['s1-npn', 's1-dio', 's1-float'] as const) {
-      const level = findLevel(id)!;
+    for (const id of ['s1-npn', 's1-dio', 's1-float', 's1-cmos-inv', 's1-cmos-nand'] as const) {
+      const level = findTeachLevel(id)!;
       expect(level.requiredUnits.length, `${id} 应有必用元件`).toBeGreaterThan(0);
       // 一根导线直连全部输入→输出：功能上可能对上真值表，但没有元件 → 必须打回
       const ins = Object.keys(level.vectors[0].inputs);
@@ -111,7 +113,7 @@ describe('阶段 1 关卡内容', () => {
   });
 
   it('教学关·认识三极管是反相开关：真值表 ¬a，无上拉（悬空）打回', () => {
-    const level = findLevel('s1-npn')!;
+    const level = findTeachLevel('s1-npn')!;
     // 反相：门窗关（0）灯亮（1）、门窗开（1）灯灭（0）
     expect(level.vectors.map((v) => [v.inputs.a, v.expect?.y])).toEqual([
       [0, 1],
@@ -132,7 +134,7 @@ describe('阶段 1 关卡内容', () => {
   });
 
   it('教学关·认识二极管是防倒灌：直接并联冲突打回，二极管或门满分', () => {
-    const level = findLevel('s1-dio')!;
+    const level = findTeachLevel('s1-dio')!;
     // 或门真值表：任一电池有电设备就有电
     expect(level.vectors.map((v) => [v.inputs.a, v.inputs.b, v.expect?.y])).toEqual([
       [0, 0, 0],

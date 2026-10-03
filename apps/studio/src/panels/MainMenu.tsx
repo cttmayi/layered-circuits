@@ -1,11 +1,11 @@
 /**
  * 主菜单（开场）：启动先进这里，而不是直接掉进工作台。
  *
- * 三条路：继续上次（有进行中的单子）/ 关卡模式（进关卡地图）/ 自由搭建（直接进沙盒）。
- * 模式在开场选定后不再在工作台里切换 —— 换模式必须回到这里。
+ * 四条路：继续上次（有进行中的单子）/ 关卡模式（进关卡地图）/ 教学模式（认识元件图鉴）/
+ * 自由搭建（直接进沙盒）。模式在开场选定后不再在工作台里切换 —— 换模式必须回到这里。
  */
 
-import { ALL_LEVELS } from '@lc/content';
+import { ALL_LEVELS, TEACH_LEVELS } from '@lc/content';
 import { FAMILY_CONTRACTS } from '@lc/schema';
 import type { Progress } from '../level/progress';
 import { clearedCount, rankOf, reconCount, sideJobCount } from '../level/progress';
@@ -17,6 +17,7 @@ export interface MainMenuProps {
   resumeLabel: string;
   onContinue: () => void;
   onLevelMode: () => void;
+  onTeachMode: () => void;
   onFreeMode: () => void;
   /** 重头开始：清空存档回主菜单 */
   onNewGame: () => void;
@@ -28,6 +29,7 @@ export function MainMenu({
   resumeLabel,
   onContinue,
   onLevelMode,
+  onTeachMode,
   onFreeMode,
   onNewGame,
 }: MainMenuProps): React.JSX.Element {
@@ -51,6 +53,12 @@ export function MainMenu({
             关卡模式
             <span className="menu-btn-note">
               {ALL_LEVELS.length} 关委托，逐关解锁 · 元件成本与素材受限
+            </span>
+          </button>
+          <button type="button" className="menu-btn" onClick={onTeachMode}>
+            教学模式
+            <span className="menu-btn-note">
+              认识 {TEACH_LEVELS.length} 种元件（三极管/二极管/MOS…），引导搭建不评星
             </span>
           </button>
           <button type="button" className="menu-btn" onClick={onFreeMode}>

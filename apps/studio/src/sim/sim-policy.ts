@@ -15,7 +15,7 @@ import type { GameMode } from '../level/session';
  * 沙盒未知是否含时序电路，按「可能有」处理（保住玩家搭的锁存器跨点击状态）。
  */
 export function shouldReuseSimState(level: Level | null, gameMode: GameMode): boolean {
-  if (gameMode !== 'level') return true;
+  if (gameMode === 'free') return true;
   if (!level) return true;
   return level.mode === 'timing' || level.unlock?.kind === 'seq';
 }

@@ -16,7 +16,7 @@ import {
   levelViewOf,
 } from '@lc/schema';
 import { describe, expect, it } from 'vitest';
-import { ALL_LEVELS } from '../src/levels.js';
+import { ALL_LEVELS, findTeachLevel, TEACH_LEVELS } from '../src/levels.js';
 import type { cmosInvRef } from '../src/references.js';
 
 const lib = new InMemoryModuleLibrary();
@@ -36,7 +36,7 @@ function rtlInverter(): ReturnType<typeof cmosInvRef> {
 describe('按契约参考解（familyRefs）', () => {
   it('每个 familyRefs 条目：参考解按契约规格判定过关且满分', () => {
     let count = 0;
-    for (const level of ALL_LEVELS) {
+    for (const level of [...ALL_LEVELS, ...TEACH_LEVELS]) {
       if (!level.familyRefs) continue;
       for (const family of FAMILIES) {
         const ref = level.familyRefs[family];
@@ -78,7 +78,7 @@ describe('按契约参考解（familyRefs）', () => {
   });
 
   it('familySpecOf：教学关无变体契约固定原规格，有变体契约（cmos）按契约换内容', () => {
-    const teaching = ALL_LEVELS.find((l) => l.id === 's1-npn')!;
+    const teaching = findTeachLevel('s1-npn')!;
     // 无变体的契约（rtl/dtl/ttl）：固定原规格
     for (const family of FAMILIES.filter((f) => f !== 'cmos')) {
       const spec = familySpecOf(teaching, family);
@@ -105,7 +105,7 @@ describe('按契约参考解（familyRefs）', () => {
       's1-float': 'CMOS',
     } as const;
     for (const [id, expectText] of Object.entries(mos)) {
-      const level = ALL_LEVELS.find((l) => l.id === id)!;
+      const level = findTeachLevel(id)!;
       const view = levelViewOf(level, 'cmos');
       expect(view.title).toContain(expectText);
       expect(view.id).toBe(id);

@@ -3,6 +3,8 @@ import {
   ALL_LEVELS,
   elementEdgeOf,
   findLevel,
+  findTeachLevel,
+  isTeachLevel,
   teachingModulesFor,
   teachingSolutionOf,
 } from '@lc/content';
@@ -79,6 +81,7 @@ import { SettlementPanel } from './panels/SettlementPanel';
 import { TruthTable } from './panels/TruthTable';
 import { WaveformPanel } from './panels/WaveformPanel';
 import { WorkshopPanel } from './panels/WorkshopPanel';
+import { TeachPanel } from './panels/TeachPanel';
 import { WorldMap } from './panels/WorldMap';
 import type { SimSnapshot, StudioResponse } from './sim/protocol';
 import { createRunner } from './sim/runner';
@@ -131,8 +134,8 @@ export function App(): React.JSX.Element {
   }));
   const [gameMode, setGameMode] = useState<GameMode>(() => session.mode);
   const [levelId, setLevelId] = useState<string>(() => session.levelId);
-  /** 画面：主菜单 / 关卡地图 / 工作台 —— 模式只在主菜单里选，进关后不能改 */
-  const [screen, setScreen] = useState<'menu' | 'map' | 'bench'>('menu');
+  /** 画面：主菜单 / 关卡地图 / 教学模式列表 / 工作台 —— 模式只在主菜单里选，进关后不能改 */
+  const [screen, setScreen] = useState<'menu' | 'map' | 'teach' | 'bench'>('menu');
   const [pickingFamily, setPickingFamily] = useState(false);
   const [judgeResult, setJudgeResult] = useState<JudgeResult | null>(null);
   const [judging, setJudging] = useState(false);
@@ -909,18 +912,28 @@ export function App(): React.JSX.Element {
     lastGateDocRef.current = null;
   };
 
-  /** 进入关卡工作台：直接开工（不再弹「新委托」选择），验收通过自动打钩发奖励 */
+  /** 进入关卡/教学关工作台：教学关走「教学模式」（独立入口，不评星不锁链）；
+   *  进教学关先讲课：弹「元件课堂」概念卡 */
   const enterLevel = (nextLevelId: string): void => {
-    setGameMode('level');
+    const teach = isTeachLevel(nextLevelId);
+    const mode: GameMode = teach ? 'teach' : 'level';
+    setGameMode(mode);
     setLevelId(nextLevelId);
-    setDoc(docFor('level', nextLevelId, progress.library));
+    setDoc(docFor(mode, nextLevelId, progress.library));
     clearTransient();
     setScreen('bench');
-    // 进关即开工并持久化：刷新直接回工作台；支线等委托选项在左侧图纸卡上随时可选
-    setProgress((prev) => (isNewJob(prev, nextLevelId) ? setStarted(prev, nextLevelId) : prev));
-    // 教学关先讲课：进工作台前弹「元件课堂」概念卡
-    const levelObj = findLevel(nextLevelId);
+    if (!teach) {
+      // 进关即开工并持久化：刷新直接回工作台；支线等委托选项在左侧图纸卡上随时可选
+      setProgress((prev) => (isNewJob(prev, nextLevelId) ? setStarted(prev, nextLevelId) : prev));
+    }
+    const levelObj = teach ? findTeachLevel(nextLevelId) : findLevel(nextLevelId);
     setClassroomOpen(Boolean(levelObj?.classroom));
+  };
+
+  /** 进入教学模式（元件图鉴列表页） */
+  const enterTeachMode = (): void => {
+    setGameMode('teach');
+    setScreen('teach');
   };
 
   /** 进入自由沙盒 */
@@ -934,8 +947,8 @@ export function App(): React.JSX.Element {
 
   /** 重载当前关：丢弃草图回到本关初始画布（组件库保留），不改变所在关 */
   const reloadLevel = (): void => {
-    if (gameMode !== 'level') return;
-    setDoc(docFor('level', levelId, progress.library));
+    if (gameMode === 'free') return;
+    setDoc(docFor(gameMode, levelId, progress.library));
     clearTransient();
     setToast('已重载本关初始画布');
   };
@@ -944,6 +957,8 @@ export function App(): React.JSX.Element {
   const goToMenu = (): void => setScreen('menu');
   /** 回关卡地图 */
   const goToMap = (): void => setScreen('map');
+  /** 回教学模式（元件图鉴） */
+  const goToTeach = (): void => setScreen('teach');
 
   /** 新游戏第一步：确认后进入「逻辑族契约选择」（决策 2：新游戏固定契约） */
   const startNewGame = (): void => {
@@ -1055,7 +1070,8 @@ export function App(): React.JSX.Element {
       ),
     );
     const index = ALL_LEVELS.findIndex((l) => l.id === currentLevel.id);
-    const next = ALL_LEVELS[index + 1];
+    // 教学关不在关卡链上：没有「下一关」（index = -1 时不能取到 ALL_LEVELS[0]）
+    const next = index >= 0 ? ALL_LEVELS[index + 1] : undefined;
     // 过场：芯片落进组件库 → 结算页（客户验收报告 + 钱 + 评级）
     setChipDrop(name);
     window.setTimeout(() => setChipDrop(null), 1400);
@@ -1151,6 +1167,7 @@ export function App(): React.JSX.Element {
         }
         onContinue={() => enterLevel(session.levelId)}
         onLevelMode={goToMap}
+        onTeachMode={enterTeachMode}
         onFreeMode={enterFree}
         onNewGame={startNewGame}
       />
@@ -1161,6 +1178,19 @@ export function App(): React.JSX.Element {
   if (screen === 'map') {
     return (
       <WorldMap
+        progress={progress}
+        family={progress.family}
+        currentLevelId={levelId}
+        onPick={enterLevel}
+        onBack={goToMenu}
+      />
+    );
+  }
+
+  // ---- 教学模式（元件图鉴：认识各个元件）----
+  if (screen === 'teach') {
+    return (
+      <TeachPanel
         progress={progress}
         family={progress.family}
         currentLevelId={levelId}
@@ -1185,6 +1215,15 @@ export function App(): React.JSX.Element {
             title="回到关卡地图（草图已自动保存）"
           >
             ← 返回地图
+          </button>
+        ) : gameMode === 'teach' ? (
+          <button
+            type="button"
+            className="back-btn"
+            onClick={goToTeach}
+            title="回到教学模式（草图已自动保存）"
+          >
+            ← 返回教学模式
           </button>
         ) : (
           <button
@@ -1228,7 +1267,7 @@ export function App(): React.JSX.Element {
             </>
           )}
         </div>
-        {gameMode === 'level' && (
+        {gameMode !== 'free' && (
           <div className="group">
             <button
               type="button"
@@ -1283,17 +1322,17 @@ export function App(): React.JSX.Element {
           </button>
         </div>
         <div className="group">
-          {gameMode === 'level' ? (
+          {gameMode === 'free' ? (
+            <button type="button" onClick={() => loadDoc(notGateDemo())}>
+              载入非门示例
+            </button>
+          ) : (
             <button
               type="button"
               onClick={reloadLevel}
               title="丢弃当前草图，回到本关初始画布（组件库保留）"
             >
               重载本关
-            </button>
-          ) : (
-            <button type="button" onClick={() => loadDoc(notGateDemo())}>
-              载入非门示例
             </button>
           )}
           <button type="button" onClick={() => loadDoc({ ...emptyDoc(), library: doc.library })}>
@@ -1475,11 +1514,16 @@ export function App(): React.JSX.Element {
                 previousScore={levelRecord?.score ?? null}
                 walletHalf={progress.walletHalf}
                 nextLevelTitle={
-                  ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]?.title
+                  ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) >= 0
+                    ? ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]
+                        ?.title
+                    : undefined // 教学关：没有下一关
                 }
                 onNextLevel={() => {
                   const next =
-                    ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1];
+                    ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) >= 0
+                      ? ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]
+                      : undefined;
                   if (next) enterLevel(next.id);
                 }}
                 onDismiss={() => setSettlement(null)}

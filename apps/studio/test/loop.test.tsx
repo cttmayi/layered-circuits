@@ -141,7 +141,7 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
 
     // ---- 5. 组件库与解锁状态反馈到界面 ----
     await waitFor(
-      () => expect(screen.getByText(new RegExp(`已通关 4/${LEVEL_TOTAL}`))).toBeTruthy(),
+      () => expect(screen.getByText(new RegExp(`已通关 1/${LEVEL_TOTAL}`))).toBeTruthy(), // 教学关不在关卡链：只有非门
       { timeout: 5000 },
     );
     // 封装出的【非门】出现在元件库「我的模块」里，成本 6，可以直接拖到下一关复用
