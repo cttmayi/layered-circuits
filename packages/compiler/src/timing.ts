@@ -270,7 +270,14 @@ export function analyzeTiming(net: FlatNet, options: TimingAnalysisOptions = {})
     // 预热向量：像 SR 锁存器这种「冷启动即处于非法态」的电路，直接施加保持向量
     // 会因对称延迟产生竞争而不收敛；必须先进入稳定态再比较历史。
     // 因此对每个能稳定的向量都做一遍探测，任意一次发现历史依赖即可判定。
-    const probeBudget = pairs * 4;
+    // 探测预算按电路规模收缩：每个探测都是数次冷启动全仿真（数千元件 ~0.5s/次），
+    // 大电路跑满 48 次会到分钟级；探测找不到记忆就快速放弃——组合关卡只需要
+    // 「有没有记忆」这一个判断，找不到的代价只是少一条时序警示。
+    // 超过 6000 元件（如计算器整机）直接预算 0：探测向量（全高/交替）会让弱信号
+    // 触发器链振荡，单次探测耗尽 120 万事件预算 ~12s，而大电路基本都是时序关，
+    // 探测结果不参与判定，纯浪费。
+    const probeBudget =
+      net.elemCount > 6_000 ? 0 : Math.min(pairs * 4, Math.max(1, Math.ceil(6_000 / net.elemCount)));
     let probesDone = 0;
     outer: for (const prime of vectors) {
       if (probesDone >= probeBudget) break;

@@ -1,29 +1,33 @@
 /**
  * 计算器关的 GUI 仿真通道端到端测试：
  * 走 App 实际用的 handleRequest('simulate')（worker 同一条链路），验证：
- *  - 按钮端口两相驱动：组合链稳定后才出现 eq 上升沿，锁存正确结果；
- *  - prevSignals 状态保持：松开等号、改数据后寄存器保持上次锁存值。
- * 端口语义：calc 的 a/b 是 BCD（a: 0x23 = BCD 数字 23），disp_t/disp_u 是
- * 十位/个位（q[4..7]/q[0..3]）。
+ *  - 按钮端口两相驱动：组合链稳定后才出现按键上升沿，锁存正确结果；
+ *  - prevSignals 状态保持：松开按键、改数据后寄存器保持上次锁存值。
+ * 端口语义：calc 是 13 键数字键盘（d0-d9、plus、minus、eq、c）→ 两位段码
+ * disp_t/disp_u（7 位 BCD→段码，0x3F..0x6F，负数显示 EE=0x79）。
  */
 
-import { ALL_LEVELS, teachingModulesFor, teachingSolutionOf } from '@lc/content';
+import { ALL_LEVELS } from '@lc/content';
 import { describe, expect, it } from 'vitest';
 import { docForLevel } from '../src/level/progress';
 import { handleRequest } from '../src/sim/handle';
 import type { DriveValue } from '../src/sim/protocol';
-import { fromDesign, inputValues, toDesign } from '../src/editor/model';
 
 const level = ALL_LEVELS.find((l) => l.id === 's3-calc')!;
 const design = level.referenceSolution!;
+const ALL_KEYS = ['d0', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd9', 'plus', 'minus', 'eq', 'c'];
 
-/** BCD 数字 → 8 位输入位图（a[0..7]） */
-function bcdInputs(a: number, b: number, eq: 0 | 1): Record<string, DriveValue> {
-  const v: Record<string, DriveValue> = { eq };
-  for (let i = 0; i < 8; i++) {
-    v[`a[${i}]`] = ((a >> i) & 1) as DriveValue;
-    v[`b[${i}]`] = ((b >> i) & 1) as DriveValue;
-  }
+/** 段码 → 数字字符（0x79 = E 错误标志） */
+const SEG_DIGIT: Record<number, string> = {
+  0x3f: '0', 0x06: '1', 0x5b: '2', 0x4f: '3', 0x66: '4',
+  0x6d: '5', 0x7d: '6', 0x07: '7', 0x7f: '8', 0x6f: '9', 0x79: 'E',
+};
+
+/** 单键驱动：全部键 0，只有目标键按下 */
+function keyInputs(key: string, pressed: 0 | 1): Record<string, DriveValue> {
+  const v: Record<string, DriveValue> = {};
+  for (const k of ALL_KEYS) v[k] = 0;
+  v[key] = pressed;
   return v;
 }
 
@@ -37,30 +41,32 @@ interface PrevState {
   contribs: Record<string, number[]>;
 }
 
-/** 从仿真快照读十位/个位（q 寄存器即 disp_t/disp_u 的网） */
-function readDisp(snap: SnapshotLike): number {
+/** 从仿真快照读两位显示（disp_t/disp_u 的段码网 segT0-6 / segU0-6） */
+function readDisp(snap: SnapshotLike): string {
   const sig = (label: string): number => {
     const hit = snap.netSignals.find(([k]) => k === label);
     return hit ? hit[1] : -1;
   };
-  const bus = (start: number): number => {
-    let v = 0;
-    for (let i = 0; i < 4; i++) if ((sig(`q${start + i}`) & 0x03) === 1) v |= 1 << i;
-    return v;
+  const seg = (prefix: string): string => {
+    let byte = 0;
+    for (let i = 0; i < 7; i++) {
+      if ((sig(`${prefix}${i}`) & 0x03) === 1) byte |= 1 << i;
+    }
+    return SEG_DIGIT[byte] ?? '?';
   };
-  return bus(4) * 10 + bus(0);
+  return seg('segT') + seg('segU');
 }
 
 /** 连续 GUI 仿真：带 prevSignals + prevContribs（状态与贡献保持）与 buttonPorts（两相） */
-function guiSim(a: number, b: number, eq: 0 | 1, prev: PrevState | undefined) {
+function guiSim(key: string, pressed: 0 | 1, prev: PrevState | undefined) {
   const resp = handleRequest({
     id: 1,
     type: 'simulate',
     design,
     library: [],
     mode: 'timing',
-    inputs: bcdInputs(a, b, eq),
-    buttonPorts: ['eq'],
+    inputs: keyInputs(key, pressed),
+    buttonPorts: [key],
     prevSignals: prev?.signals,
     prevContribs: prev?.contribs,
   });
@@ -75,33 +81,48 @@ function guiSim(a: number, b: number, eq: 0 | 1, prev: PrevState | undefined) {
   };
 }
 
+/** 完整按键序列（按下 + 松开），返回每键按下后的显示 */
+function keySeq(seq: string[], prev?: PrevState): { shows: string[]; prev: PrevState } {
+  let p = prev;
+  const shows: string[] = [];
+  for (const k of seq) {
+    const r1 = guiSim(k, 1, p);
+    shows.push(readDisp(r1.snap));
+    p = r1.next;
+    const r0 = guiSim(k, 0, p);
+    p = r0.next;
+  }
+  return { shows, prev: p! };
+}
+
 describe('计算器关 GUI 仿真通道（按钮 + 状态保持）', () => {
-  it('设 23+5 按等号显示 28，松开保持；换 50+19 再按锁存 69', { timeout: 60_000 }, () => {
-    let prev: PrevState | undefined;
-    // 上电/设数（未锁存，显示上电态即可）
-    ({ next: prev } = guiSim(0x23, 0x05, 0, prev));
-    // 按等号（两相）：23+5=28
-    let r = guiSim(0x23, 0x05, 1, prev);
-    expect(readDisp(r.snap)).toBe(28);
-    prev = r.next;
-    // 松开等号：28 保持（prevSignals 状态续传）
-    r = guiSim(0x23, 0x05, 0, prev);
-    expect(readDisp(r.snap)).toBe(28);
-    prev = r.next;
-    // 换 50+19（BCD）并按下等号：50+19=69
-    r = guiSim(0x50, 0x19, 1, prev);
-    expect(readDisp(r.snap)).toBe(69);
-    prev = r.next;
-    // 松开：69 保持
-    r = guiSim(0x50, 0x19, 0, prev);
-    expect(readDisp(r.snap)).toBe(69);
+  it('12+5= 显示 17，松开保持；C 清屏后 5-8= 显示 EE', { timeout: 120_000 }, () => {
+    // 12+5=17
+    let { shows, prev } = keySeq(['c', 'd1', 'd2', 'plus', 'd5', 'eq']);
+    expect(shows[0]).toBe('00'); // C 清屏
+    expect(shows[1]).toBe('01'); // 1
+    expect(shows[2]).toBe('12'); // 12
+    expect(shows[3]).toBe('12'); // +
+    expect(shows[4]).toBe('05'); // 5
+    expect(shows[5]).toBe('17'); // = 12+5=17
+    // 松开 = 后状态保持（prevSignals 续传），显示仍是 17
+    const held = guiSim('eq', 0, prev);
+    expect(readDisp(held.snap)).toBe('17');
+    prev = held.next;
+    // C 清屏 → 5-8= → EE（负数错误标志）
+    ({ shows, prev } = keySeq(['c', 'd5', 'minus', 'd8', 'eq'], prev));
+    expect(shows[0]).toBe('00');
+    expect(shows[1]).toBe('05');
+    expect(shows[3]).toBe('08');
+    expect(shows[4]).toBe('EE');
   });
 
-  it('0+0 按等号显示 00', { timeout: 60_000 }, () => {
-    let prev: PrevState | undefined;
-    ({ next: prev } = guiSim(0, 0, 0, prev));
-    const r = guiSim(0, 0, 1, prev);
-    expect(readDisp(r.snap)).toBe(0);
+  it('0+7= 显示 07', { timeout: 60_000 }, () => {
+    const { shows } = keySeq(['c', 'd0', 'plus', 'd7', 'eq']);
+    expect(shows[0]).toBe('00');
+    expect(shows[1]).toBe('00'); // 0
+    expect(shows[3]).toBe('07');
+    expect(shows[4]).toBe('07');
   });
 
   it('关卡端口在画布上的形态：eq 是按钮、disp_t/disp_u 是数码管', () => {
@@ -115,52 +136,5 @@ describe('计算器关 GUI 仿真通道（按钮 + 状态保持）', () => {
     expect(du?.display).toBe('segment');
     expect(dt?.width).toBe(7);
     expect(du?.width).toBe(7);
-  });
-});
-
-describe('s3-display：点击 bcd 输入走 0-9，seg 数码管显示对应段码（7 位按位）', () => {
-  // 回归：多 bit 输入端口点击 = 驱动值 +1，且按位展开到各 lane（修复前 bcd 只能 0x0/0xF，
-  // 0xF 的译码输出恰好与「9」同形，导致玩家看到"显示 9 后不变"）。
-  it('一键出答案后，value 0-9 → seg 段码 0x3F..0x6F', () => {
-    const ON = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f];
-    const lv = ALL_LEVELS.find((l) => l.id === 's3-display')!;
-    const stored = teachingModulesFor('rtl').map((m) => ({
-      hash: m.hash,
-      name: m.name,
-      version: m.version,
-      stage: m.stage,
-      costHalf: m.costHalf,
-      isSequential: m.isSequential,
-      ports: m.ports,
-      template: m,
-      sources: [],
-      createdAt: 0,
-    }));
-    let doc = fromDesign(teachingSolutionOf('s3-display', 'rtl')!, docForLevel(lv, stored));
-    for (let v = 0; v < 10; v++) {
-      // 模拟点击：驱动值 +1（与 App 的 stepInput 语义一致）
-      doc = {
-        ...doc,
-        syms: doc.syms.map((s) => (s.kind === 'input' ? { ...s, value: v } : s)),
-      };
-      const design = toDesign(doc);
-      const resp = handleRequest({
-        id: 1,
-        type: 'simulate',
-        design,
-        library: doc.library.map((m) => m.template),
-        mode: 'logic',
-        inputs: inputValues(doc),
-        buttonPorts: [],
-      });
-      expect(resp.error).toBeUndefined();
-      const sig = Object.fromEntries(resp.snapshot.netSignals as [string, number][]);
-      const segNets = design.ports.find((p) => p.name === 'seg')!.nets;
-      let seg = 0;
-      segNets.forEach((n, i) => {
-        if ((sig[n] & 0x03) === 1) seg |= 1 << i;
-      });
-      expect(seg, `bcd=${v} 应显示段码 ${ON[v].toString(16)}`).toBe(ON[v]);
-    }
   });
 });

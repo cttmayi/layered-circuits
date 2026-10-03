@@ -12,7 +12,7 @@ import { ALL_LEVELS } from '../src/levels.js';
 import { elementEdgeOf, TEACHING_MODULES, teachingSolutionOf } from '../src/teachings.js';
 
 const lib = new InMemoryModuleLibrary();
-const NEW_IDS = ['s3-bcd2bin', 's3-bin2bcd', 's3-reg-8', 's3-calc'];
+const NEW_IDS = ['s3-bcd2bin', 's3-bin2bcd', 's3-reg-8', 's3-encoder', 's3-digit-entry', 's3-calc'];
 
 describe('计算器链新关', () => {
   for (const id of NEW_IDS) {

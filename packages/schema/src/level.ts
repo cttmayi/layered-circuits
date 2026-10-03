@@ -124,6 +124,9 @@ export const LevelSchema = z.object({
   hint: z.string().default(''),
   /** 关卡端口规格（含位宽，第三章总线；缺省按向量推导、全部 1 位） */
   ports: z.array(PortSpecSchema).default([]),
+  /** 输入端口网格列数：>1 时 docForLevel 把输入按 ports 数组顺序行优先排成键盘式网格
+   *  （缺省单列竖排）。多位按键关（编码器/计算器）用。 */
+  inputGridCols: z.number().int().min(2).max(8).optional(),
   mode: z.enum(['logic', 'timing']).default('logic'),
   /** 本关的逻辑族契约（RTL/DTL/TTL/CMOS）：判定按它的输出强度规范硬约束（默认 rtl = 高弱 1 合法） */
   family: z.enum(['rtl', 'dtl', 'ttl', 'cmos']).default('rtl'),

@@ -16,6 +16,7 @@
 
 import { type Design, DesignBuilder } from '@lc/schema';
 import { fullAdderInto, nandInto, seg7Into, xorInto } from './references-ari.js';
+import { digitEntryInto, encoderInto } from './references-keypad.js';
 
 /**
  * 主从 D 触发器（无 rail 拼装块）：clk 上升沿把 d 搬到 q。
@@ -264,65 +265,291 @@ export function bin2bcdRef(id = 'ref-bin2bcd'): Design {
 }
 
 /**
- * 简易计算器参考解（高成本版）：eq 上升沿把 a+b（BCD）锁存，经 2×【七段译码器】
- * 点亮十位/个位数码管（disp_t/disp_u 各 7 位段码）。
+ * 简易计算器参考解（真实键盘版）：13 键（d0-d9、+、-、=、C）+ 两位数码管。
+ *
+ * 立即执行链式模型（运算符按下即结算）：
+ *  - 编码器 → code[3:0]、any（任一键按下）；
+ *  - 数字输入寄存器 ER：wr=any（数字键时钟）、fresh=¬E_in（换新载入）；
+ *  - 运算控制（calcControlInto）：op_plus/op_minus/P/J/E_in 五个标志 + 累加器选择；
+ *  - 累加器 ACC：op/= 边沿锁存 ALU 结果（a_src = (P∨J)?ACC:0，首运算 A=0+ER=ER）；
+ *  - ALU：a_src/ER → bcd2bin ×2 → 加减（mode=op_minus，减法 = 补码+进位 1）→ bin2bcd；
+ *  - 显示（calcDisplayInto）：E_in?ER:ACC → 2×七段译码器 → 负数（借位∧减法）显示 EE。
+ */
+
+/** 多输入或门（拼装块）：y = a0∨a1∨…（先逐项反相，再逐级 NAND 折叠，每步反相累积项） */
+export function orNInto(b: DesignBuilder, p: string, terms: string[], y: string): void {
+  if (terms.length === 0) return;
+  const invs = terms.map((_, i) => `${p}i${i}`);
+  terms.forEach((t, i) => nandInto(b, `${p}ni${i}`, t, t, invs[i] as string));
+  let acc = invs[0] as string;
+  for (let i = 1; i < invs.length; i++) {
+    if (i > 1) {
+      // 累积项反相：NAND(OR_{i-1}, OR_{i-1}) = ¬OR_{i-1}，再 NAND(¬OR_{i-1}, ¬t_i) = OR_{i-1}∨t_i
+      const inv = `${p}w${i}`;
+      nandInto(b, `${p}w${i}`, acc, acc, inv);
+      acc = inv;
+    }
+    const next = i === invs.length - 1 ? y : `${p}o${i}`;
+    nandInto(b, `${p}o${i}`, acc, invs[i] as string, next);
+    acc = next;
+  }
+}
+
+export interface CalcControlPins {
+  aSrc: string[];
+  accD: string[];
+  accClk: string;
+  erFresh: string;
+  opMinus: string;
+  ein: string;
+  /** P∨J：有未结算的前值（a_src 选择 + 减法模式生效条件） */
+  pending: string;
+}
+
+/**
+ * 运算控制（拼装块）：五个标志 + 累加器选择。
+ *  - op_plus/op_minus/P 用 clk1 = op∨eq∨c；J/E_in 用 clk2 = any∨op∨eq∨c；
+ *  - a_src = (P∨J) ? ACC : 0（首运算 A=0，ALU 算 0+ER=ER）；
+ *  - acc_d = (eq∨op) ? ALU : (c ? 0 : ACC)；
+ *  - er_fresh = ¬E_in（换新载入）。
+ */
+export function calcControlInto(
+  b: DesignBuilder,
+  p: string,
+  plus: string,
+  minus: string,
+  eq: string,
+  c: string,
+  any: string,
+  acc: string[],
+  alu: string[],
+): CalcControlPins {
+  const op = `${p}op`;
+  const clk1 = `${p}clk1`;
+  const clk2 = `${p}clk2`;
+  const clkOpC = `${p}clkc`;
+  orNInto(b, `${p}op`, [plus, minus], op);
+  orNInto(b, `${p}cl1`, [op, eq, c], clk1);
+  orNInto(b, `${p}cl2`, [any, op, eq, c], clk2);
+  // op_minus 只被「新运算 / C」改写：= 提交结果后仍需保留减法模式（负结果判定）
+  orNInto(b, `${p}clc`, [op, c], clkOpC);
+  const opPlus = `${p}opp`;
+  const opMinus = `${p}opm`;
+  const pn = `${p}p`;
+  const j = `${p}j`;
+  const ein = `${p}ein`;
+  dffInto(b, `${p}Fop+`, clk1, plus, opPlus, `${p}nop+`);
+  dffInto(b, `${p}Fop-`, clkOpC, minus, opMinus, `${p}nop-`);
+  dffInto(b, `${p}Fp`, clk1, op, pn, `${p}np`);
+  dffInto(b, `${p}Fj`, clk2, eq, j, `${p}nj`);
+  dffInto(b, `${p}Fe`, clk2, any, ein, `${p}ne`);
+  // a_src = (P∨J) ? ACC : 0 → ACC ∧ (P∨J)
+  const sel = `${p}sel`;
+  orNInto(b, `${p}sel`, [pn, j], sel);
+  const aSrc = Array.from({ length: 8 }, (_, i) => `${p}as${i}`);
+  for (let i = 0; i < 8; i++) {
+    const t = `${p}asn${i}`;
+    nandInto(b, `${p}asA${i}`, acc[i] as string, sel, t);
+    nandInto(b, `${p}asB${i}`, t, t, aSrc[i] as string);
+  }
+  // acc_d = (eq∨op) ? ALU : (c ? 0 : ACC) = (eq∨op) ? ALU : ACC∧¬c
+  // 注：不在 op 沿做「= 后抑制重算」（J 抑制）——给 J 标志加 9 个负载会破坏
+  // 弱信号下主从触发器的从锁收敛（J 卡在上电 1 清不掉）；「= 后直接 op」按
+  // 立即执行模型用旧操作数重算（简化语义，向量不覆盖该链）。
+  const sel1 = `${p}sel1`;
+  const nsel1 = `${p}nsel1`;
+  const nc = `${p}nc`;
+  orNInto(b, `${p}sel1`, [eq, op], sel1);
+  nandInto(b, `${p}ns1`, sel1, sel1, nsel1);
+  nandInto(b, `${p}nc`, c, c, nc);
+  const accD = Array.from({ length: 8 }, (_, i) => `${p}ad${i}`);
+  for (let i = 0; i < 8; i++) {
+    const inner = `${p}in${i}`;
+    const inn = `${p}inn${i}`;
+    nandInto(b, `${p}inA${i}`, acc[i] as string, nc, inn);
+    nandInto(b, `${p}inB${i}`, inn, inn, inner);
+    const t1 = `${p}ad1${i}`;
+    const t2 = `${p}ad2${i}`;
+    nandInto(b, `${p}adA${i}`, alu[i] as string, sel1, t1);
+    nandInto(b, `${p}adB${i}`, inner, nsel1, t2);
+    nandInto(b, `${p}adC${i}`, t1, t2, accD[i] as string);
+  }
+  // 累加器时钟延迟：accD（按钮→mux ≈ 4-5 级门）必须比 acc_clk（按钮→orN ≈ 2-3 级门）
+  // 先稳定（建立时间）。给 acc_clk 加 10 级反相器（偶数，极性不变，≈15us），
+  // 保证 op/eq/c 沿上 accD 已稳定、主锁存器采到正确值（否则会采到旧 ACC）。
+  const accClk = `${p}ack`;
+  let d = clk1;
+  for (let i = 0; i < 10; i++) {
+    const next = i === 9 ? accClk : `${p}ak${i}d`;
+    nandInto(b, `${p}ak${i}`, d, d, next);
+    d = next;
+  }
+  const erFresh = `${p}fr`;
+  nandInto(b, `${p}fr`, ein, ein, erFresh);
+  return { aSrc, accD, accClk, erFresh, opMinus, ein, pending: sel };
+}
+
+/**
+ * 显示控制（拼装块）：显示源 E_in?ER:ACC（8 位 mux）+ 负数 EE 覆写。
+ *  - err = neg ∧ ¬ein（neg = 上次 = 的借位锁存标志；只覆盖「显示结果」——输入数字时显示 ER）；
+ *  - E 段码 0x79（a,d,e,f,g 亮 / b,c 灭）：亮段 = dec∨err，灭段 = dec∧¬err。
+ */
+export function calcDisplayInto(
+  b: DesignBuilder,
+  p: string,
+  ein: string,
+  er: string[],
+  acc: string[],
+  neg: string,
+  decT: string[],
+  decU: string[],
+  disp: string[],
+  segT: string[],
+  segU: string[],
+): void {
+  const nein = `${p}nein`;
+  nandInto(b, `${p}nein`, ein, ein, nein);
+  for (let i = 0; i < 8; i++) {
+    const t1 = `${p}dm1${i}`;
+    const t2 = `${p}dm2${i}`;
+    nandInto(b, `${p}dmA${i}`, er[i] as string, ein, t1);
+    nandInto(b, `${p}dmB${i}`, acc[i] as string, nein, t2);
+    nandInto(b, `${p}dmC${i}`, t1, t2, disp[i] as string);
+  }
+  const err = `${p}err`;
+  const errn = `${p}errn`;
+  // err = neg ∧ ¬ein
+  nandInto(b, `${p}errA`, neg, nein, errn);
+  nandInto(b, `${p}errB`, errn, errn, err);
+  const nerr = `${p}nerr`;
+  nandInto(b, `${p}nerr`, err, err, nerr);
+  // E 段码 0x79：a(0),d(3),e(4),f(5),g(6) 亮；b(1),c(2) 灭
+  const E_ON = [0, 3, 4, 5, 6];
+  for (let k = 0; k < 2; k++) {
+    const dec = k === 0 ? decT : decU;
+    const seg = k === 0 ? segT : segU;
+    for (let i = 0; i < 7; i++) {
+      if (E_ON.includes(i)) {
+        // seg = dec ∨ err = NAND(¬dec, ¬err)
+        const nd = `${p}e${k}nd${i}`;
+        nandInto(b, `${p}e${k}na${i}`, dec[i] as string, dec[i] as string, nd);
+        nandInto(b, `${p}e${k}nb${i}`, nd, nerr, seg[i] as string);
+      } else {
+        // seg = dec ∧ ¬err
+        const t = `${p}e${k}nt${i}`;
+        nandInto(b, `${p}e${k}na${i}`, dec[i] as string, nerr, t);
+        nandInto(b, `${p}e${k}nb${i}`, t, t, seg[i] as string);
+      }
+    }
+  }
+}
+
+/**
+ * 简易计算器参考解（键盘版）：13 键 + 两位数码管（立即执行链式模型）。
  */
 export function calcRef(id = 'ref-calc'): Design {
   const b = new DesignBuilder(id, '简易计算器');
   b.vcc('vcc');
   b.gnd('gnd');
-  // a、b（BCD 8 位）→ 二进制 7 位
-  const aT = Array.from({ length: 4 }, (_, i) => `a${i + 4}`);
-  const aU = Array.from({ length: 4 }, (_, i) => `a${i}`);
-  const bT = Array.from({ length: 4 }, (_, i) => `b${i + 4}`);
-  const bU = Array.from({ length: 4 }, (_, i) => `b${i}`);
+  const keys = Array.from({ length: 10 }, (_, i) => `d${i}`);
+  const code = Array.from({ length: 4 }, (_, i) => `code${i}`);
+  const any = 'any';
+  encoderInto(b, 'E', keys, code, any);
+  const er = Array.from({ length: 8 }, (_, i) => `er${i}`);
+  const acc = Array.from({ length: 8 }, (_, i) => `acc${i}`);
+  const sum = Array.from({ length: 8 }, (_, i) => `sum${i}`);
+  // 1) bin2bcd 先建：t/u 数组被 bin2bcdInto 改写为内部网名（alu = bin2bcd 输出）
+  const t = Array.from({ length: 4 }, (_, i) => `t${i}`);
+  const u = Array.from({ length: 4 }, (_, i) => `u${i}`);
+  bin2bcdInto(b, 'R', [sum[0], sum[1], sum[2], sum[3], sum[4], sum[5], sum[6]], t, u);
+  const alu = [...u, ...t];
+  // 2) 运算控制（net 只是名字，循环依赖靠命名解析）
+  const ctrl = calcControlInto(b, 'C', 'plus', 'minus', 'eq', 'c', any, acc, alu);
+  // 3) 输入寄存器：wr = any 经 4 级反相延迟（约 +6us）——给 DFF 更多建立时间，
+  //    且仍早于 ein 更新（~13us）→ fresh 不被破坏
+  const anyD = 'anyD';
+  let ad0 = any;
+  for (let i = 0; i < 4; i++) {
+    const next = i === 3 ? anyD : `anyd${i}`;
+    nandInto(b, `AD${i}`, ad0, ad0, next);
+    ad0 = next;
+  }
+  digitEntryInto(b, 'D', code, anyD, ctrl.erFresh, er);
+  // 4) 累加器：8 个 D 触发器（clk = acc_clk）
+  for (let i = 0; i < 8; i++) {
+    dffInto(b, `r${i}`, ctrl.accClk, ctrl.accD[i] as string, acc[i] as string, `qn${i}`);
+  }
+  // 5) ALU：a_src、er（BCD）→ 二进制 → 加减 → 写入 sum（bin2bcd 已在 1) 读取）
   const aBin = Array.from({ length: 7 }, (_, i) => `aBin${i}`);
   const bBin = Array.from({ length: 7 }, (_, i) => `bBin${i}`);
-  bcd2binInto(b, 'a', aT, aU, aBin);
-  bcd2binInto(b, 'b', bT, bU, bBin);
-  // 8 位二进制加法 aBin + bBin → sum[7:0]（向量约束 a+b ≤ 99，第 8 位恒 0）
-  const sum = Array.from({ length: 8 }, (_, i) => `sum${i}`);
-  let carry = 'gnd';
+  bcd2binInto(
+    b,
+    'A',
+    [ctrl.aSrc[4] as string, ctrl.aSrc[5] as string, ctrl.aSrc[6] as string, ctrl.aSrc[7] as string],
+    [ctrl.aSrc[0] as string, ctrl.aSrc[1] as string, ctrl.aSrc[2] as string, ctrl.aSrc[3] as string],
+    aBin,
+  );
+  bcd2binInto(
+    b,
+    'B',
+    [er[4] as string, er[5] as string, er[6] as string, er[7] as string],
+    [er[0] as string, er[1] as string, er[2] as string, er[3] as string],
+    bBin,
+  );
+  // 减法：b_i ⊕ mode，进位 1。mode = op_minus ∧ pending —— 首运算没有前值（pending=0），
+  // 按「载入 ER」处理（0+ER=ER），减法从第二个运算起生效。
+  const mode = 'mode';
+  const moder = 'moder';
+  nandInto(b, 'M1', ctrl.opMinus, ctrl.pending, moder);
+  nandInto(b, 'M2', moder, moder, mode);
+  const bx = Array.from({ length: 7 }, (_, i) => `bx${i}`);
+  for (let i = 0; i < 7; i++) xorInto(b, `X${i}`, bBin[i] as string, mode, bx[i] as string);
+  let carry = mode;
+  const borrowRaw = 'borrowRaw';
   for (let i = 0; i < 8; i++) {
-    const next = i === 7 ? 'sumc' : `sumc${i}`;
+    const next = i === 7 ? borrowRaw : `sumc${i}`;
     fullAdderInto(
       b,
-      `s${i}`,
+      `S${i}`,
       i < 7 ? (aBin[i] as string) : 'gnd',
-      i < 7 ? (bBin[i] as string) : 'gnd',
+      i < 7 ? (bx[i] as string) : mode,
       carry,
       sum[i] as string,
       next,
     );
     carry = next;
   }
-  // sum → BCD（十位/个位）
-  const t = Array.from({ length: 4 }, (_, i) => `t${i}`);
-  const u = Array.from({ length: 4 }, (_, i) => `u${i}`);
-  bin2bcdInto(b, 'c', sum, t, u);
-  // eq 上升沿锁存到 8 位寄存器（d = {u[3:0], t[3:0]}）
-  const dIn = Array.from({ length: 8 }, (_, i) =>
-    i < 4 ? (u[i] as string) : (t[i - 4] as string),
-  );
-  for (let i = 0; i < 8; i++) {
-    dffInto(b, `r${i}`, 'eq', dIn[i] as string, `q${i}`, `qn${i}`);
-  }
-  b.port(
-    'a',
-    'in',
-    Array.from({ length: 8 }, (_, i) => `a${i}`),
-  );
-  b.port(
-    'b',
-    'in',
-    Array.from({ length: 8 }, (_, i) => `b${i}`),
-  );
-  b.port('eq', 'in', 'eq');
-  // 锁存后的 BCD 十位/个位 → 各一个七段译码器 → 7 位段码显示
+  // 借位 = ¬第 8 位进位（两补码减法：a-b 借位当且仅当进位输出为 0）
+  const borrow = 'borrow';
+  nandInto(b, 'BR1', borrowRaw, borrowRaw, borrow);
+  // NEG 标志：= / op / C 沿上锁存 borrow∧op_minus∧¬c —— 结果的负性在 = 时刻定格，
+  // 之后 a_src 重算（截断 BCD）不会再翻转 EE 判定
+  const ncNeg = 'ncNeg';
+  const negClk = 'negClk';
+  const negD1 = 'negD1';
+  const negD2 = 'negD2';
+  const negD3 = 'negD3';
+  nandInto(b, 'N1', 'c', 'c', ncNeg);
+  nandInto(b, 'N2', borrow, ctrl.opMinus, negD1);
+  nandInto(b, 'N3', negD1, negD1, negD2);
+  nandInto(b, 'N4', negD2, ncNeg, negD3);
+  nandInto(b, 'N5', negD3, negD3, 'negD');
+  orNInto(b, 'N6', ['eq', 'plus', 'minus', 'c'], negClk);
+  dffInto(b, 'Neg', negClk, 'negD', 'neg', 'nneg');
+  // 6) 显示：E_in?ER:ACC → 2×七段译码器 → 负数 EE 覆写
+  const disp = Array.from({ length: 8 }, (_, i) => `disp${i}`);
+  const decT = Array.from({ length: 7 }, (_, i) => `decT${i}`);
+  const decU = Array.from({ length: 7 }, (_, i) => `decU${i}`);
   const segT = Array.from({ length: 7 }, (_, i) => `segT${i}`);
   const segU = Array.from({ length: 7 }, (_, i) => `segU${i}`);
-  seg7Into(b, 'T', `q4`, `q5`, `q6`, `q7`, segT);
-  seg7Into(b, 'U', `q0`, `q1`, `q2`, `q3`, segU);
+  seg7Into(b, 'T', disp[4] as string, disp[5] as string, disp[6] as string, disp[7] as string, decT);
+  seg7Into(b, 'U', disp[0] as string, disp[1] as string, disp[2] as string, disp[3] as string, decU);
+  calcDisplayInto(b, 'V', ctrl.ein, er, acc, 'neg', decT, decU, disp, segT, segU);
+  for (let i = 0; i < 10; i++) b.port(`d${i}`, 'in', `d${i}`);
+  b.port('plus', 'in', 'plus');
+  b.port('minus', 'in', 'minus');
+  b.port('eq', 'in', 'eq');
+  b.port('c', 'in', 'c');
   b.port('disp_t', 'out', segT);
   b.port('disp_u', 'out', segU);
   return b.build();

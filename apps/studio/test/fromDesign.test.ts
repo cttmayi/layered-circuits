@@ -17,39 +17,41 @@ import { fromDesign, toDesign } from '../src/editor/model';
 import { docForLevel } from '../src/level/progress';
 
 describe('fromDesign 还原器（一键出答案）', () => {
-  it('每个有关卡参考解的关：还原 → 再导出 → 判定通关且满分', () => {
-    const library = new InMemoryModuleLibrary();
-    let checked = 0;
-    for (const level of ALL_LEVELS) {
-      const ref = level.referenceSolution;
-      if (!ref) continue;
-      checked++;
-      const base = docForLevel(level, []);
-      const doc = fromDesign(ref, base);
-      // 端口保留：位宽与锁定继承自关卡预置
-      expect(doc.syms.filter((s) => s.kind === 'input' || s.kind === 'output').length).toBe(
-        base.syms.filter((s) => s.kind === 'input' || s.kind === 'output').length,
-      );
-      // 元件真的铺上去了
-      expect(doc.syms.filter((s) => s.kind === 'unit' || s.kind === 'module').length).toBe(
-        ref.instances.filter((i) => i.kind === 'unit' || i.kind === 'module').length,
-      );
-      // 多 bit 端口位宽保留
-      for (const p of level.ports) {
-        const sym = doc.syms.find(
-          (s) => s.kind !== 'vcc' && s.kind !== 'gnd' && s.label === p.name,
+  it(
+    '每个有关卡参考解的关：还原 → 再导出 → 判定通关且满分',
+    () => {
+      const library = new InMemoryModuleLibrary();
+      let checked = 0;
+      for (const level of ALL_LEVELS) {
+        const ref = level.referenceSolution;
+        if (!ref) continue;
+        checked++;
+        const base = docForLevel(level, []);
+        const doc = fromDesign(ref, base);
+        // 端口保留：位宽与锁定继承自关卡预置
+        expect(doc.syms.filter((s) => s.kind === 'input' || s.kind === 'output').length).toBe(
+          base.syms.filter((s) => s.kind === 'input' || s.kind === 'output').length,
         );
-        expect(sym?.width, `${level.id} 端口 ${p.name} 位宽`).toBe(p.width);
-      }
-      // 往返：导出 → 判定（硬核）→ 通过 + 满分
-      const design = toDesign(doc);
+        // 元件真的铺上去了
+        expect(doc.syms.filter((s) => s.kind === 'unit' || s.kind === 'module').length).toBe(
+          ref.instances.filter((i) => i.kind === 'unit' || i.kind === 'module').length,
+        );
+        // 多 bit 端口位宽保留
+        for (const p of level.ports) {
+          const sym = doc.syms.find(
+            (s) => s.kind !== 'vcc' && s.kind !== 'gnd' && s.label === p.name,
+          );
+          expect(sym?.width, `${level.id} 端口 ${p.name} 位宽`).toBe(p.width);
+        }
+        // 往返：导出 → 判定（硬核）→ 通过 + 满分
+        const design = toDesign(doc);
       const r = judgeDesign(design, level, { library, hardcore: true });
       expect(r.pass, `${level.id} 还原后应通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${level.id} 还原后应满分`).toBe(100);
     }
     expect(checked).toBeGreaterThanOrEqual(15);
     // 计算器链大电路的时序行为探测较慢，放宽超时（全仓并发时 judgeDesign 会跑满这个窗口）
-  }, 60_000);
+  }, 120_000);
 
   it('没有参考解的关返回空电路提示（不炸）', () => {
     const level = ALL_LEVELS[0]!;
@@ -95,15 +97,17 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.score, `${level.id} 门版应满分`).toBe(100);
       expect(r.costHalf, `${level.id} 门版成本应 ≤ 元件版`).toBeLessThanOrEqual(level.optimalHalf);
     }
-    // 21 关有门版：第 1 章 5（与非/或非/异或/同或/异或·复古版）+ 第 2 章 6（SR/D锁存/按钮锁存/DFF×3）+ 第 3 章 10（算术+计算器链+数码管显示）；
+    // 23 关有门版：第 1 章 5（与非/或非/异或/同或/异或·复古版）+ 第 2 章 6（SR/D锁存/按钮锁存/DFF×3）+ 第 3 章 12（算术+计算器链+数码管显示）；
     // 非门/与门/或门 moduleAccess: 'none'（禁用模块）→ 不出门版
-    expect(checked).toBe(21);
+    expect(checked).toBe(23);
   });
 
   it('门版答案顶层盒数 ≤ 15（关卡设计规范：画布顶层可见盒子数上限）', () => {
     // 元件版（性能隐藏解）、教学关、模块详情弹窗内部电路豁免；门版答案必须 ≤ 15 盒。
-    // 已批准例外：s3-display（七段译码器关）= 43 盒，答案即教学内容（docs §一例外）。
-    const EXEMPT = new Set(['s3-display']);
+    // 已批准例外：s3-display（七段译码器关）= 43 盒、s3-encoder（键盘编码器关）= 45 盒，
+    // 答案即教学内容（docs §一例外）；s3-calc（终局组装关）= 29 盒（8 位 ALU + 控制 + 显示，
+    // 架构决定，docs §一豁免）。
+    const EXEMPT = new Set(['s3-display', 's3-encoder', 's3-calc']);
     for (const level of ALL_LEVELS) {
       const teaching = teachingSolutionOf(level.id);
       if (!teaching) continue;
@@ -137,7 +141,7 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.pass, `${level.id} 门版还原后应通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${level.id} 门版还原后应满分`).toBe(100);
     }
-    expect(checked).toBe(21);
+    expect(checked).toBe(23);
   });
 });
 

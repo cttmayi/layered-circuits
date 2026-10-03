@@ -109,7 +109,7 @@ describe('调试模式 · 一键出答案', () => {
   });
 
   it('计算器（新关）：一键出答案直接出门版（元件版无优势，不弹窗）', async () => {
-    // 预置第三章前 8 关已通关，解锁计算器
+    // 预置第三章前半关已通关，解锁计算器（链：…→ s3-bin2bcd → s3-encoder → s3-digit-entry → s3-calc）
     const cleared = {
       ...teachCleared(),
       's3-half-adder': { score: 100, bestCostHalf: 84, clearedAt: 1 },
@@ -120,6 +120,8 @@ describe('调试模式 · 一键出答案', () => {
       's3-bcd2bin': { score: 100, bestCostHalf: 2160, clearedAt: 1 },
       's3-bin2bcd': { score: 100, bestCostHalf: 7872, clearedAt: 1 },
       's3-reg-8': { score: 100, bestCostHalf: 1568, clearedAt: 1 },
+      's3-encoder': { score: 100, bestCostHalf: 900, clearedAt: 1 },
+      's3-digit-entry': { score: 100, bestCostHalf: 1748, clearedAt: 1 },
     };
     localStorage.setItem(
       'lc-studio-progress-v1',

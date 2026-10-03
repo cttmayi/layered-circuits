@@ -254,7 +254,11 @@ export function recordAttempt(progress: Progress, levelId: string): Progress {
  * 玩家只需要在中间连出电路，端口约定与供电永远不是卡关原因。
  */
 export function docForLevel(level: Level, library: StoredModule[]): Doc {
-  const { inputs, outputs } = requiredPortsOf(level);
+  // 键盘式网格关按 ports 声明顺序排（行优先 = 真键盘布局）；其余沿用向量首见顺序
+  const required = requiredPortsOf(level);
+  const inputs = level.inputGridCols
+    ? level.ports.filter((p) => p.dir === 'in').map((p) => p.name)
+    : [...required.inputs];
   // 端口位宽：关卡声明优先（第三章总线），缺省 1 位
   const widthOf = new Map(level.ports.map((p) => [p.name, p.width]));
   // 端口交互/显示形态：button（输入按钮）、display（输出数码管）
@@ -264,13 +268,17 @@ export function docForLevel(level: Level, library: StoredModule[]): Doc {
     { id: 'rail-vcc', kind: 'vcc', x: 40, y: 60, rot: 0, label: 'VCC', locked: true },
     { id: 'rail-gnd', kind: 'gnd', x: 700, y: 60, rot: 0, label: 'GND', locked: true },
   ];
+  // 键盘式网格：按 ports 数组顺序行优先排（按键关让画布像真键盘），缺省单列竖排（保持历史间距）
+  const gridCols = level.inputGridCols;
   inputs.forEach((name, i) => {
     const declared = portFlagOf.get(name);
+    const col = gridCols ? i % gridCols : 0;
+    const row = gridCols ? Math.floor(i / gridCols) : i;
     syms.push({
       id: `in-${name}`,
       kind: 'input',
-      x: 40,
-      y: 200 + i * 140,
+      x: 40 + col * 110,
+      y: gridCols ? 180 + row * 96 : 200 + i * 140,
       rot: 0,
       value: 0,
       label: name,
@@ -280,7 +288,7 @@ export function docForLevel(level: Level, library: StoredModule[]): Doc {
     });
   });
   const outputTop = 200;
-  outputs.forEach((name, i) => {
+  required.outputs.forEach((name, i) => {
     const declared = portFlagOf.get(name);
     const sym: Sym = {
       id: `out-${name}`,

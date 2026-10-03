@@ -169,6 +169,10 @@ const COMPOSITE_ORDER = [
   '二进制→BCD',
   '七段译码器',
   '八位寄存器',
+  '数字键盘编码器',
+  '数字输入寄存器',
+  '运算控制',
+  '显示控制',
 ] as const;
 const COMPOSITE_KIND: Record<string, ModuleKind> = {
   加3单元: 'arith',
@@ -177,6 +181,10 @@ const COMPOSITE_KIND: Record<string, ModuleKind> = {
   '二进制→BCD': 'arith',
   七段译码器: 'arith',
   八位寄存器: 'seq',
+  数字键盘编码器: 'arith',
+  数字输入寄存器: 'seq',
+  运算控制: 'seq',
+  显示控制: 'arith',
 };
 const compositeCache = new Map<string, ModuleTemplate>();
 
@@ -195,6 +203,14 @@ function compositeBodyOf(name: string, family: LogicFamily): Design {
       return seg7ByModules(`brick-seg7-${family}`, '七段译码器', family);
     case '八位寄存器':
       return reg8ByModules(`brick-reg8-${family}`, '八位寄存器', family);
+    case '数字键盘编码器':
+      return encoderByModules(`brick-encoder-${family}`, '数字键盘编码器', family);
+    case '数字输入寄存器':
+      return digitEntryByModules(`brick-dentry-${family}`, '数字输入寄存器', family);
+    case '运算控制':
+      return calcControlByModules(`brick-calcctrl-${family}`, '运算控制', family);
+    case '显示控制':
+      return calcDisplayByModules(`brick-calcdsp-${family}`, '显示控制', family);
     default:
       throw new Error(`未知复合积木：${name}`);
   }
@@ -541,6 +557,10 @@ export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl')
       return seg7ByModules('teach-s3-display', '七段译码器（门版）', family);
     case 's3-reg-8':
       return reg8ByModules('teach-s3-reg8', '8位寄存器（门版）', family);
+    case 's3-encoder':
+      return encoderByModules('teach-s3-encoder', '数字键盘编码器（门版）', family);
+    case 's3-digit-entry':
+      return digitEntryByModules('teach-s3-dentry', '数字输入寄存器（门版）', family);
     case 's3-calc':
       return calcByModules('teach-s3-calc', '简易计算器（门版）', family);
     default:
@@ -567,8 +587,14 @@ export function elementEdgeOf(level: Level, family: LogicFamily = 'rtl'): 'cost'
   const ec = computeCosts(ref, emptyLib).costHalf;
   const gc = computeCosts(teach, gateLib).costHalf;
   if (ec < gc) return 'cost';
-  const ed = analyzeTiming(compileDesign(ref, { library: emptyLib }).net).criticalPathPs;
-  const gd = analyzeTiming(compileDesign(teach, { library: gateLib }).net).criticalPathPs;
+  const refNet = compileDesign(ref, { library: emptyLib }).net;
+  const gateNet = compileDesign(teach, { library: gateLib }).net;
+  // 大电路（6000+ 元件，如计算器整机）的传播延迟测量 = 输入数×2 次冷启动全仿真
+  // （十几秒/关）；元件版与门版同结构时延迟必然相等，跳过延迟比较——
+  // 不影响「元件版占优才给选项」的语义（小电路仍走全量测量）。
+  const big = refNet.elemCount > 6_000 || gateNet.elemCount > 6_000;
+  const ed = analyzeTiming(refNet, big ? { skipDelay: true } : undefined).criticalPathPs;
+  const gd = analyzeTiming(gateNet, big ? { skipDelay: true } : undefined).criticalPathPs;
   if (ed < gd) return 'delay';
   return null;
 }
@@ -737,6 +763,80 @@ function reg8ByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
   return b.build();
 }
 
+/** 数字键盘编码器（门版）：d0-d9 → code[3:0]、any，45 个【与非门】，结构与单元参考解一致 */
+function encoderByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
+  const b = new DesignBuilder(id, name);
+  b.vcc('vcc');
+  b.gnd('gnd');
+  const nand = hashOf('与非门', family);
+  const d = Array.from({ length: 10 }, (_, i) => `d${i}`);
+  // 每键一个反相器
+  const nd = d.map((_, i) => {
+    b.module(nand, { a: `d${i}`, b: `d${i}`, y: `nd${i}` }, `I${i}`);
+    return `nd${i}`;
+  });
+  let n = 0;
+  const g = (a: string, c: string): string => {
+    b.module(nand, { a, b: c, y: `t${n}` }, `G${n}`);
+    return `t${n++}`;
+  };
+  const orN = (terms: string[]): string => {
+    if (terms.length === 2) return g(terms[0], terms[1]);
+    let s = g(terms[0], terms[1]);
+    for (let i = 2; i < terms.length; i++) {
+      const inv = g(s, s);
+      s = g(inv, terms[i]);
+    }
+    return s;
+  };
+  const code = [
+    orN([nd[1], nd[3], nd[5], nd[7], nd[9]]),
+    orN([nd[2], nd[3], nd[6], nd[7]]),
+    orN([nd[4], nd[5], nd[6], nd[7]]),
+    orN([nd[8], nd[9]]),
+  ];
+  const any = orN(nd);
+  b.port('d0', 'in', d[0]);
+  b.port('d1', 'in', d[1]);
+  b.port('d2', 'in', d[2]);
+  b.port('d3', 'in', d[3]);
+  b.port('d4', 'in', d[4]);
+  b.port('d5', 'in', d[5]);
+  b.port('d6', 'in', d[6]);
+  b.port('d7', 'in', d[7]);
+  b.port('d8', 'in', d[8]);
+  b.port('d9', 'in', d[9]);
+  b.port('code', 'out', code);
+  b.port('any', 'out', any);
+  return b.build();
+}
+
+/** 数字输入寄存器（门版）：8×【主从D触发器】积木，wr 上升沿左移插入（回接不需要门） */
+function digitEntryByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
+  const b = new DesignBuilder(id, name);
+  b.vcc('vcc');
+  b.gnd('gnd');
+  const dff = hashOf('主从D触发器', family);
+  const and = hashOf('与门', family);
+  const not = hashOf('非门', family);
+  const d = Array.from({ length: 4 }, (_, i) => `d${i}`);
+  const q = Array.from({ length: 8 }, (_, i) => `q${i}`);
+  // fresh=1（换新载入）：十位 D = 旧个位 ∧ ¬fresh（与门钳 0）；wr 直驱全部 DFF
+  b.module(not, { a: 'fresh', y: 'nfr' }, 'N1');
+  for (let i = 0; i < 4; i++) {
+    // 个位：锁存新数字码
+    b.module(dff, { d: `d${i}`, clk: 'wr', q: `q${i}`, qn: `qn${i}` }, `U${i}`);
+    // 十位：D = 旧个位 ∧ ¬fresh（左移 / 换新）
+    b.module(and, { a: `q${i}`, b: 'nfr', y: `dt${i}` }, `AT${i}`);
+    b.module(dff, { d: `dt${i}`, clk: 'wr', q: `q${4 + i}`, qn: `qnT${i}` }, `T${i}`);
+  }
+  b.port('d', 'in', d);
+  b.port('wr', 'in', 'wr');
+  b.port('fresh', 'in', 'fresh');
+  b.port('q', 'out', q);
+  return b.build();
+}
+
 /** 两位 BCD → 二进制（门版参考解）：端口与 s3-bcd2bin 关卡一致（bcd[7:0] → bin[6:0]） */
 function bcd2binByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
@@ -820,32 +920,227 @@ function seg7ByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
   return b.build();
 }
 
-/** 简易计算器（门版参考解）：端口与 s3-calc 关卡一致（a/b BCD、eq 按钮、disp_t/disp_u 十位/个位） */
-/** 简易计算器（门版参考解，组装关）：2×【BCD→二进制】+ 8×【全加器】+ 1×【二进制→BCD】+ 1×【八位寄存器】+ 2×【七段译码器】= 14 盒 */
+/** 运算控制（复合积木）：五标志 + 累加器选择 + 负号锁存。
+ *  输入 plus/minus/eq/c/any + acc/er/alu（网名）+ borrow（借位网名）；
+ *  输出 aSrc[8]、accD[8]、accClk、erFresh、pending（P∨J）、opMinus、neg（= 的借位锁存）。 */
+function calcControlByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
+  const b = new DesignBuilder(id, name);
+  b.vcc('vcc');
+  b.gnd('gnd');
+  const dff = hashOf('主从D触发器', family);
+  const and = hashOf('与门', family);
+  const not = hashOf('非门', family);
+  const nand = hashOf('与非门', family);
+  let n = 0;
+  const g = (a: string, c: string): string => {
+    b.module(nand, { a, b: c, y: `t${n}` }, `G${n}`);
+    return `t${n++}`;
+  };
+  const inv = (a: string): string => g(a, a);
+  const orN = (terms: string[]): string => {
+    if (terms.length === 2) return g(inv(terms[0] as string), inv(terms[1] as string));
+    let s = g(inv(terms[0] as string), inv(terms[1] as string));
+    for (let i = 2; i < terms.length; i++) {
+      s = g(inv(s), inv(terms[i] as string));
+    }
+    return s;
+  };
+  const and2 = (a: string, c: string): string => {
+    const t = g(a, c);
+    return inv(t);
+  };
+  const mux2 = (s: string, a: string, c: string): string => {
+    const ns = inv(s);
+    return g(g(a, s), g(c, ns));
+  };
+  const op = orN(['plus', 'minus']);
+  const clk1 = orN([op, 'eq', 'c']);
+  const clk2 = orN(['any', op, 'eq', 'c']);
+  const clkOpC = orN([op, 'c']);
+  b.module(dff, { d: 'plus', clk: clk1, q: 'opPlus', qn: 'nopPlus' }, 'Fop+');
+  b.module(dff, { d: 'minus', clk: clkOpC, q: 'opMinus', qn: 'nopMinus' }, 'Fop-');
+  b.module(dff, { d: op, clk: clk1, q: 'P', qn: 'nP' }, 'Fp');
+  b.module(dff, { d: 'eq', clk: clk2, q: 'J', qn: 'nJ' }, 'Fj');
+  b.module(dff, { d: 'any', clk: clk2, q: 'ein', qn: 'nein' }, 'Fe');
+  // aSrc = acc ∧ (P∨J)
+  const sel = orN(['P', 'J']);
+  const aSrc = Array.from({ length: 8 }, (_, i) => `aSrc${i}`);
+  for (let i = 0; i < 8; i++) {
+    b.module(and, { a: `acc${i}`, b: sel, y: aSrc[i] as string }, `AS${i}`);
+  }
+  // accD = (eq∨op) ? alu : acc∧¬c（不在 op 沿做「= 后抑制重算」——给 J 加负载会破坏
+  // 弱信号下主从触发器的从锁收敛，J 卡在上电 1 清不掉）
+  const sel1 = orN(['eq', op]);
+  const nc = inv('c');
+  const accD = Array.from({ length: 8 }, (_, i) => `accD${i}`);
+  for (let i = 0; i < 8; i++) {
+    const inner = and2(`acc${i}`, nc);
+    accD[i] = mux2(sel1, `alu${i}`, inner);
+  }
+  // accClk = clk1 延迟 10 级（建立时间）
+  const accClk = 'accClk';
+  let d = clk1;
+  for (let i = 0; i < 10; i++) {
+    const next = i === 9 ? accClk : `ak${i}d`;
+    b.module(not, { a: d, y: next }, `AK${i}`);
+    d = next;
+  }
+  // erFresh = ¬ein
+  b.module(not, { a: 'ein', y: 'erFresh' }, 'NFR');
+  // neg = DFF(clk1, D = opMinus∧borrow∧¬c) —— = 的借位锁存（负号）
+  const negD = and2(and2('opMinus', 'borrow'), nc);
+  b.module(dff, { d: negD, clk: clk1, q: 'neg', qn: 'nneg' }, 'Fneg');
+  b.port('plus', 'in', 'plus');
+  b.port('minus', 'in', 'minus');
+  b.port('eq', 'in', 'eq');
+  b.port('c', 'in', 'c');
+  b.port('any', 'in', 'any');
+  b.port('acc', 'in', Array.from({ length: 8 }, (_, i) => `acc${i}`));
+  b.port('er', 'in', Array.from({ length: 8 }, (_, i) => `er${i}`));
+  b.port('alu', 'in', Array.from({ length: 8 }, (_, i) => `alu${i}`));
+  b.port('borrow', 'in', 'borrow');
+  b.port('aSrc', 'out', aSrc);
+  b.port('accD', 'out', accD);
+  b.port('accClk', 'out', accClk);
+  b.port('erFresh', 'out', 'erFresh');
+  b.port('pending', 'out', sel);
+  b.port('opMinus', 'out', 'opMinus');
+  b.port('ein', 'out', 'ein');
+  b.port('neg', 'out', 'neg');
+  return b.build();
+}
+
+/** 显示控制（复合积木）：显示源 E_in?ER:ACC + 2×七段译码器 + 负数 E 覆写。
+ *  输入 ein/er/acc/neg；输出 segT/segU（两位段码）。 */
+function calcDisplayByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
+  const b = new DesignBuilder(id, name);
+  b.vcc('vcc');
+  b.gnd('gnd');
+  const nand = hashOf('与非门', family);
+  let n = 0;
+  const g = (a: string, c: string): string => {
+    b.module(nand, { a, b: c, y: `t${n}` }, `G${n}`);
+    return `t${n++}`;
+  };
+  const inv = (a: string): string => g(a, a);
+  const mux2 = (s: string, a: string, c: string): string => {
+    const ns = inv(s);
+    return g(g(a, s), g(c, ns));
+  };
+  const nein = inv('ein');
+  const disp = Array.from({ length: 8 }, (_, i) => `disp${i}`);
+  for (let i = 0; i < 8; i++) disp[i] = mux2('ein', `er${i}`, `acc${i}`);
+  const decT = Array.from({ length: 7 }, (_, i) => `decT${i}`);
+  const decU = Array.from({ length: 7 }, (_, i) => `decU${i}`);
+  b.module(
+    hashOf('七段译码器', family),
+    { bcd: [disp[4] as string, disp[5] as string, disp[6] as string, disp[7] as string], seg: decT },
+    'DEC_T',
+  );
+  b.module(
+    hashOf('七段译码器', family),
+    { bcd: [disp[0] as string, disp[1] as string, disp[2] as string, disp[3] as string], seg: decU },
+    'DEC_U',
+  );
+  // err = neg ∧ ¬ein；E 段码 0x79：a(0),d(3),e(4),f(5),g(6) 亮；b(1),c(2) 灭
+  const err = inv(g('neg', nein));
+  const nerr = inv(err);
+  const E_ON = [0, 3, 4, 5, 6];
+  const segT = Array.from({ length: 7 }, (_, i) => `segT${i}`);
+  const segU = Array.from({ length: 7 }, (_, i) => `segU${i}`);
+  for (let k = 0; k < 2; k++) {
+    const dec = k === 0 ? decT : decU;
+    const seg = k === 0 ? segT : segU;
+    for (let i = 0; i < 7; i++) {
+      if (E_ON.includes(i)) {
+        seg[i] = g(inv(dec[i] as string), nerr);
+      } else {
+        seg[i] = inv(g(dec[i] as string, nerr));
+      }
+    }
+  }
+  b.port('ein', 'in', 'ein');
+  b.port('er', 'in', Array.from({ length: 8 }, (_, i) => `er${i}`));
+  b.port('acc', 'in', Array.from({ length: 8 }, (_, i) => `acc${i}`));
+  b.port('neg', 'in', 'neg');
+  b.port('segT', 'out', segT);
+  b.port('segU', 'out', segU);
+  return b.build();
+}
+
+/** 简易计算器（门版参考解，组装关）：编码器 + 输入寄存器 + 运算控制 + 八位寄存器(累加器)
+ *  + ALU（2×BCD→二进制、8×全加器、8×异或门、1×二进制→BCD）+ 显示控制 = 16 盒 */
 function calcByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
   b.gnd('gnd');
+  const not = hashOf('非门', family);
+  const and = hashOf('与门', family);
   const fa = hashOf('全加器', family);
-  // a、b（BCD）→ 二进制（两个 BCD→二进制 积木）
-  const aT = Array.from({ length: 4 }, (_, i) => `a${i + 4}`);
-  const aU = Array.from({ length: 4 }, (_, i) => `a${i}`);
-  const bT = Array.from({ length: 4 }, (_, i) => `b${i + 4}`);
-  const bU = Array.from({ length: 4 }, (_, i) => `b${i}`);
+  // 键盘编码器 → code[4]、any
+  const code = Array.from({ length: 4 }, (_, i) => `code${i}`);
+  b.module(
+    hashOf('数字键盘编码器', family),
+    { d0: 'd0', d1: 'd1', d2: 'd2', d3: 'd3', d4: 'd4', d5: 'd5', d6: 'd6', d7: 'd7', d8: 'd8', d9: 'd9', code, any: 'any' },
+    'ENC',
+  );
+  // any 延迟 4 级 → 输入寄存器写脉冲（建立时间）
+  const anyD = 'anyD';
+  let ad = 'any';
+  for (let i = 0; i < 4; i++) {
+    const next = i === 3 ? anyD : `anyd${i}`;
+    b.module(not, { a: ad, y: next }, `AD${i}`);
+    ad = next;
+  }
+  const er = Array.from({ length: 8 }, (_, i) => `er${i}`);
+  b.module(hashOf('数字输入寄存器', family), { d: code, wr: anyD, fresh: 'erFresh', q: er }, 'DENT');
+  // 运算控制 —— alu 网名 = bin2bcd 输出（u/t），先声明后接线（网名与调用顺序无关）
+  const acc = Array.from({ length: 8 }, (_, i) => `acc${i}`);
+  const t = Array.from({ length: 4 }, (_, i) => `t${i}`);
+  const u = Array.from({ length: 4 }, (_, i) => `u${i}`);
+  const alu = [...u, ...t];
+  const aSrc = Array.from({ length: 8 }, (_, i) => `aSrc${i}`);
+  const accD = Array.from({ length: 8 }, (_, i) => `accD${i}`);
+  b.module(
+    hashOf('运算控制', family),
+    {
+      plus: 'plus', minus: 'minus', eq: 'eq', c: 'c', any: 'any',
+      acc, er, alu, borrow: 'borrow',
+      aSrc, accD, accClk: 'accClk', erFresh: 'erFresh', pending: 'pending',
+      opMinus: 'opMinus', ein: 'ein', neg: 'neg',
+    },
+    'CTRL',
+  );
+  // 累加器：八位寄存器（clk = accClk，d = accD）
+  b.module(hashOf('八位寄存器', family), { d: accD, clk: 'accClk', q: acc }, 'ACC');
+  // ALU：mode = op_minus ∧ pending；A、ER(BCD)→二进制 → 加减 → 二进制→BCD → alu
+  const mode = 'mode';
+  b.module(and, { a: 'opMinus', b: 'pending', y: mode }, 'M1');
   const aBin = Array.from({ length: 7 }, (_, i) => `aBin${i}`);
   const bBin = Array.from({ length: 7 }, (_, i) => `bBin${i}`);
-  b.module(hashOf('BCD→二进制', family), { bcd: [...aU, ...aT], bin: aBin }, 'BCD2BIN_A');
-  b.module(hashOf('BCD→二进制', family), { bcd: [...bU, ...bT], bin: bBin }, 'BCD2BIN_B');
-  // 8 位二进制加法（8× 全加器 积木）
+  b.module(
+    hashOf('BCD→二进制', family),
+    { bcd: [...aSrc.slice(0, 4), ...aSrc.slice(4, 8)], bin: aBin },
+    'B2A',
+  );
+  b.module(
+    hashOf('BCD→二进制', family),
+    { bcd: [...er.slice(0, 4), ...er.slice(4, 8)], bin: bBin },
+    'B2B',
+  );
+  const bx = Array.from({ length: 7 }, (_, i) => `bx${i}`);
+  for (let i = 0; i < 7; i++) {
+    b.module(hashOf('异或门', family), { a: bBin[i] as string, b: mode, y: bx[i] as string }, `X${i}`);
+  }
   const sum = Array.from({ length: 8 }, (_, i) => `sum${i}`);
-  let carry = 'gnd';
+  let carry = mode;
   for (let i = 0; i < 8; i++) {
-    const next = i === 7 ? 'sumc' : `sumc${i}`;
+    const next = i === 7 ? 'borrowRaw' : `sumc${i}`;
     b.module(
       fa,
       {
         a: i < 7 ? (aBin[i] as string) : 'gnd',
-        b: i < 7 ? (bBin[i] as string) : 'gnd',
+        b: i < 7 ? (bx[i] as string) : mode,
         cin: carry,
         s: sum[i] as string,
         cout: next,
@@ -854,38 +1149,28 @@ function calcByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
     );
     carry = next;
   }
-  // sum → BCD（一个 二进制→BCD 积木；a+b ≤ 99 只需 7 位）
-  const t = Array.from({ length: 4 }, (_, i) => `t${i}`);
-  const u = Array.from({ length: 4 }, (_, i) => `u${i}`);
-  b.module(hashOf('二进制→BCD', family), { bin: sum.slice(0, 7), bcd: [...u, ...t] }, 'BIN2BCD');
-  // eq 上升沿锁存（一个 八位寄存器 积木：d = 个位 u + 十位 t）
-  const dIn = [...u, ...t];
-  const q = Array.from({ length: 8 }, (_, i) => `q${i}`);
-  b.module(hashOf('八位寄存器', family), { d: dIn, clk: 'eq', q }, 'REG8');
-  b.port(
-    'a',
-    'in',
-    Array.from({ length: 8 }, (_, i) => `a${i}`),
-  );
-  b.port(
-    'b',
-    'in',
-    Array.from({ length: 8 }, (_, i) => `b${i}`),
-  );
-  b.port('eq', 'in', 'eq');
-  // 锁存后的 BCD 十位/个位 → 2×【七段译码器】→ 7 位段码显示
+  // 借位 = ¬进位输出
+  b.module(not, { a: 'borrowRaw', y: 'borrow' }, 'BR');
+  b.module(hashOf('二进制→BCD', family), { bin: sum.slice(0, 7), bcd: [...u, ...t] }, 'B2D');
+  // 显示控制：ein/er/acc/neg → 两位段码
   const segT = Array.from({ length: 7 }, (_, i) => `segT${i}`);
   const segU = Array.from({ length: 7 }, (_, i) => `segU${i}`);
-  b.module(
-    hashOf('七段译码器', family),
-    { bcd: [`q4`, `q5`, `q6`, `q7`], seg: segT },
-    'DEC_T',
-  );
-  b.module(
-    hashOf('七段译码器', family),
-    { bcd: [`q0`, `q1`, `q2`, `q3`], seg: segU },
-    'DEC_U',
-  );
+  b.module(hashOf('显示控制', family), { ein: 'ein', er, acc, neg: 'neg', segT, segU }, 'DISP');
+  // 键盘布局端口顺序：7 8 9 ＋ / 4 5 6 － / 1 2 3 ＝ / 0 C
+  b.port('d7', 'in', 'd7');
+  b.port('d8', 'in', 'd8');
+  b.port('d9', 'in', 'd9');
+  b.port('plus', 'in', 'plus');
+  b.port('d4', 'in', 'd4');
+  b.port('d5', 'in', 'd5');
+  b.port('d6', 'in', 'd6');
+  b.port('minus', 'in', 'minus');
+  b.port('d1', 'in', 'd1');
+  b.port('d2', 'in', 'd2');
+  b.port('d3', 'in', 'd3');
+  b.port('eq', 'in', 'eq');
+  b.port('d0', 'in', 'd0');
+  b.port('c', 'in', 'c');
   b.port('disp_t', 'out', segT);
   b.port('disp_u', 'out', segU);
   return b.build();

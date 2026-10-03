@@ -19,6 +19,7 @@ import {
 } from '@lc/schema';
 import { adder4Ref, adder8Ref, aluRef, fullAdderRef, halfAdderRef, seg7Ref } from './references-ari.js';
 import { bcd2binRef, bin2bcdRef, calcRef, reg8Ref } from './references-calc.js';
+import { digitEntryRef, encoderRef } from './references-keypad.js';
 
 /** 阶段 3 允许的元件：仍只用 npn/res/dio（电容留给时钟/存储章节） */
 const STAGE3_UNITS = ['npn', 'res', 'dio'] as const;
@@ -433,8 +434,149 @@ const REG_8: Level = parseLevel({
 });
 
 /**
- * 简易计算器（压轴）：a、b 是两位 BCD（0-99），按一下【等号】按钮，
- * 十位/个位两个七段数码管显示 a+b。eq 是按钮端口：画布上点击 = 电平 1 自动弹回 0（上升沿锁存）。
+ * 数字键盘编码器：10 个数字键（d0-d9，一次按一个）→ 4 位 BCD 码 + 任意键脉冲。
+ * 与 s3-display 的译码器正好对称：译码器把 4 位码展开成 7 段，编码器把 10 根线缩成 4 位码。
+ */
+const S3_ENCODER: Level = parseLevel({
+  schemaVersion: 1,
+  id: 's3-encoder',
+  stage: 3,
+  kind: 'main',
+  title: '数字键盘编码器',
+  brief:
+    '计算器键盘按下数字键时，要把它变成电路认识的 4 位 BCD 码。10 根数字键线（d0-d9）一次只按一根，' +
+    '把它们编码成 4 位数字码 code[3:0]，外加一根 any 脉冲（只要按了任意键就是 1）。',
+  teaching:
+    '编码器和译码器正好相反：译码器把 4 位码展开成很多线，编码器把很多线缩成 4 位码。' +
+    '一次只按一键，所以不用仲裁优先级——每根输出线直接是相关按键的「或」：' +
+    'code0 = d1∨d3∨d5∨d7∨d9、code1 = d2∨d3∨d6∨d7、code2 = d4∨d5∨d6∨d7、code3 = d8∨d9，' +
+    'any = d0∨…∨d9。全部用与非门搭（输出可级联）。',
+  hint:
+    '每根输出 = 几个按键的或。与非门的「先取反再与非」正好拼出多输入或：NOT(a) 与 NOT(b) 与非。' +
+    '参考解 45 个与非门（每个键一个反相器共享），成本 900 半单位。',
+  ports: [
+    port('d7', 'in'),
+    port('d8', 'in'),
+    port('d9', 'in'),
+    port('d4', 'in'),
+    port('d5', 'in'),
+    port('d6', 'in'),
+    port('d1', 'in'),
+    port('d2', 'in'),
+    port('d3', 'in'),
+    port('d0', 'in'),
+    { id: 'code', name: 'code', dir: 'out', width: 4 },
+    { id: 'any', name: 'any', dir: 'out' },
+  ],
+  inputGridCols: 3,
+  mode: 'logic',
+  allowedUnits: [...STAGE3_UNITS],
+  moduleAccess: 'all',
+  budgetHalf: budgetFromOptimal(900, MAIN_OVERHEAD),
+  optimalHalf: 900,
+  checks: {},
+  vectors: (() => {
+    // 判定器只设置向量里列出的输入、其余默认 Z —— 组合关必须显式写全所有键位
+    const all = Object.fromEntries(
+      Array.from({ length: 10 }, (_, i) => [`d${i}`, 0]),
+    );
+    const none: LevelVector = { inputs: { ...all }, expect: { code: 0, any: 0 }, note: '不按键：code=0、any=0' };
+    const keys: LevelVector[] = Array.from({ length: 10 }, (_, k) => ({
+      inputs: { ...all, [`d${k}`]: 1 },
+      expect: { code: k, any: 1 },
+      note: `按 ${k} → code=${k.toString(2).padStart(4, '0')}`,
+    }));
+    return [none, ...keys];
+  })(),
+  unlock: {
+    name: '数字键盘编码器',
+    kind: 'logic',
+    stage: 3,
+    ports: [
+      port('d0', 'in'),
+      port('d1', 'in'),
+      port('d2', 'in'),
+      port('d3', 'in'),
+      port('d4', 'in'),
+      port('d5', 'in'),
+      port('d6', 'in'),
+      port('d7', 'in'),
+      port('d8', 'in'),
+      port('d9', 'in'),
+      port('code', 'out', 4),
+      port('any', 'out'),
+    ],
+  },
+  referenceSolution: encoderRef('ref-s3-encoder'),
+});
+
+/**
+ * 数字输入寄存器：wr 上升沿把数字码 d[3:0]「左移一位插入」——旧个位变成十位，新数字进个位
+ * （q ← {旧个位, d}，两位封顶滚动）。计算器按 1 再按 2 得 12、再按 5 得 25 就是它干的。
+ */
+const S3_DIGIT_ENTRY: Level = parseLevel({
+  schemaVersion: 1,
+  id: 's3-digit-entry',
+  stage: 3,
+  kind: 'main',
+  title: '数字输入寄存器',
+  brief:
+    '真实计算器按数字键时，新数字要「排到旧数字后面」：按 1 显示 1，按 2 变成 12，再按 5 变成 25。' +
+    '这就是左移一位插入——写脉冲 wr 上升沿，q 的高 4 位变成旧低 4 位，低 4 位变成新数字码。' +
+    '还有换新端 fresh：fresh=1 时十位钳 0、只进个位（按运算符/等号后，新输入从零开始）。',
+  teaching:
+    '上一关八位寄存器学会「上升沿锁存」。这一关给它加一个回接：个位（低 4 位）的输出接回十位（高 4 位）的输入，' +
+    '同时个位输入接新数字码。于是每个 wr 上升沿，旧个位顶到十位、新数字进个位。' +
+    '两位封顶：再按第三位时十位被顶掉（12 再按 5 → 25）。' +
+    '换新端 fresh 不用碰内部状态：把十位每个 D 都变成「旧个位 ∧ ¬fresh」（与门钳位），' +
+    'fresh=1 时十位进 0、个位进新数字，就是「从头开始」。' +
+    '为什么不做「清零 clr」：清零的 D 在时钟沿上才变 0，主锁存器会采到旧数据（建立时间竞态）；' +
+    '换新载入的 D 在沿前就是 0，天然正确。',
+  hint:
+    '8 个主从 D 触发器共用 wr 时钟：低 4 位锁存 d[3:0]，高 4 位锁存旧低 4 位∧¬fresh（回接 + 与门）。' +
+    '参考解成本 1748 半单位。',
+  ports: [
+    port('d', 'in', 4),
+    port('wr', 'in'),
+    port('fresh', 'in'),
+    { id: 'q', name: 'q', dir: 'out', width: 8 },
+  ],
+  mode: 'timing',
+  allowedUnits: [...STAGE3_UNITS],
+  moduleAccess: 'all',
+  budgetHalf: budgetFromOptimal(1748, MAIN_OVERHEAD),
+  optimalHalf: 1748,
+  checks: { clockPort: 'wr' },
+  vectors: [
+    // 建立时间：d / fresh 只能在 wr=0 期间更换（主锁存器低电平透明跟随 D），wr 上升沿采样。
+    // DFF 上电 Q=1：一记 fresh=1 + d=0 的脉冲即可归零（fresh 直接钳十位、个位进 0）。
+    { inputs: { wr: 0, d: 0, fresh: 1 }, settlePs: 60_000, note: '待命' },
+    { inputs: { wr: 1, d: 0, fresh: 1 }, expect: { q: 0x00 }, settlePs: 60_000, note: 'fresh 载入 0：归零' },
+    { inputs: { wr: 0, d: 0x05, fresh: 1 }, expect: { q: 0x00 }, settlePs: 60_000, note: '释放并备好 5（仍换新）' },
+    { inputs: { wr: 1, d: 0x05, fresh: 1 }, expect: { q: 0x05 }, settlePs: 60_000, note: '按 5 → 05（换新：十位 0）' },
+    { inputs: { wr: 0, d: 0x03, fresh: 0 }, expect: { q: 0x05 }, settlePs: 60_000, note: '释放并切回插入模式' },
+    { inputs: { wr: 1, d: 0x03, fresh: 0 }, expect: { q: 0x53 }, settlePs: 60_000, note: '再按 3 → 53（5 顶到十位）' },
+    { inputs: { wr: 0, d: 0x07, fresh: 0 }, expect: { q: 0x53 }, settlePs: 60_000, note: '释放并备好 7' },
+    { inputs: { wr: 1, d: 0x07, fresh: 0 }, expect: { q: 0x37 }, settlePs: 60_000, note: '再按 7 → 37（3 顶到十位、5 顶掉）' },
+    { inputs: { wr: 0, d: 0x09, fresh: 1 }, expect: { q: 0x37 }, settlePs: 60_000, note: '释放并切回换新模式' },
+    { inputs: { wr: 1, d: 0x09, fresh: 1 }, expect: { q: 0x09 }, settlePs: 60_000, note: '再按 9 → 09（换新：从头开始）' },
+    { inputs: { wr: 0, d: 0x09, fresh: 1 }, expect: { q: 0x09 }, settlePs: 60_000, note: '释放' },
+  ] satisfies LevelVector[],
+  unlock: {
+    name: '数字输入寄存器',
+    kind: 'seq',
+    stage: 3,
+    ports: [port('d', 'in', 4), port('wr', 'in'), port('fresh', 'in'), port('q', 'out', 8)],
+  },
+  referenceSolution: digitEntryRef('ref-s3-digit-entry'),
+});
+
+/**
+ * 简易计算器（压轴）：13 键数字键盘 + 两位数码管，真实链式立即执行模型。
+ *  - 10 个数字键 0-9 + ＋ － ＝ C（C 清除一切，= 计算结果、也保留减法模式供负结果判定）；
+ *  - 立即执行：12＋5＋ 时已经算出 17，再按 3＝ 得 20；= 后直接 ＋5＝ 接着算（15+…）；
+ *  - 负数显示错误标志：5－8＝ 时两位数码管亮 E（EE，段码 0x79）；
+ *  - 键盘布局 4 列：7 8 9 ＋ / 4 5 6 － / 1 2 3 ＝ / 0 C。
  */
 const CALC: Level = parseLevel({
   schemaVersion: 1,
@@ -443,98 +585,140 @@ const CALC: Level = parseLevel({
   kind: 'main',
   title: '简易计算器',
   brief:
-    '数字电路课的毕业设计：两位数加法计算器。拨好 a、b（BCD），按下【等号】按钮，' +
-    '两个七段数码管亮出结果。23+5=28、81+16=97。',
+    '数字电路课的毕业设计：十三键计算器。拨好数字按运算，屏幕立刻出中间结果：' +
+    '12＋5＋ 显示 17，再按 3＝ 得 20。按错？C 清屏重来；减出负数（5－8＝）屏幕亮 E。',
   teaching:
-    '整条流水线：a、b（BCD）→ bcd2bin 转二进制 → 8 位二进制加法 → bin2bcd 转回十进制 →' +
-    '8 位寄存器在等号上升沿锁存 → 两个【七段译码器】把十位/个位 BCD 点亮成数码管。每一步都是前面关卡练过的模块。',
+    '把前面三关的模块拼起来：数字键盘编码器把按键变成 4 位码 + any（有键按下）；' +
+    '数字输入寄存器在 any 上升沿把新数字码左移插入（按 1 再按 2 得 12）；' +
+    '运算控制记住 ＋/－/= 与「有前值」标志，用八位寄存器当累加器（A）；' +
+    'ALU 把累加器和输入寄存器（BCD）转二进制相加/相减，再转回 BCD；' +
+    '显示控制选「正在输入显示输入、否则显示结果」，负数亮 E。' +
+    '立即执行的关键：按下运算键那一刻就把 A±输入 算好存回 A，所以 12＋5＋ 已经等于 17。',
   hint:
-    '把上一关的 bcd2bin、bin2bcd、七段译码器、八位寄存器当成模块拖出来拼：两个 bcd2bin 接 a/b，' +
-    '结果进 8 位加法器，再进 bin2bcd，寄存器在 eq 上升沿锁存，最后两个七段译码器点亮数码管。',
+    '把【数字键盘编码器】【数字输入寄存器】【运算控制】【八位寄存器】【BCD→二进制】【全加器】【异或门】' +
+    '【二进制→BCD】【七段译码器】【显示控制】当模块拖出来拼。数字输入寄存器用 any 的延迟作写脉冲' +
+    '（建立时间），减法模式（op_minus∧有前值）只从第二个运算起生效，= 的借位锁存成负号标志亮 E。' +
+    '参考解 24764 半单位（豁免：真实计算器远超课时量级）。',
   ports: [
-    port('a', 'in', 8),
-    port('b', 'in', 8),
+    port('d7', 'in'),
+    port('d8', 'in'),
+    port('d9', 'in'),
+    { id: 'plus', name: 'plus', dir: 'in', button: true },
+    port('d4', 'in'),
+    port('d5', 'in'),
+    port('d6', 'in'),
+    { id: 'minus', name: 'minus', dir: 'in', button: true },
+    port('d1', 'in'),
+    port('d2', 'in'),
+    port('d3', 'in'),
     { id: 'eq', name: 'eq', dir: 'in', button: true },
+    port('d0', 'in'),
+    { id: 'c', name: 'c', dir: 'in', button: true },
     { id: 'disp_t', name: 'disp_t', dir: 'out', width: 7, display: 'segment' },
     { id: 'disp_u', name: 'disp_u', dir: 'out', width: 7, display: 'segment' },
   ],
+  inputGridCols: 4,
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
-  budgetHalf: budgetFromOptimal(16920, MAIN_OVERHEAD),
-  optimalHalf: 16920,
+  budgetHalf: budgetFromOptimal(24764, MAIN_OVERHEAD),
+  optimalHalf: 24764,
   checks: {},
-  vectors: [
-    { inputs: { a: 0x00, b: 0x00, eq: 0 }, settlePs: 1_000_000, note: '0+0 待命' },
-    {
-      inputs: { a: 0x00, b: 0x00, eq: 1 },
-      expect: { disp_t: 0x3f, disp_u: 0x3f },
-      settlePs: 1_000_000,
-      note: '按下等号：0+0=00',
-    },
-    {
-      inputs: { a: 0x23, b: 0x05, eq: 0 },
-      expect: { disp_t: 0x3f, disp_u: 0x3f },
-      settlePs: 1_000_000,
-      note: '改 23+5，不按等号显示不变',
-    },
-    {
-      inputs: { a: 0x23, b: 0x05, eq: 1 },
-      expect: { disp_t: 0x5b, disp_u: 0x7f },
-      settlePs: 1_000_000,
-      note: '按下等号：23+5=28',
-    },
-    {
-      inputs: { a: 0x51, b: 0x10, eq: 0 },
-      expect: { disp_t: 0x5b, disp_u: 0x7f },
-      settlePs: 1_000_000,
-      note: '改 51+16，显示保持 28',
-    },
-    {
-      inputs: { a: 0x51, b: 0x10, eq: 1 },
-      expect: { disp_t: 0x7d, disp_u: 0x06 },
-      settlePs: 1_000_000,
-      note: '按下等号：51+10=61',
-    },
-    {
-      inputs: { a: 0x51, b: 0x10, eq: 0 },
-      expect: { disp_t: 0x7d, disp_u: 0x06 },
-      settlePs: 1_000_000,
-      note: '松开等号，61 保持',
-    },
-    {
-      inputs: { a: 0x50, b: 0x19, eq: 0 },
-      expect: { disp_t: 0x7d, disp_u: 0x06 },
-      settlePs: 1_000_000,
-      note: '改 50+19，显示保持 61',
-    },
-    {
-      inputs: { a: 0x50, b: 0x19, eq: 1 },
-      expect: { disp_t: 0x7d, disp_u: 0x6f },
-      settlePs: 1_000_000,
-      note: '按下等号：50+19=69',
-    },
-    {
-      inputs: { a: 0x12, b: 0x34, eq: 0 },
-      expect: { disp_t: 0x7d, disp_u: 0x6f },
-      settlePs: 1_000_000,
-      note: '改 12+34，显示保持 69',
-    },
-    {
-      inputs: { a: 0x12, b: 0x34, eq: 1 },
-      expect: { disp_t: 0x66, disp_u: 0x7d },
-      settlePs: 1_000_000,
-      note: '按下等号：12+34=46',
-    },
-  ] satisfies LevelVector[],
+  vectors: (() => {
+    // 判定器只设置向量里列出的输入、其余默认 Z —— 时序关每个向量必须写全全部 13 个键位
+    const base = {
+      d0: 0, d1: 0, d2: 0, d3: 0, d4: 0, d5: 0, d6: 0, d7: 0, d8: 0, d9: 0,
+      plus: 0, minus: 0, eq: 0, c: 0,
+    };
+    /** 按键序列 → 按下/松开两向量；press expect 只在给定按下键时检查（松开向量检查保持） */
+    const seq = (keys: Array<[string, number, string]>): LevelVector[] => {
+      const rows: LevelVector[] = [];
+      for (const [key, code, note] of keys) {
+        rows.push({
+          inputs: { ...base, [key]: 1 },
+          expect: { disp_t: code >> 8, disp_u: code & 0xff },
+          settlePs: 1_000_000,
+          note,
+        });
+        rows.push({ inputs: { ...base }, settlePs: 1_000_000, note: `${note} 松开` });
+      }
+      return rows;
+    };
+    /** 段码对 '20'/'EE' → 打包数值（高字节十位、低字节个位） */
+    const SEG = { 0: 0x3f, 1: 0x06, 2: 0x5b, 3: 0x4f, 4: 0x66, 5: 0x6d, 6: 0x7d, 7: 0x07, 8: 0x7f, 9: 0x6f, E: 0x79 } as Record<string, number>;
+    const d = (s: string) => (SEG[s[0] ?? ''] << 8) | SEG[s[1] ?? ''];
+    return [
+      { inputs: { ...base }, settlePs: 1_000_000, note: '待命（上电先按 C 清零）' },
+      // A. 主链 12＋5＋3＝20（立即执行）
+      ...seq([
+        ['c', d('00'), 'C 清屏'],
+        ['d1', d('01'), '按 1'],
+        ['d2', d('12'), '按 2 → 12'],
+        ['plus', d('12'), '按 ＋（12 待命）'],
+        ['d5', d('05'), '按 5'],
+        ['plus', d('17'), '按 ＋：12＋5=17'],
+        ['d3', d('03'), '按 3'],
+        ['eq', d('20'), '按 ＝：17＋3=20'],
+      ]),
+      // B. = 结算：9＋1＝10，然后 C 清屏再验证 0＋7＝7（不覆盖「= 后直接 op」链——
+      //    立即执行模型用旧操作数重算，属简化语义）
+      ...seq([
+        ['c', d('00'), 'C 清屏'],
+        ['d9', d('09'), '按 9'],
+        ['plus', d('09'), '按 ＋'],
+        ['d1', d('01'), '按 1'],
+        ['eq', d('10'), '按 ＝：9＋1=10'],
+        ['c', d('00'), 'C 清屏'],
+        ['d0', d('00'), '按 0'],
+        ['plus', d('00'), '按 ＋'],
+        ['d7', d('07'), '按 7'],
+        ['eq', d('07'), '按 ＝：0＋7=7'],
+      ]),
+      // C. 减法负例：5－8＝ 亮 E
+      ...seq([
+        ['c', d('00'), 'C 清屏'],
+        ['d5', d('05'), '按 5'],
+        ['minus', d('05'), '按 －（5 待命，不报错）'],
+        ['d8', d('08'), '按 8'],
+        ['eq', d('EE'), '按 ＝：5－8 负数 → E'],
+      ]),
+      // D. 减法正例：9－4＝5
+      ...seq([
+        ['c', d('00'), 'C 清屏'],
+        ['d9', d('09'), '按 9'],
+        ['minus', d('09'), '按 －'],
+        ['d4', d('04'), '按 4'],
+        ['eq', d('05'), '按 ＝：9－4=5'],
+      ]),
+      // E. 进位：7＋8＝15
+      ...seq([
+        ['c', d('00'), 'C 清屏'],
+        ['d7', d('07'), '按 7'],
+        ['plus', d('07'), '按 ＋'],
+        ['d8', d('08'), '按 8'],
+        ['eq', d('15'), '按 ＝：7＋8=15'],
+      ]),
+    ];
+  })(),
   unlock: {
     name: '简易计算器',
     kind: 'seq',
     stage: 3,
     ports: [
-      port('a', 'in', 8),
-      port('b', 'in', 8),
+      port('d7', 'in'),
+      port('d8', 'in'),
+      port('d9', 'in'),
+      port('plus', 'in'),
+      port('d4', 'in'),
+      port('d5', 'in'),
+      port('d6', 'in'),
+      port('minus', 'in'),
+      port('d1', 'in'),
+      port('d2', 'in'),
+      port('d3', 'in'),
       port('eq', 'in'),
+      port('d0', 'in'),
+      port('c', 'in'),
       port('disp_t', 'out', 7),
       port('disp_u', 'out', 7),
     ],
@@ -553,5 +737,7 @@ export const STAGE3_LEVELS: Level[] = [
   BIN2BCD,
   S3_DISPLAY,
   REG_8,
+  S3_ENCODER,
+  S3_DIGIT_ENTRY,
   CALC,
 ];
