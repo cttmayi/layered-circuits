@@ -37,7 +37,6 @@ export interface SimSnapshot {
     isSequential: boolean;
     uncertain: boolean;
   } | null;
-  truth: Array<{ inputs: Record<string, Logic>; outputs: Record<string, Logic> }> | null;
 }
 
 export interface WrappedModuleInfo {
@@ -69,8 +68,6 @@ export type StudioRequest =
        *  恢复信号必须一并恢复贡献，否则元素求值读到上电旧贡献会把状态电路毒化 */
       prevContribs?: Record<string, number[]>;
       withTiming?: boolean;
-      withTruth?: boolean;
-      maxTruthRows?: number;
     }
   | { id: number; type: 'wrap'; design: Design; library: unknown[]; name: string; stage: number }
   | {

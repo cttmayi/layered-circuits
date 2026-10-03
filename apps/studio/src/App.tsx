@@ -85,7 +85,6 @@ import { ModuleDetailModal } from './panels/ModuleDetailModal';
 import { Palette } from './panels/Palette';
 import { SettlementPanel } from './panels/SettlementPanel';
 import { TeachPanel } from './panels/TeachPanel';
-import { TruthTable } from './panels/TruthTable';
 import { WaveformPanel } from './panels/WaveformPanel';
 import { WorkshopPanel } from './panels/WorkshopPanel';
 import { WorldMap } from './panels/WorldMap';
@@ -168,7 +167,6 @@ export function App(): React.JSX.Element {
     setChipDrop(null);
   }, [levelId]);
 
-  const [showTruth, setShowTruth] = useState(true);
   const [showWave, setShowWave] = useState(false);
   /** 左右侧面板整体收起/展开（体验：布线时把侧栏收起来腾画布），选择记忆在 localStorage */
   const [leftOpen, setLeftOpen] = usePersistentBool('lc-ui-left-open', true);
@@ -260,8 +258,6 @@ export function App(): React.JSX.Element {
           prevSignals,
           prevContribs,
           withTiming: showTiming,
-          withTruth: showTruth,
-          maxTruthRows: 32,
         })
         .then((response: StudioResponse) => {
           if (response.error) {
@@ -283,7 +279,7 @@ export function App(): React.JSX.Element {
         .catch((error: unknown) => setToast(`仿真失败：${String(error)}`));
     }, 40);
     return () => clearTimeout(timer);
-  }, [doc, mode, showTruth, showTiming, runner, recomputeNonce]);
+  }, [doc, mode, showTiming, runner, recomputeNonce]);
 
   // ---- 本地自动存档（按模式 + 关卡分开存） ----
   const storageKey = storageKeyFor(gameMode, levelId);
@@ -1381,14 +1377,6 @@ export function App(): React.JSX.Element {
         <label className="check">
           <input
             type="checkbox"
-            checked={showTruth}
-            onChange={(e) => setShowTruth(e.target.checked)}
-          />
-          真值表
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
             checked={showTiming}
             onChange={(e) => setShowTiming(e.target.checked)}
           />
@@ -1589,7 +1577,6 @@ export function App(): React.JSX.Element {
                 ]}
               />
             )}
-            {showTruth && <TruthTable snapshot={snapshot} />}
           </div>
         )}
 

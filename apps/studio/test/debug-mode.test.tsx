@@ -23,12 +23,8 @@ describe('调试模式 · 一键出答案', () => {
 
     fireEvent.click(screen.getByText('一键出答案'));
     expect(screen.getByText(/参考解已搭好/)).toBeTruthy();
-    // 自动仿真跑起来了：真值表有内容（非门 2 行），说明电路真的搭到了画布上
-    await waitFor(() => {
-      const tt = screen.queryByText(/真值表（\d+ 行）/);
-      expect(tt).toBeTruthy();
-      expect((tt?.textContent ?? '').match(/真值表（(\d+) 行）/)?.[1]).toBe('2');
-    });
+    // 自动仿真跑起来了：材料费出现「三极管」行（非门 2 管），说明电路真的搭到了画布上
+    await waitFor(() => expect(screen.getByText('三极管')).toBeTruthy());
   });
 
   it('一键出答案后交付验收：功能通过、最优成本满分', async () => {
@@ -36,8 +32,8 @@ describe('调试模式 · 一键出答案', () => {
     startJob('非门');
     fireEvent.click(screen.getByText('调试模式'));
     fireEvent.click(screen.getByText('一键出答案'));
-    // 自动仿真跑完（真值表出现）后，仿真诊断里不得有「基极悬空」误报
-    await waitFor(() => expect(screen.getByText(/真值表（\d+ 行）/)).toBeTruthy());
+    // 自动仿真跑完（材料费出现「三极管」行）后，仿真诊断里不得有「基极悬空」误报
+    await waitFor(() => expect(screen.getByText('三极管')).toBeTruthy());
     expect(screen.queryByText(/基极悬空|未连接任何驱动/)).toBeNull();
     // 验收（验收台那枚）→ 通过后自动封装并弹出结算
     const judgeButtons = screen.getAllByText('交付验收');

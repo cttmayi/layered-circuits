@@ -21,7 +21,7 @@ import {
   ModuleTemplateSchema,
   parseLevel,
 } from '@lc/schema';
-import { allInputCombinations, type Logic, runVectors, Simulator } from '@lc/sim-core';
+import { type Logic, Simulator } from '@lc/sim-core';
 import type {
   DriveValue,
   SimSnapshot,
@@ -168,19 +168,6 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       };
     }
 
-    let truth: SimSnapshot['truth'] = null;
-    const inputNames = net.ports.filter((p) => p.dir === 'in').map((p) => p.name);
-    if (req.withTruth && inputNames.length > 0 && inputNames.length <= 6) {
-      const combos = allInputCombinations(inputNames);
-      const settled = combos
-        .filter((combo) => Object.values(combo).every((v) => v === 0 || v === 1))
-        .map((combo) => ({ inputs: combo }));
-      if (settled.length > 0) {
-        const run = runVectors(net, settled, { mode, defaultSettlePs: 1_000_000 });
-        truth = run.rows.map((row) => ({ inputs: row.inputs, outputs: row.actual }));
-      }
-    }
-
     const snapshot: SimSnapshot = {
       ok: true,
       inputs: values,
@@ -206,7 +193,6 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       cost: { counts: { ...counts }, half, text: formatCost(counts) },
       hash: hashDesign(design),
       timing,
-      truth,
     };
     if (unstable) {
       snapshot.simDiagnostics.push({

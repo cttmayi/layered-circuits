@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * 工作台的端到端用例：载入「非门示例」画布 → 导出 Design → 走真实仿真通道 → UI 显示真值表。
- * 这条链路把 M0 的验收判据（2 三极管 + 3 电阻搭出的非门真值表正确）在 UI 层面锁死。
+ * 工作台的端到端用例：载入「非门示例」画布 → 导出 Design → 走真实仿真通道。
+ * 这条链路把 M0 的验收判据（2 三极管 + 3 电阻搭出的非门行为正确）在 UI 层面锁死。
  */
 
 import { fireEvent, screen, waitFor } from '@testing-library/react';
@@ -57,7 +57,7 @@ describe('编辑器模型', () => {
 });
 
 describe('仿真通道（Worker 与主线程共用 handleRequest）', () => {
-  it('非门：成本 10、真值表 in=0→out=1、in=1→out=0', () => {
+  it('非门：成本 10、in=0→out=1、in=1→out=0', () => {
     const design = toDesign(notGateDemo());
     const off = handleRequest({
       id: 1,
@@ -80,19 +80,6 @@ describe('仿真通道（Worker 与主线程共用 handleRequest）', () => {
       inputs: { in: 1 },
     });
     expect(on.snapshot?.portValues.out).toBe(0);
-
-    const truth = handleRequest({
-      id: 3,
-      type: 'simulate',
-      design,
-      library: [],
-      mode: 'logic',
-      inputs: { in: 0 },
-      withTruth: true,
-    });
-    const rows = truth.snapshot?.truth ?? [];
-    expect(rows).toHaveLength(2);
-    expect(rows.map((r) => `${r.inputs.in}->${r.outputs.out}`)).toEqual(['0->1', '1->0']);
   });
 
   it('硬核模式：输出 1 是强驱动、0 是弱驱动（强度语义进了 UI）', () => {
@@ -165,7 +152,7 @@ describe('仿真通道（Worker 与主线程共用 handleRequest）', () => {
 });
 
 describe('工作台界面', () => {
-  it('渲染工具栏、成本面板与真值表（载入非门示例后自动仿真）', async () => {
+  it('渲染工具栏与成本面板（载入非门示例后自动仿真）', async () => {
     renderApp();
     // 主菜单 → 自由搭建 → 工作台
     fireEvent.click(screen.getByText('自由搭建'));
@@ -173,22 +160,13 @@ describe('工作台界面', () => {
     fireEvent.click(screen.getByText('载入非门示例'));
     expect(screen.getByText('封装为模块')).toBeTruthy();
 
-    // 自动仿真后（测试环境下走主线程回退路径），成本面板与真值表都要出现
-    await waitFor(() => expect(screen.getByText('真值表（2 行）')).toBeTruthy(), { timeout: 5000 });
-    expect(screen.getByText('合计')).toBeTruthy();
-
-    // 真值表两行必须是 0→1、1→0（这就是 M0 的验收判据）
-    const table = document.querySelector('.truth') as HTMLTableElement;
-    const cells = [...table.querySelectorAll('tbody tr')].map((tr) =>
-      [...tr.querySelectorAll('td')].map((td) => td.textContent),
+    // 自动仿真后（测试环境下走主线程回退路径），成本面板出现（材料费合计 10）
+    await waitFor(
+      () => {
+        const costRows = [...document.querySelectorAll('.kv tr')].map((tr) => tr.textContent ?? '');
+        expect(costRows.some((row) => row.includes('合计') && row.includes('10'))).toBe(true);
+      },
+      { timeout: 5000 },
     );
-    expect(cells).toEqual([
-      ['0', '1'],
-      ['1', '0'],
-    ]);
-
-    // 成本面板显示合计 10
-    const costRows = [...document.querySelectorAll('.kv tr')].map((tr) => tr.textContent ?? '');
-    expect(costRows.some((row) => row.includes('合计') && row.includes('10'))).toBe(true);
   });
 });
