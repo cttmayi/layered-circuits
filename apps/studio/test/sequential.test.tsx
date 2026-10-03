@@ -66,15 +66,7 @@ describe('波形面板', () => {
   it('校验面板显示跳变次数、空翻结论与建立/保持时间', () => {
     const result = judgeDff();
     const html = renderToStaticMarkup(
-      <JudgePanel
-        level={dffLevel}
-        result={result}
-        busy={false}
-        record={undefined}
-        attempts={1}
-        onJudge={() => {}}
-        onClear={() => {}}
-      />,
+      <JudgePanel level={dffLevel} result={result} record={undefined} attempts={1} />,
     );
     expect(html).toContain('空翻/毛刺');
     expect(html).toContain('无空翻');
@@ -90,15 +82,7 @@ describe('波形面板', () => {
       <>
         <h1 style={{ font: '600 15px system-ui' }}>D 触发器：端口波形与判定读数</h1>
         <WaveformPanel result={result} portNames={PORT_NAMES} />
-        <JudgePanel
-          level={dffLevel}
-          result={result}
-          busy={false}
-          record={undefined}
-          attempts={3}
-          onJudge={() => {}}
-          onClear={() => {}}
-        />
+        <JudgePanel level={dffLevel} result={result} record={undefined} attempts={3} />
       </>,
     );
     mkdirSync('.tmp-wave', { recursive: true });

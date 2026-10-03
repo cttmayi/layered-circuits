@@ -20,7 +20,7 @@ const UNIT_NAME: Record<UnitKind, string> = {
   pmos: 'P-MOS',
 };
 
-/** 右侧检查器：材料费 / 端口电平 / 诊断 / 时序 */
+/** 右侧检查器：材料费 / 诊断 / 时序 */
 export function Inspector({
   snapshot,
   units,
@@ -68,25 +68,6 @@ export function Inspector({
 
       {snapshot && (
         <>
-          <h3>端口电平</h3>
-          <table className="kv">
-            <tbody>
-              {Object.entries(snapshot.portValues).map(([name, value]) => (
-                <tr key={name}>
-                  <td>{name}</td>
-                  <td className={`num ${value === 1 ? 'hi' : value === 0 ? 'lo' : 'bad'}`}>
-                    {String(value)}
-                  </td>
-                </tr>
-              ))}
-              {Object.keys(snapshot.portValues).length === 0 && (
-                <tr>
-                  <td className="dim">还没有输出引脚</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
           <h3>仿真状态</h3>
           <p className="small">
             {snapshot.nodeCount} 节点 · {snapshot.elemCount} 元件 · {snapshot.evaluations} 次求值 ·

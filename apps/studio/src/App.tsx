@@ -1295,11 +1295,21 @@ export function App(): React.JSX.Element {
           )}
         </div>
         {gameMode !== 'free' && (
-          <span className="cleared-count">
-            已通关 {ALL_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
-            {ALL_LEVELS.length} · 可用余额 {(progress.walletHalf - progress.spentHalf) / 2} 元 ·{' '}
-            {rankOf(progress).title}
-          </span>
+          <div className="group">
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void runJudge()}
+              disabled={judging}
+            >
+              {judging ? '验收中…' : '交付验收'}
+            </button>
+            <span className="cleared-count">
+              已通关 {ALL_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
+              {ALL_LEVELS.length} · 可用余额 {(progress.walletHalf - progress.spentHalf) / 2} 元 ·{' '}
+              {rankOf(progress).title}
+            </span>
+          </div>
         )}
         <div className="group">
           <button
@@ -1359,6 +1369,9 @@ export function App(): React.JSX.Element {
           )}
         </div>
         <div className="group">
+          <button type="button" onClick={() => setPanelOpen('shop')} title="花钱买设备">
+            工具铺
+          </button>
           <button type="button" onClick={() => setPanelOpen('library')} title="封装复用 / 存档">
             组件库
           </button>
@@ -1523,10 +1536,8 @@ export function App(): React.JSX.Element {
               <JudgePanel
                 level={judgedLevel ?? currentLevel}
                 result={judgeResult}
-                busy={judging}
                 record={levelRecord}
                 attempts={progress.attempts[currentLevel.id] ?? 0}
-                onJudge={() => void runJudge()}
               />
             )}
             {currentLevel && settlement && (
@@ -1552,11 +1563,6 @@ export function App(): React.JSX.Element {
                 onDismiss={() => setSettlement(null)}
               />
             )}
-            <div className="rail">
-              <button type="button" onClick={() => setPanelOpen('shop')} title="花钱买设备">
-                工具铺
-              </button>
-            </div>
             <Inspector
               snapshot={snapshot}
               units={units}
@@ -1644,13 +1650,6 @@ export function App(): React.JSX.Element {
           >
             {rightOpen ? '▶' : '◀'}
           </button>
-          {!rightOpen && (
-            <div className="rail-mini">
-              <button type="button" onClick={() => setPanelOpen('shop')} title="花钱买设备">
-                工具铺
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>

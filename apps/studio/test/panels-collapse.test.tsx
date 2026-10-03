@@ -44,22 +44,24 @@ describe('左右侧面板展开/收起', () => {
     expect(screen.getByText('三极管 NPN')).toBeTruthy();
   });
 
-  it('右侧整体收起：验收面板隐藏但迷你侧栏可用；展开恢复', async () => {
+  it('右侧整体收起：验收/属性面板隐藏，顶栏按钮不受影响；展开恢复', async () => {
     renderApp();
     startJob('非门');
-    // 右侧面板默认展开：「交付验收」在验收面板里（工具栏已不设该按钮）
-    expect(screen.getAllByText('交付验收').length).toBe(1);
+    // 右侧面板默认展开：右侧检查器（材料费）与顶栏「交付验收」都在
+    expect(screen.getAllByText('材料费').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('交付验收')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '收起右侧面板' }));
-    // 验收面板没了（0 处），但迷你侧栏的工具铺还在
-    expect(screen.queryAllByText('交付验收').length).toBe(0);
+    // 右侧检查器隐藏，但顶栏按钮（交付验收/工具铺）仍在
+    expect(screen.queryByText('材料费')).toBeNull();
+    expect(screen.getByText('交付验收')).toBeTruthy();
     expect(screen.getByText('工具铺')).toBeTruthy();
-    // 迷你侧栏仍能开工具铺弹窗
+    // 工具铺弹窗照常可开（顶栏入口）
     fireEvent.click(screen.getByText('工具铺'));
     await waitFor(() => expect(screen.getByRole('dialog', { name: '工具铺' })).toBeTruthy());
     // 收起弹窗、展开右侧面板
     fireEvent.click(screen.getByRole('button', { name: '关闭' }));
     fireEvent.click(screen.getByRole('button', { name: '展开右侧面板' }));
-    await waitFor(() => expect(screen.getAllByText('交付验收').length).toBe(1));
+    await waitFor(() => expect(screen.getAllByText('材料费').length).toBeGreaterThanOrEqual(1));
   });
 
   it('开合选择持久化：收起左侧后重进工作台仍是收起', () => {

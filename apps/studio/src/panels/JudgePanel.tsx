@@ -6,22 +6,18 @@ import { type BusValue, columnsFromKeys, groupBusRow, portLabel } from './busDis
 export interface JudgePanelProps {
   level: Level;
   result: JudgeResult | null;
-  busy: boolean;
   record: LevelRecord | undefined;
   attempts: number;
-  onJudge: () => void;
 }
 
 const CELL: Record<string, string> = { 0: 'lo', 1: 'hi', X: 'bad', Z: 'dim' };
 
-/** 右侧「验收台」：逐行对比、错误原因。验收通过即自动封装并弹出结算（不用再点交付按钮） */
+/** 右侧「验收台」：逐行对比、错误原因（「交付验收」按钮在顶栏）。验收通过即自动封装并弹出结算 */
 export function JudgePanel({
   level,
   result,
-  busy,
   record,
   attempts,
-  onJudge,
 }: JudgePanelProps): React.JSX.Element {
   const outputNames = [...new Set(level.vectors.flatMap((v) => Object.keys(v.expect ?? {})))];
   const widthOf = new Map(level.ports.map((p) => [p.name, p.width]));
@@ -31,11 +27,6 @@ export function JudgePanel({
   return (
     <section className="panel judge">
       <h3>验收台</h3>
-      <div className="group-row">
-        <button type="button" className="primary" onClick={onJudge} disabled={busy}>
-          {busy ? '验收中…' : '交付验收'}
-        </button>
-      </div>
       {result?.pass && (
         <p className="dim small">
           验收通过，正在自动封装为【{level.unlock?.name ?? level.title}】并结算…
