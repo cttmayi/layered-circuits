@@ -272,10 +272,12 @@ export function Palette({
               className={isArmed('unit', item.unit) ? 'palette-item active' : 'palette-item'}
               onClick={() => pick('unit', item.unit)}
             >
-              <span className="palette-name">
-                {item.name} {locked && <em className="locked">本关不可用</em>}
+              <span className="palette-row">
+                <span className="palette-name">
+                  {item.name} {locked && <em className="locked">本关不可用</em>}
+                </span>
+                <span className="palette-cost">价格 {item.cost}</span>
               </span>
-              <span className="palette-cost">价格 {item.cost}</span>
               <span className="palette-note">{locked ? lockReason(item.unit) : item.note}</span>
             </button>
           );
@@ -358,10 +360,12 @@ export function Palette({
               onClick={() => pick('module', undefined, mod.hash)}
               title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}（拖到画布放置）`}
             >
-              <span className="palette-name">
-                {mod.name} v{mod.version} {mod.isSequential && <em>时序</em>}
+              <span className="palette-row">
+                <span className="palette-name">
+                  {mod.name} v{mod.version} {mod.isSequential && <em>时序</em>}
+                </span>
+                <span className="palette-cost">成本 {mod.costHalf / 2}</span>
               </span>
-              <span className="palette-cost">成本 {mod.costHalf / 2}</span>
               <span className="palette-note">
                 {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
                 {mod.ports.filter((p) => p.dir === 'out').length} 出 · #{mod.hash.slice(0, 6)}
