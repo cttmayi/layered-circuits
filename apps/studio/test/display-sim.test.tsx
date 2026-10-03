@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * 端到端回归：s3-display（组合译码器关）点击 bcd 输入，seg 数码管必须跟随变化。
+ * 端到端回归：s3-display2（数码管显示关，模块复用 2× 译码器）点击 bcd 输入，seg 数码管必须跟随变化。
  *
  * 曾复现的 bug：组合关卡也复用上次终态（prevSignals/prevContribs），而快照只含
  * 顶层网、模块内部节点不恢复 —— 「部分恢复 + 输入变化再收敛」时深组合链（43 门
@@ -32,7 +32,7 @@ vi.mock('../src/sim/handle', async (importOriginal) => {
   };
 });
 
-const level = ALL_LEVELS.find((l) => l.id === 's3-display')!;
+const level = ALL_LEVELS.find((l) => l.id === 's3-display2')!;
 const gateDesign = teachingSolutionOf(level.id, 'rtl')!;
 const lib = teachingModulesFor('rtl').map((m) => ({
   hash: m.hash,
@@ -47,9 +47,9 @@ const lib = teachingModulesFor('rtl').map((m) => ({
   createdAt: 0,
 }));
 const answerDoc = fromDesign(gateDesign, docForLevel(level, lib));
-const bcdSym = answerDoc.syms.find((s) => s.kind === 'input' && s.label === 'bcd')!;
-// seg 数码管端口在答案电路里的网（t18…）——仿真响应里按这些顶层网名读段码
-const segNets = toDesign(answerDoc).ports.find((p) => p.name === 'seg')!.nets;
+const bcdSym = answerDoc.syms.find((s) => s.kind === 'input' && s.label === 'bcd1')!;
+// seg1 数码管端口在答案电路里的网——仿真响应里按这些顶层网名读段码
+const segNets = toDesign(answerDoc).ports.find((p) => p.name === 'seg1')!.nets;
 
 /** 从仿真响应读 seg 段码（bit0=a..bit6=g） */
 function readSeg(resp: StudioResponse | undefined): number {
@@ -129,24 +129,24 @@ describe('数码管关：点 bcd 输入 seg 跟随 + 组合关不复用终态 + 
     for (const r of responses) {
       expect(
         r.req.prevSignals,
-        `组合关不复用 prevSignals（${r.req.inputs['bcd[0]']}）`,
+        `组合关不复用 prevSignals（${r.req.inputs['bcd1[0]']}）`,
       ).toBeUndefined();
       expect(r.req.prevContribs).toBeUndefined();
     }
 
-    // 点 bcd：值 0 → 1（seg 0x3F → 0x06），再点 → 2（0x5B）
+    // 点 bcd1：值 0 → 1（seg 0x3F → 0x06），再点 → 2（0x5B）
     clickWorld(bcdSym.x, bcdSym.y);
-    await waitFor(() => expect(responses.some((x) => x.req.inputs['bcd[0]'] === 1)).toBe(true), {
+    await waitFor(() => expect(responses.some((x) => x.req.inputs['bcd1[0]'] === 1)).toBe(true), {
       timeout: 4000,
     });
-    const v1 = [...responses].reverse().find((x) => x.req.inputs['bcd[0]'] === 1);
+    const v1 = [...responses].reverse().find((x) => x.req.inputs['bcd1[0]'] === 1);
     expect(readSeg(v1?.resp)).toBe(0x06);
 
     clickWorld(bcdSym.x, bcdSym.y);
-    await waitFor(() => expect(responses.some((x) => x.req.inputs['bcd[1]'] === 1)).toBe(true), {
+    await waitFor(() => expect(responses.some((x) => x.req.inputs['bcd1[1]'] === 1)).toBe(true), {
       timeout: 4000,
     });
-    const v2 = [...responses].reverse().find((x) => x.req.inputs['bcd[1]'] === 1);
+    const v2 = [...responses].reverse().find((x) => x.req.inputs['bcd1[1]'] === 1);
     expect(readSeg(v2?.resp)).toBe(0x5b);
 
     for (const r of responses) {

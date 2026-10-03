@@ -8,7 +8,13 @@ import {
   teachingModulesFor,
   teachingSolutionOf,
 } from '@lc/content';
-import { familySpecOf, type LogicFamily, levelViewOf } from '@lc/schema';
+import {
+  type Design,
+  familySpecOf,
+  type LogicFamily,
+  levelViewOf,
+  type ModuleTemplate,
+} from '@lc/schema';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emptyDoc, notGateDemo } from './editor/demos';
 import {
@@ -843,11 +849,12 @@ export function App(): React.JSX.Element {
       return;
     }
     // 参考解若引用了教学门积木（门版必引；模块化参考解如 s3-display2 的「2×七段译码器」
-    // 也会引），按引用哈希并入画布库供渲染/判定编译用；这些积木标记 teaching，不出现在
+    // 也会引），并入画布库供渲染/判定编译用；这些积木标记 teaching，不出现在
     // 左侧「我的模块」（玩家没亲手搭，不算他的资产）。hash 内容稳定，重复注入无害。
-    const refHashes = new Set<string>();
-    for (const inst of ref.instances) if (inst.kind === 'module') refHashes.add(inst.module);
-    const extra = teachingStoredFor(spec.family).filter((m) => refHashes.has(m.hash));
+    // 复合积木的身体还会引用更早的积木（传递闭包，如 显示控制→七段译码器→与非门），
+    // 只注入直接引用会在展开时 unknown-module，因此只要参考解用到任何教学积木就注入整族。
+    const refUsesModule = ref.instances.some((inst) => inst.kind === 'module');
+    const extra = refUsesModule ? teachingStoredFor(spec.family) : [];
     const library = [...doc.library, ...extra];
     const next = fromDesign(ref, docForLevel(currentLevel, library));
     const nextDoc = { ...next, library };
@@ -1061,18 +1068,30 @@ export function App(): React.JSX.Element {
       },
       Date.now(),
     );
-    commit({ ...doc, library: addModule(doc.library, stored) });
+    // 封装出的复合模块身体会引用子积木哈希（玩家自己的模块 + 教学积木）。教学积木不在
+    // 玩家库里 → 跨关复用会 unknown-module：把身体传递引用到的教学积木一并持久化进玩家库
+    // （teaching 标记，仍不出现在「我的模块」，但库里有 → 编译可解析）。幂等：重复无害。
+    const deps = teachingDepsOf(
+      (info.template as ModuleTemplate).body,
+      doc.library,
+      progress.family,
+    );
+    let library = addModule(doc.library, stored);
+    for (const d of deps) library = addModule(library, d);
+    commit({ ...doc, library });
     // 星级：元件成本与传播延迟各按基准线四档（0.5/0.75/1 倍），取较差；教学关无标准不评星
     const stars = currentLevel.classroom ? 0 : starsOf(judge);
-    setProgress((prev) =>
-      recordClear(
-        { ...prev, library: addModule(prev.library, stored) },
+    setProgress((prev) => {
+      let next = addModule(prev.library, stored);
+      for (const d of deps) next = addModule(next, d);
+      return recordClear(
+        { ...prev, library: next },
         currentLevel.id,
         judge.score,
         judge.costHalf,
         stars,
-      ),
-    );
+      );
+    });
     const index = ALL_LEVELS.findIndex((l) => l.id === currentLevel.id);
     // 教学关不在关卡链上：没有「下一关」（index = -1 时不能取到 ALL_LEVELS[0]）
     const next = index >= 0 ? ALL_LEVELS[index + 1] : undefined;
@@ -1684,6 +1703,39 @@ const teachingStoredFor = (family: LogicFamily): StoredModule[] =>
     createdAt: 0,
     teaching: true,
   }));
+
+/**
+ * 设计传递引用到的教学积木（复合积木的身体还会引用更早的积木）。
+ * 封装出的复合模块要跨关复用，其身体引用的教学积木必须也在玩家库里；
+ * 这里把它们找出来（保持 teaching 标记，不出现在「我的模块」，但库里有 → 编译可解析）。
+ */
+const teachingDepsOf = (
+  design: Design,
+  library: readonly StoredModule[],
+  family: LogicFamily,
+): StoredModule[] => {
+  const all = teachingStoredFor(family);
+  const byHash = new Map<string, ModuleTemplate>();
+  // 模板在存档/画布库里是纯 JSON（结构化克隆），按 familyOfModule 的既有模式窄化成 ModuleTemplate
+  for (const m of library) byHash.set(m.hash, m.template as ModuleTemplate);
+  for (const m of all) byHash.set(m.hash, m.template as ModuleTemplate);
+  const found = new Map<string, StoredModule>();
+  const seen = new Set<string>();
+  const walk = (d: Design): void => {
+    for (const inst of d.instances) {
+      if (inst.kind !== 'module') continue;
+      if (seen.has(inst.module)) continue;
+      seen.add(inst.module);
+      const t = byHash.get(inst.module);
+      if (!t) continue;
+      walk(t.body);
+      const teach = all.find((m) => m.hash === inst.module);
+      if (teach) found.set(inst.module, teach);
+    }
+  };
+  walk(design);
+  return [...found.values()];
+};
 
 /** 面板开合等 UI 偏好的持久化：刷新后保持用户上次的选择 */
 function usePersistentBool(key: string, def: boolean): [boolean, (v: boolean) => void] {

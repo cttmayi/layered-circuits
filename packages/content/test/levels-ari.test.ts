@@ -41,7 +41,7 @@ function portWidthOf(levelId: string, name: string): number {
 }
 
 describe('阶段 3 关卡内容（位宽/总线）', () => {
-  it('主线按「半加器 → 全加器 → 4位 → 8位 → ALU → BCD↔二进制 → 数码管 → 寄存器 → 计算器」排列，位宽从 1 涨到 8', () => {
+  it('主线按「半加器 → 全加器 → 4位 → 8位 → ALU → BCD↔二进制 → 段码积项/段码×3 → 数码管 → 寄存器 → 计算器」排列，位宽从 1 涨到 8', () => {
     const ids = STAGE3_LEVELS.map((l) => l.id);
     expect(ids).toEqual([
       's3-half-adder',
@@ -52,6 +52,9 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
       's3-bcd2bin',
       's3-bin2bcd',
       's3-display',
+      's3-seg-abc',
+      's3-seg-de',
+      's3-seg-fg',
       's3-display2',
       's3-reg-8',
       's3-or-chain',
@@ -163,32 +166,57 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
     expect(run.rows.every((r) => r.ok)).toBe(true);
   });
 
-  it('七段译码器真值表：bcd 0-9 → 段码（单元参考解与门版一致）', () => {
+  it('段码真值表：bcd 0-9 → a-g（单元参考解与门版一致，拆分自原七段译码器关）', () => {
     // 段码（bit0=a..bit6=g）：0→3F 1→06 2→5B 3→4F 4→66 5→6D 6→7D 7→07 8→7F 9→6F
     const ON = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f];
-    const l = level('s3-display');
-    const widths = portWidthsOf(l);
-    const vs = ON.map((seg, v) => ({ inputs: { bcd: v }, expect: { seg } }));
-    const lib = new InMemoryModuleLibrary();
-    const runRef = runVectors(
-      compileDesign(l.referenceSolution!, { library: lib }).net,
-      expandVectors(vs, widths),
-      { mode: 'logic' },
-    );
-    expect(
-      runRef.pass,
-      `单元参考解：${JSON.stringify(runRef.rows?.map((r) => (r.ok ? 'ok' : `mismatch:${JSON.stringify(r.mismatches)}`)))}`,
-    ).toBe(true);
-    const gateLib = new InMemoryModuleLibrary([...teachingModulesFor('rtl')]);
-    const runGate = runVectors(
-      compileDesign(teachingSolutionOf('s3-display', 'rtl')!, { library: gateLib }).net,
-      expandVectors(vs, widths),
-      { mode: 'logic' },
-    );
-    expect(
-      runGate.pass,
-      `门版：${JSON.stringify(runGate.rows?.map((r) => (r.ok ? 'ok' : `mismatch:${JSON.stringify(r.mismatches)}`)))}`,
-    ).toBe(true);
+    const bcd = (v: number) => ({
+      bcd0: v & 1,
+      bcd1: (v >> 1) & 1,
+      bcd2: (v >> 2) & 1,
+      bcd3: (v >> 3) & 1,
+    });
+    const segOf = (v: number) => ({
+      a: (ON[v]! >> 0) & 1,
+      b: (ON[v]! >> 1) & 1,
+      c: (ON[v]! >> 2) & 1,
+      d: (ON[v]! >> 3) & 1,
+      e: (ON[v]! >> 4) & 1,
+      f: (ON[v]! >> 5) & 1,
+      g: (ON[v]! >> 6) & 1,
+    });
+    const cases = [
+      ['s3-seg-abc', ['a', 'b', 'c']],
+      ['s3-seg-de', ['d', 'e']],
+      ['s3-seg-fg', ['f', 'g']],
+    ] as const;
+    for (const [id, segs] of cases) {
+      const l = level(id);
+      const vs = ON.map((_, v) => {
+        const expect: Record<string, number> = {};
+        for (const s of segs) expect[s] = segOf(v)[s];
+        return { inputs: bcd(v), expect };
+      });
+      const lib = new InMemoryModuleLibrary();
+      const runRef = runVectors(
+        compileDesign(l.referenceSolution!, { library: lib }).net,
+        expandVectors(vs, portWidthsOf(l)),
+        { mode: 'logic' },
+      );
+      expect(
+        runRef.pass,
+        `${id} 单元参考解：${JSON.stringify(runRef.rows?.map((r) => (r.ok ? 'ok' : `mismatch:${JSON.stringify(r.mismatches)}`)))}`,
+      ).toBe(true);
+      const gateLib = new InMemoryModuleLibrary([...teachingModulesFor('rtl')]);
+      const runGate = runVectors(
+        compileDesign(teachingSolutionOf(id, 'rtl')!, { library: gateLib }).net,
+        expandVectors(vs, portWidthsOf(l)),
+        { mode: 'logic' },
+      );
+      expect(
+        runGate.pass,
+        `${id} 门版：${JSON.stringify(runGate.rows?.map((r) => (r.ok ? 'ok' : `mismatch:${JSON.stringify(r.mismatches)}`)))}`,
+      ).toBe(true);
+    }
   });
 
   it('玩家风格解法：封装【全加器】+【异或门】拼出 ALU（多 bit 模块实例化）', () => {

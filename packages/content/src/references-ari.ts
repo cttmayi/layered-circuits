@@ -246,6 +246,130 @@ export function seg7Into(
   orN(seg[6], [t1, t3, t4, nD]); // g
 }
 
+/**
+ * 段码积项：输入反相 + 10 个共享积项（14 个与非门）。
+ * 网名带前缀 p（nA..nD、t1..t9、t3n），可被段级子电路与完整译码器复用。
+ */
+export function segTermInto(
+  b: DesignBuilder,
+  p: string,
+  A: string,
+  B: string,
+  C: string,
+  D: string,
+): void {
+  const nA = `${p}nA`;
+  const nB = `${p}nB`;
+  const nC = `${p}nC`;
+  const nD = `${p}nD`;
+  nandInto(b, `${p}iA`, A, A, nA);
+  nandInto(b, `${p}iB`, B, B, nB);
+  nandInto(b, `${p}iC`, C, C, nC);
+  nandInto(b, `${p}iD`, D, D, nD);
+  nandInto(b, `${p}t1`, nA, B, `${p}t1`); // ¬(A'·B)
+  nandInto(b, `${p}t2`, nA, nC, `${p}t2`); // ¬(A'·C')
+  nandInto(b, `${p}t3`, nB, C, `${p}t3`); // ¬(B'·C)
+  nandInto(b, `${p}t4`, B, nC, `${p}t4`); // ¬(B·C')
+  nandInto(b, `${p}t5`, A, C, `${p}t5`); // ¬(A·C)
+  nandInto(b, `${p}t6`, nA, nB, `${p}t6`); // ¬(A'·B')
+  nandInto(b, `${p}t7`, A, B, `${p}t7`); // ¬(A·B)
+  nandInto(b, `${p}t3n`, `${p}t3`, `${p}t3`, `${p}t3n`); // B'·C
+  nandInto(b, `${p}t8`, A, `${p}t3n`, `${p}t8`); // ¬(A·B'·C)
+  nandInto(b, `${p}t9`, nA, C, `${p}t9`); // ¬(A'·C)
+}
+
+/** 段输出链：NAND 链实现 ¬(terms 全与)（与 seg7Into 的 orN 同算法；内部网/实例 id 带前缀 p） */
+export function segChainInto(b: DesignBuilder, p: string, out: string, terms: string[]): void {
+  let n = 0;
+  const g = (a: string, c: string, y: string): void => {
+    nandInto(b, `${p}q${n++}`, a, c, y);
+  };
+  if (terms.length === 2) {
+    g(terms[0], terms[1], out);
+    return;
+  }
+  let s = `${p}m${n++}`;
+  g(terms[0], terms[1], s);
+  for (let i = 2; i < terms.length; i++) {
+    const inv = `${p}m${n++}`;
+    g(s, s, inv);
+    const nxt = i === terms.length - 1 ? out : `${p}m${n++}`;
+    g(inv, terms[i], nxt);
+    s = nxt;
+  }
+}
+
+/** 段码积项参考解：bcd0..3 → nA..nD、t1..t9、t3n（14 个与非门，成本 280） */
+export function segTermRef(id = 'ref-s3-seg-term'): Design {
+  const b = new DesignBuilder(id, '段码积项');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  segTermInto(b, '', 'bcd0', 'bcd1', 'bcd2', 'bcd3');
+  for (const n of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(n, 'in', n);
+  for (const n of [
+    'nA',
+    'nB',
+    'nC',
+    'nD',
+    't1',
+    't2',
+    't3',
+    't4',
+    't5',
+    't6',
+    't7',
+    't8',
+    't9',
+    't3n',
+  ])
+    b.port(n, 'out', n);
+  return b.build();
+}
+
+/** 段码·高段参考解：bcd0..3 → a,b,c（积项 14 + 链 5+3+3 = 25 个与非门，成本 500） */
+export function segABCRef(id = 'ref-s3-seg-abc'): Design {
+  const b = new DesignBuilder(id, '段码abc');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  segTermInto(b, '', 'bcd0', 'bcd1', 'bcd2', 'bcd3');
+  segChainInto(b, 'a', 'a', ['t2', 't5', 'nB', 'nD']);
+  segChainInto(b, 'b', 'b', ['t6', 't7', 'bcd2']);
+  segChainInto(b, 'c', 'c', ['nA', 'bcd1', 'nC']);
+  for (const n of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(n, 'in', n);
+  b.port('a', 'out', 'a');
+  b.port('b', 'out', 'b');
+  b.port('c', 'out', 'c');
+  return b.build();
+}
+
+/** 段码·中段参考解：bcd0..3 → d,e（积项 14 + 链 7+1 = 22 个与非门，成本 440） */
+export function segDERef(id = 'ref-s3-seg-de'): Design {
+  const b = new DesignBuilder(id, '段码de');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  segTermInto(b, '', 'bcd0', 'bcd1', 'bcd2', 'bcd3');
+  segChainInto(b, 'd', 'd', ['t1', 't2', 't8', 't4', 'nD']);
+  segChainInto(b, 'e', 'e', ['t1', 't2']);
+  for (const n of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(n, 'in', n);
+  b.port('d', 'out', 'd');
+  b.port('e', 'out', 'e');
+  return b.build();
+}
+
+/** 段码·低段参考解：bcd0..3 → f,g（积项 14 + 链 5+5 = 24 个与非门，成本 480） */
+export function segFGRef(id = 'ref-s3-seg-fg'): Design {
+  const b = new DesignBuilder(id, '段码fg');
+  b.vcc('vcc');
+  b.gnd('gnd');
+  segTermInto(b, '', 'bcd0', 'bcd1', 'bcd2', 'bcd3');
+  segChainInto(b, 'f', 'f', ['t6', 't9', 't3', 'nD']);
+  segChainInto(b, 'g', 'g', ['t1', 't3', 't4', 'nD']);
+  for (const n of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(n, 'in', n);
+  b.port('f', 'out', 'f');
+  b.port('g', 'out', 'g');
+  return b.build();
+}
+
 /** 七段译码器参考解：bcd[3:0] → seg[6:0]（成本 860） */
 export function seg7Ref(id = 'ref-s3-seg7'): Design {
   const b = new DesignBuilder(id, '七段译码器');

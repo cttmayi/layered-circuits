@@ -61,7 +61,7 @@ describe('按钮 / 七段数码管器件', () => {
     expect(seg?.width).toBe(7);
   });
 
-  it('docForLevel：s2-btn-latch 的 btn 端口 → 锁定按钮符号；s3-display 的 seg 端口 → 锁定 7 位数码管符号', () => {
+  it('docForLevel：s2-btn-latch 的 btn 端口 → 锁定按钮符号；s3-display2 的 seg1/seg2 端口 → 锁定 7 位数码管符号', () => {
     const btnDoc = docForLevel(findLevel('s2-btn-latch')!, []);
     const btn = btnDoc.syms.find((s) => s.label === 'btn');
     expect(btn?.kind).toBe('input');
@@ -69,12 +69,14 @@ describe('按钮 / 七段数码管器件', () => {
     expect(btn?.sprite).toBe('button');
     expect(btn?.locked).toBe(true);
 
-    const dispDoc = docForLevel(findLevel('s3-display')!, []);
-    const seg = dispDoc.syms.find((s) => s.label === 'seg');
-    expect(seg?.kind).toBe('output');
-    expect(seg?.display).toBe('segment');
-    expect(seg?.width).toBe(7);
-    expect(seg?.locked).toBe(true);
+    const dispDoc = docForLevel(findLevel('s3-display2')!, []);
+    for (const name of ['seg1', 'seg2']) {
+      const seg = dispDoc.syms.find((s) => s.label === name);
+      expect(seg?.kind).toBe('output');
+      expect(seg?.display).toBe('segment');
+      expect(seg?.width).toBe(7);
+      expect(seg?.locked).toBe(true);
+    }
   });
 });
 
