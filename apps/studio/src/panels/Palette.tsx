@@ -48,12 +48,12 @@ export function dragImage(kind: string): HTMLImageElement | HTMLCanvasElement {
 }
 
 const UNITS: Array<{ unit: UnitKind; name: string; cost: string; note: string }> = [
-  { unit: 'npn', name: '三极管 NPN', cost: '2', note: '基极高电平导通，双向通路' },
-  { unit: 'res', name: '电阻', cost: '2', note: '弱驱动：永远被强驱动压过；芯片里最占面积' },
-  { unit: 'dio', name: '二极管', cost: '1', note: '单向导通 + 逻辑隔离' },
-  { unit: 'cap', name: '电容', cost: '4', note: '只计费，不参与逻辑仿真' },
-  { unit: 'nmos', name: 'N-MOS', cost: '1', note: '栅极高电平导通，漏源双向通路' },
-  { unit: 'pmos', name: 'P-MOS', cost: '1', note: '栅极低电平导通，漏源双向通路' },
+  { unit: 'npn', name: '三极管 NPN', cost: '2', note: '基极高电平导通' },
+  { unit: 'res', name: '电阻', cost: '2', note: '弱驱动，最占面积' },
+  { unit: 'dio', name: '二极管', cost: '1', note: '单向导通' },
+  { unit: 'cap', name: '电容', cost: '4', note: '只计费，不参与仿真' },
+  { unit: 'nmos', name: 'N-MOS', cost: '1', note: '栅极高电平导通' },
+  { unit: 'pmos', name: 'P-MOS', cost: '1', note: '栅极低电平导通' },
 ];
 
 /** 分组折叠的持久化键：值为数组（当前展开的分组 key） */
@@ -196,7 +196,7 @@ export function Palette({
     return '本关不允许使用模块';
   };
   const lockReason = (unit: UnitKind): string => {
-    if (unit === 'cap') return '电容是时钟专用元件，本阶段不开放';
+    if (unit === 'cap') return '时钟专用元件，本阶段不开放';
     return '本关卡不允许使用该元件';
   };
   /** 输入/输出引脚：关卡模式下端口已预置（a/b/y 是契约），不开放自加 */
@@ -358,17 +358,17 @@ export function Palette({
                 e.dataTransfer.setDragImage(dragImage('module'), 48, 48);
               }}
               onClick={() => pick('module', undefined, mod.hash)}
-              title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}（拖到画布放置）`}
+              title={locked ? moduleLockReason(mod.name) : '拖到画布放置'}
             >
               <span className="palette-row">
                 <span className="palette-name">
-                  {mod.name} v{mod.version} {mod.isSequential && <em>时序</em>}
+                  {mod.name} {mod.isSequential && <em>时序</em>}
                 </span>
                 <span className="palette-cost">成本 {mod.costHalf / 2}</span>
               </span>
               <span className="palette-note">
                 {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
-                {mod.ports.filter((p) => p.dir === 'out').length} 出 · #{mod.hash.slice(0, 6)}
+                {mod.ports.filter((p) => p.dir === 'out').length} 出
               </span>
               {locked && <span className="palette-lock">{moduleLockReason(mod.name)}</span>}
             </button>

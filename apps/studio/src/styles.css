@@ -194,7 +194,7 @@ body,
 }
 
 .palette {
-  width: 208px;
+  width: 240px;
   flex: none;
   background: var(--panel);
   border-right: 1px solid var(--line);
@@ -370,6 +370,9 @@ body,
   color: var(--dim);
   font-size: 11px;
   line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .palette-empty {
