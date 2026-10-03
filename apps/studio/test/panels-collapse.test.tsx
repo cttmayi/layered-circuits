@@ -51,13 +51,13 @@ describe('左右侧面板展开/收起', () => {
     expect(screen.getAllByText('材料费').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('交付验收')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '收起右侧面板' }));
-    // 右侧检查器隐藏，但顶栏按钮（交付验收/工具铺）仍在
+    // 右侧检查器隐藏，但顶栏按钮（交付验收/组件库）仍在
     expect(screen.queryByText('材料费')).toBeNull();
     expect(screen.getByText('交付验收')).toBeTruthy();
-    expect(screen.getByText('工具铺')).toBeTruthy();
-    // 工具铺弹窗照常可开（顶栏入口）
-    fireEvent.click(screen.getByText('工具铺'));
-    await waitFor(() => expect(screen.getByRole('dialog', { name: '工具铺' })).toBeTruthy());
+    expect(screen.getByText('组件库')).toBeTruthy();
+    // 组件库弹窗照常可开（顶栏入口）
+    fireEvent.click(screen.getByText('组件库'));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: '组件库与成绩' })).toBeTruthy());
     // 收起弹窗、展开右侧面板
     fireEvent.click(screen.getByRole('button', { name: '关闭' }));
     fireEvent.click(screen.getByRole('button', { name: '展开右侧面板' }));

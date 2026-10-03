@@ -7,13 +7,10 @@
 
 import type { JudgeResult } from '@lc/compiler';
 import { logicValueOf, strengthOf } from '@lc/sim-core';
-import { useState } from 'react';
 
 export interface WaveformPanelProps {
   result: JudgeResult;
   portNames: string[];
-  /** 工具铺的示波器游标：点两个时间点，读出 Δt */
-  hasScope: boolean;
 }
 
 const ROW_H = 26;
@@ -30,13 +27,7 @@ function levelOf(signal: number): { high: boolean; weak: boolean; unknown: boole
   };
 }
 
-export function WaveformPanel({
-  result,
-  portNames,
-  hasScope,
-}: WaveformPanelProps): React.JSX.Element {
-  const [cursors, setCursors] = useState<number[]>([]);
-  void hasScope;
+export function WaveformPanel({ result, portNames }: WaveformPanelProps): React.JSX.Element {
   const wave = result.waveform;
   if (!wave || wave.nets.length === 0) {
     return (
@@ -65,14 +56,6 @@ export function WaveformPanel({
       <h3>
         波形 <span className="dim small">（每格 {fmtPs(endPs / 4)}，竖线 = 向量施加时刻）</span>
       </h3>
-      {hasScope && (
-        <p className="dim small">
-          游标：{cursors.length === 0 ? '点两下波形，读出 Δt' : ''}
-          {cursors.length > 0 && `A @ ${fmtPs(cursors[0])}`}
-          {cursors.length === 2 &&
-            ` · B @ ${fmtPs(cursors[1])} · Δt = ${fmtPs(Math.abs(cursors[1] - cursors[0]))}`}
-        </p>
-      )}
       <svg
         className="wave-svg"
         viewBox={`0 0 ${width} ${height}`}
@@ -80,21 +63,6 @@ export function WaveformPanel({
         height={height}
         role="img"
         aria-label="端口波形"
-        onClick={(event) => {
-          if (!hasScope) return;
-          const rect = event.currentTarget.getBoundingClientRect();
-          const ps = Math.max(
-            0,
-            Math.min(endPs, ((event.clientX - rect.left) / Math.max(1, rect.width)) * endPs),
-          );
-          setCursors((prev) => (prev.length >= 2 ? [ps] : [...prev, ps]));
-        }}
-        onKeyDown={(event) => {
-          if (!hasScope || (event.key !== 'Enter' && event.key !== ' ')) return;
-          event.preventDefault();
-          setCursors((prev) => (prev.length >= 2 ? [] : [endPs / 2]));
-        }}
-        tabIndex={hasScope ? 0 : undefined}
       >
         {result.rows.map((row) => (
           <line
@@ -104,16 +72,6 @@ export function WaveformPanel({
             x2={x(row.window.fromPs)}
             y2={height - 12}
             className="vline"
-          />
-        ))}
-        {cursors.map((ps) => (
-          <line
-            key={`cur-${Math.round(ps)}`}
-            x1={x(ps)}
-            y1={8}
-            x2={x(ps)}
-            y2={height - 12}
-            className="cursor"
           />
         ))}
         {rows.map((row, index) => {

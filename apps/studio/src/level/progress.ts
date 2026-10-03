@@ -101,8 +101,6 @@ export interface Progress {
   recon: Record<string, ReconState>;
   /** 支线单完成记录：`关卡id:支线key` → 拿到的奖金（半单位）；也用于任务墙徽章 */
   sideJobs: Record<string, number>;
-  /** 工具铺：已购买的设备 id */
-  equipment: string[];
   /** 已经花掉的钱（半单位）；可用余额 = walletHalf − spentHalf */
   spentHalf: number;
   /** 已开工的关卡（点过「开工」）；用于刷新后恢复到工作台而不是重选 */
@@ -164,7 +162,6 @@ export function emptyProgress(family: LogicFamily = 'rtl'): Progress {
     walletHalf: 0,
     recon: {},
     sideJobs: {},
-    equipment: [],
     spentHalf: 0,
     started: {},
   };
@@ -183,7 +180,6 @@ export function loadProgress(): Progress {
       walletHalf: typeof parsed.walletHalf === 'number' ? parsed.walletHalf : 0,
       recon: (parsed.recon as Record<string, ReconState>) ?? {},
       sideJobs: (parsed.sideJobs as Record<string, number>) ?? {},
-      equipment: Array.isArray(parsed.equipment) ? (parsed.equipment as string[]) : [],
       spentHalf: typeof parsed.spentHalf === 'number' ? parsed.spentHalf : 0,
       started: (parsed.started as Record<string, boolean>) ?? {},
     };
@@ -439,7 +435,6 @@ export function importSave(text: string): { progress: Progress; error?: string }
     walletHalf: typeof raw.walletHalf === 'number' ? raw.walletHalf : 0,
     recon: (raw.recon as Record<string, ReconState>) ?? {},
     sideJobs: (raw.sideJobs as Record<string, number>) ?? {},
-    equipment: Array.isArray(raw.equipment) ? (raw.equipment as string[]) : [],
     spentHalf: typeof raw.spentHalf === 'number' ? raw.spentHalf : 0,
     started: (raw.started as Record<string, boolean>) ?? {},
   };

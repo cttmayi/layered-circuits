@@ -117,7 +117,6 @@ describe('模块引脚外引', () => {
       pendingPin: null,
       pendingPoint: null,
       grid: true,
-      probes: [],
     };
     expect(() => drawScene(ctx, scene)).not.toThrow();
     expect(ops).toContain(`moveTo(${MODULE_HALF_WIDTH},0)`);

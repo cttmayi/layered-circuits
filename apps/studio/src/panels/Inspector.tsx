@@ -37,31 +37,29 @@ export function Inspector({
     <section className="panel">
       <h3>材料费</h3>
       {snapshot ? (
-        <>
-          <table className="kv">
-            <tbody>
-              {units
-                .filter(([, count]) => count > 0)
-                .map(([unit, count]) => (
-                  <tr key={unit}>
-                    <td>{UNIT_NAME[unit]}</td>
-                    <td className="num">{count}</td>
-                    <td className="num dim">
-                      {(
-                        count *
-                        ({ npn: 2, res: 1, dio: 1.5, cap: 3 } as Record<UnitKind, number>)[unit]
-                      ).toFixed(1)}
-                    </td>
-                  </tr>
-                ))}
-              <tr className="total">
-                <td>合计</td>
-                <td className="num" />
-                <td className="num">{snapshot.cost.half / 2}</td>
-              </tr>
-            </tbody>
-          </table>
-        </>
+        <table className="kv">
+          <tbody>
+            {units
+              .filter(([, count]) => count > 0)
+              .map(([unit, count]) => (
+                <tr key={unit}>
+                  <td>{UNIT_NAME[unit]}</td>
+                  <td className="num">{count}</td>
+                  <td className="num dim">
+                    {(
+                      count *
+                      ({ npn: 2, res: 1, dio: 1.5, cap: 3 } as Record<UnitKind, number>)[unit]
+                    ).toFixed(1)}
+                  </td>
+                </tr>
+              ))}
+            <tr className="total">
+              <td>合计</td>
+              <td className="num" />
+              <td className="num">{snapshot.cost.half / 2}</td>
+            </tr>
+          </tbody>
+        </table>
       ) : (
         <p className="dim small">等待仿真…</p>
       )}

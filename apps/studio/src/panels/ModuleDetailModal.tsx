@@ -169,7 +169,6 @@ function SchematicView({ doc }: { doc: Doc }): React.JSX.Element {
       pendingPin: null,
       pendingPoint: null,
       grid: true,
-      probes: [],
     });
   }, [doc]);
   return <canvas ref={ref} className="schematic-canvas" aria-label="模块内部电路图" />;

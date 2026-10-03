@@ -45,7 +45,6 @@ import {
   screenToWorld,
   signalText,
 } from './editor/render';
-import { buyEquipment, ownsEquipment } from './level/equipment';
 import { addModule, dedupeLibrary, storeModule } from './level/library';
 import {
   docForLevel,
@@ -86,7 +85,6 @@ import { Palette } from './panels/Palette';
 import { SettlementPanel } from './panels/SettlementPanel';
 import { TeachPanel } from './panels/TeachPanel';
 import { WaveformPanel } from './panels/WaveformPanel';
-import { WorkshopPanel } from './panels/WorkshopPanel';
 import { WorldMap } from './panels/WorldMap';
 import type { SimSnapshot, StudioResponse } from './sim/protocol';
 import { createRunner } from './sim/runner';
@@ -181,12 +179,8 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('debug') === '1') setDebugMode(true);
   }, [setDebugMode]);
-  /** 低频面板弹窗：工具铺 / 组件库 / 波形（点击启动，不用时不留侧栏） */
-  const [panelOpen, setPanelOpen] = useState<null | 'shop' | 'library' | 'wave'>(null);
-  /** 画布探针：买下探针后可点连线钉读数 */
-  const [probes, setProbes] = useState<
-    Array<{ id: string; x: number; y: number; inst: string; pin: string }>
-  >([]);
+  /** 低频面板弹窗：组件库 / 波形（点击启动，不用时不留侧栏） */
+  const [panelOpen, setPanelOpen] = useState<null | 'library' | 'wave'>(null);
   const [showTiming, setShowTiming] = useState(false);
   const [snapshot, setSnapshot] = useState<SimSnapshot | null>(null);
   const [resultDoc, setResultDoc] = useState<Doc | null>(null);
@@ -328,7 +322,6 @@ export function App(): React.JSX.Element {
     pendingPin,
     pendingPoint,
     grid: true,
-    probes,
   });
 
   // 事件处理里要用最新的场景做命中测试，但不希望它成为 effect 依赖
@@ -358,20 +351,8 @@ export function App(): React.JSX.Element {
       pendingPin,
       pendingPoint,
       grid: true,
-      probes,
     });
-  }, [
-    doc,
-    camera,
-    size,
-    pinSignals,
-    selection,
-    selectedWires,
-    hover,
-    pendingPin,
-    pendingPoint,
-    probes,
-  ]);
+  }, [doc, camera, size, pinSignals, selection, selectedWires, hover, pendingPin, pendingPoint]);
 
   // ---- 文档变更辅助 ----
   const commit = (next: Doc, options: { history?: boolean } = {}): void => {
@@ -444,7 +425,6 @@ export function App(): React.JSX.Element {
         setPendingPoint(null);
         setSelection([]);
         setSelectedWires([]);
-        setProbes([]);
       } else if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
         deleteSelection();
@@ -599,23 +579,11 @@ export function App(): React.JSX.Element {
     if (target?.kind === 'wire') {
       setSelectedWires([target.id]);
       setSelection([]);
-      if (ownsEquipment(progress, 'probe')) {
-        const wire = doc.wires.find((w) => w.id === target.id);
-        if (wire) {
-          const pid = `${target.id}@${Math.round(wx)}:${Math.round(wy)}`;
-          setProbes((prev) =>
-            prev.some((p) => p.id === pid)
-              ? prev.filter((p) => p.id !== pid)
-              : [...prev, { id: pid, x: wx, y: wy, inst: wire.a.inst, pin: wire.a.pin }],
-          );
-        }
-      }
       return;
     }
 
     setSelection([]);
     setSelectedWires([]);
-    setProbes([]);
     setPendingPin(null);
     dragRef.current = {
       mode: 'pan',
@@ -1363,9 +1331,6 @@ export function App(): React.JSX.Element {
           )}
         </div>
         <div className="group">
-          <button type="button" onClick={() => setPanelOpen('shop')} title="花钱买设备">
-            工具铺
-          </button>
           <button type="button" onClick={() => setPanelOpen('library')} title="封装复用 / 存档">
             组件库
           </button>
@@ -1574,7 +1539,6 @@ export function App(): React.JSX.Element {
             {(showWave || panelOpen === 'wave') && judgeResult && (
               <WaveformPanel
                 result={judgeResult}
-                hasScope={ownsEquipment(progress, 'scope')}
                 portNames={[
                   ...Object.keys(judgeResult.rows[0]?.inputs ?? {}),
                   ...new Set(judgeResult.rows.flatMap((r) => Object.keys(r.expected))),
@@ -1584,22 +1548,6 @@ export function App(): React.JSX.Element {
           </div>
         )}
 
-        {panelOpen === 'shop' && (
-          <Modal title="工具铺" onClose={() => setPanelOpen(null)}>
-            <WorkshopPanel
-              progress={progress}
-              onBuy={(id) => {
-                const result = buyEquipment(progress, id);
-                setProgress(result.progress);
-                if (result.error) setToast(result.error);
-                else
-                  setToast(
-                    `已买下设备（可用余额 ${(result.progress.walletHalf - result.progress.spentHalf) / 2} 元）`,
-                  );
-              }}
-            />
-          </Modal>
-        )}
         {panelOpen === 'library' && (
           <Modal title="组件库与成绩" onClose={() => setPanelOpen(null)}>
             <LibraryPanel
@@ -1619,7 +1567,6 @@ export function App(): React.JSX.Element {
           <Modal title="波形" onClose={() => setPanelOpen(null)}>
             <WaveformPanel
               result={judgeResult}
-              hasScope={ownsEquipment(progress, 'scope')}
               portNames={[
                 ...Object.keys(judgeResult.rows[0]?.inputs ?? {}),
                 ...new Set(judgeResult.rows.flatMap((r) => Object.keys(r.expected))),

@@ -19,10 +19,10 @@
 - ✅ **阶段 3 内容**：半加器/全加器/4·8 位加法器/简易 ALU/BCD↔二进制/八位寄存器/**简易计算器**（27 关全可玩）
 - ✅ **门版教学积木**（一键出答案）：每个关卡按玩家工艺给"用其他门搭"的门级参考解，元件版仅在更省/更快时作为更优解弹窗；判定只看功能（门版成本/时序超标也过关，只降评分）
 - ✅ **门模块形象**：中文门名为主（居中，按长度自动缩字号），右上角小字标 IEC 符号（& / ≥1 / =1 / 1），反相门输出侧带气泡；**双击模块展开详情**（内部电路图 + 递归成本明细树，Inspector 也有按钮）
-- ✅ 结算/评星/钱包/称号/工具铺/黑盒侦察/存档导入导出
+- ✅ 结算/评星/钱包/称号/黑盒侦察/存档导入导出
 - ⏳ 待办：蓝图 4 关（s1-mux2/s2-gated-sr/s3-adder-2/s3-sub-4）仅设计未实现；低成本版计算器优化；延迟线补全；GUI 视觉自动验证；阶段 4+（寄存器组/ALU/RAM/CPU）
 
-**质量基线**：`pnpm check` 全绿 = 242 个测试 / 42 个测试文件。
+**质量基线**：`pnpm check` 全绿 = 245 个测试 / 43 个测试文件。
 
 ---
 
@@ -49,7 +49,7 @@ apps/studio/            # 游戏本体（React + Canvas + Worker）
   src/editor/model.ts   # ★Doc（画布文档）↔ Design 互转（fromDesign/toDesign）
   src/editor/render.ts  # Canvas 渲染（sprite/引脚/布线）
   src/sim/              # ★仿真通道：protocol.ts（请求协议）+ runner.ts（Worker/主线程回退）+ handle.ts（纯函数处理器）+ worker.ts
-  src/level/            # progress.ts（存档/评星/款项/利润）+ session.ts（草稿存储）+ library.ts（模块库）+ equipment.ts（工具铺）
+  src/level/            # progress.ts（存档/评星/款项/利润）+ session.ts（草稿存储）+ library.ts（模块库）
   src/panels/           # 面板：Palette/Inspector/JudgePanel/LibraryPanel/SettlementPanel/WaveformPanel/LevelMap/ClassroomModal/FamilyPicker...
   test/                 # 17 个测试文件（UI 级，含 debug-mode / fromDesign / calc-sim）
 packages/
