@@ -125,7 +125,7 @@ function PinDot({ x, y }: { x: number; y: number }): React.JSX.Element {
   return <circle cx={x} cy={y} r={3} fill={C.hover} />;
 }
 
-/** 端口方块（输入/输出） */
+/** 端口方块（输入/输出）；标签放在方块上方，避免被延伸的导线穿过 */
 function Port({
   x,
   y,
@@ -150,7 +150,7 @@ function Port({
         stroke={stroke}
         strokeWidth={1.5}
       />
-      <text x={x - 9} y={y + 4} textAnchor="end" fontSize={11} fill={C.text} {...FONT}>
+      <text x={x - 9} y={y - 6} textAnchor="end" fontSize={11} fill={C.text} {...FONT}>
         {label}
       </text>
     </g>
@@ -239,7 +239,7 @@ function Battery({ x, y, label }: { x: number; y: number; label: string }): Reac
       <text x={x - 4} y={y + 4} textAnchor="end" fontSize={10} fill={C.strong1} {...FONT}>
         +
       </text>
-      <text x={x + 14} y={y + 4} fontSize={10} fill={C.strong0} {...FONT}>
+      <text x={x + 14} y={y + 14} fontSize={10} fill={C.strong0} {...FONT}>
         −
       </text>
       {label && (
@@ -318,7 +318,7 @@ function NpnDiagram({ compact }: { compact?: boolean }): React.JSX.Element {
       <text x={117} y={54} fontSize={11} fill={C.text} {...FONT}>
         c
       </text>
-      <text x={117} y={126} fontSize={11} fill={C.text} {...FONT}>
+      <text x={117} y={129} fontSize={11} fill={C.text} {...FONT}>
         e
       </text>
 
@@ -342,7 +342,7 @@ function NpnDiagram({ compact }: { compact?: boolean }): React.JSX.Element {
 
       {!compact && (
         <>
-          <text x={30} y={150} fontSize={10} fill={C.textDim} {...FONT}>
+          <text x={30} y={164} fontSize={10} fill={C.textDim} {...FONT}>
             弱信号源直接接基极；VCC 直连基极要经电阻限流
           </text>
           <Takeaway text="a=1 → 基极通电 → c-e 导通 → 输出被拉低（天生的反相）" />
@@ -363,7 +363,7 @@ function NmosDiagram({ compact }: { compact?: boolean }): React.JSX.Element {
       <text x={117} y={54} fontSize={11} fill={C.text} {...FONT}>
         d
       </text>
-      <text x={117} y={126} fontSize={11} fill={C.text} {...FONT}>
+      <text x={117} y={129} fontSize={11} fill={C.text} {...FONT}>
         s
       </text>
 
@@ -385,7 +385,7 @@ function NmosDiagram({ compact }: { compact?: boolean }): React.JSX.Element {
 
       {!compact && (
         <>
-          <text x={30} y={150} fontSize={10} fill={C.textDim} {...FONT}>
+          <text x={30} y={164} fontSize={10} fill={C.textDim} {...FONT}>
             电压控制：栅极不取电流，弱信号源直接接栅极毫无压力
           </text>
           <Takeaway text="栅极高电平 → 导通 → 输出被拉低；截止时上拉电阻把 y 钉回 1" />
@@ -403,7 +403,7 @@ function DioDiagram({ compact }: { compact?: boolean }): React.JSX.Element {
       <Battery x={66} y={58} label="电池 A" />
       <line x1={75} y1={58} x2={92} y2={58} stroke={C.wire} strokeWidth={1.6} />
       <Diode x={92} y={58} />
-      <text x={101} y={50} fontSize={9} fill={C.textDim} {...FONT}>
+      <text x={92} y={40} fontSize={9} fill={C.textDim} {...FONT}>
         a→k
       </text>
       <line x1={102} y1={58} x2={138} y2={58} stroke={C.wire} strokeWidth={1.6} />
@@ -422,7 +422,7 @@ function DioDiagram({ compact }: { compact?: boolean }): React.JSX.Element {
       <Resistor x1={196} y1={116} x2={196} y2={148} />
       <line x1={196} y1={148} x2={252} y2={148} stroke={C.wire} strokeWidth={1.6} />
       <Lamp x={280} y={148} />
-      <text x={280} y={170} textAnchor="middle" fontSize={10} fill={C.textDim} {...FONT}>
+      <text x={280} y={134} textAnchor="middle" fontSize={10} fill={C.textDim} {...FONT}>
         设备灯
       </text>
       <line x1={280} y1={158} x2={280} y2={176} stroke={C.wire} strokeWidth={1.6} />
@@ -430,10 +430,10 @@ function DioDiagram({ compact }: { compact?: boolean }): React.JSX.Element {
 
       {!compact && (
         <>
-          <text x={30} y={130} fontSize={10} fill={C.weak1} {...FONT}>
-            二极管只许电流往外流（阳极朝电池、阴极朝设备）
+          <text x={30} y={132} fontSize={10} fill={C.weak1} {...FONT}>
+            二极管只许电流往外流（防倒灌）
           </text>
-          <Takeaway text="任一节电池有电 → 设备就有电：防倒灌 = 或门" />
+          <Takeaway text="任一节有电 → 设备就有电（= 或门）" />
         </>
       )}
     </g>
@@ -451,7 +451,7 @@ function PmosDiagram({ compact }: { compact?: boolean }): React.JSX.Element {
       <text x={117} y={54} fontSize={11} fill={C.text} {...FONT}>
         s
       </text>
-      <text x={117} y={126} fontSize={11} fill={C.text} {...FONT}>
+      <text x={117} y={129} fontSize={11} fill={C.text} {...FONT}>
         d
       </text>
 
@@ -467,8 +467,8 @@ function PmosDiagram({ compact }: { compact?: boolean }): React.JSX.Element {
       <Port x={300} y={114} label="y" dir="out" />
       <line x1={210} y1={114} x2={210} y2={138} stroke={C.wire} strokeWidth={1.6} />
       <Resistor x1={210} y1={138} x2={210} y2={162} label="下拉" />
-      <line x1={210} y1={162} x2={210} y2={172} stroke={C.wire} strokeWidth={1.6} />
-      <Gnd x={210} y={172} />
+      <line x1={210} y1={162} x2={210} y2={168} stroke={C.wire} strokeWidth={1.6} />
+      <Gnd x={210} y={168} />
       <Lamp x={262} y={114} />
       <text x={262} y={100} textAnchor="middle" fontSize={9.5} fill={C.textDim} {...FONT}>
         灯
@@ -477,7 +477,7 @@ function PmosDiagram({ compact }: { compact?: boolean }): React.JSX.Element {
       {!compact && (
         <>
           <text x={30} y={150} fontSize={10} fill={C.textDim} {...FONT}>
-            栅极悬空是 CMOS 大忌：没人驱动，电平不确定、受噪声乱跳
+            栅极悬空是 CMOS 大忌：没人驱动
           </text>
           <Takeaway text="栅极低电平 → 导通 → 输出被拉到 VCC（和 N-MOS 相反）" />
         </>
@@ -556,17 +556,17 @@ function FloatDiagram({ compact }: { compact?: boolean }): React.JSX.Element {
       <line x1={118} y1={88} x2={222} y2={88} stroke={C.weak1} strokeWidth={2.4} />
       <line x1={223} y1={88} x2={310} y2={88} stroke={C.weak0} strokeWidth={2.4} />
 
-      {/* 上拉：VCC → 电阻 → 信号线 */}
-      <Vcc x={170} label="VCC" />
-      <line x1={170} y1={16} x2={170} y2={36} stroke={C.wire} strokeWidth={1.6} />
-      <Resistor x1={170} y1={36} x2={170} y2={58} />
-      <line x1={170} y1={58} x2={170} y2={88} stroke={C.wire} strokeWidth={1.6} />
+      {/* 上拉：VCC → 电阻 → 信号线（竖线在面板左侧，避开中央文字） */}
+      <Vcc x={132} label="VCC" />
+      <line x1={132} y1={16} x2={132} y2={36} stroke={C.wire} strokeWidth={1.6} />
+      <Resistor x1={132} y1={36} x2={132} y2={58} />
+      <line x1={132} y1={58} x2={132} y2={88} stroke={C.wire} strokeWidth={1.6} />
 
-      {/* 下拉：信号线 → 电阻 → GND */}
-      <line x1={274} y1={88} x2={274} y2={108} stroke={C.wire} strokeWidth={1.6} />
-      <Resistor x1={274} y1={108} x2={274} y2={130} />
-      <line x1={274} y1={130} x2={274} y2={150} stroke={C.wire} strokeWidth={1.6} />
-      <Gnd x={274} y={150} />
+      {/* 下拉：信号线 → 电阻 → GND（竖线在面板左侧，避开中央文字） */}
+      <line x1={230} y1={88} x2={230} y2={108} stroke={C.wire} strokeWidth={1.6} />
+      <Resistor x1={230} y1={108} x2={230} y2={130} />
+      <line x1={230} y1={130} x2={230} y2={150} stroke={C.wire} strokeWidth={1.6} />
+      <Gnd x={230} y={150} />
 
       {!compact && <Takeaway text="这一关用上拉：平时默认 1，a 一给电就被三极管拉低（反相）" />}
     </g>
@@ -646,15 +646,15 @@ function CmosNandDiagram({ compact }: { compact?: boolean }): React.JSX.Element 
       {/* N1（栅 a，左下）：漏极接 y，源极接串联线 */}
       <TransistorBody cx={120} cy={136} r={17} />
       <line x1={120} y1={119} x2={120} y2={70} stroke={C.wire} strokeWidth={1.6} />
-      <line x1={120} y1={136} x2={120} y2={160} stroke={C.wire} strokeWidth={1.6} />
+      <line x1={120} y1={136} x2={120} y2={154} stroke={C.wire} strokeWidth={1.6} />
 
       {/* 串联线（N1 源极 → N2 漏极） */}
-      <line x1={120} y1={160} x2={230} y2={160} stroke={C.wire} strokeWidth={1.6} />
+      <line x1={120} y1={154} x2={230} y2={154} stroke={C.wire} strokeWidth={1.6} />
 
       {/* N2（栅 b，右下）：漏极接串联线，源极 → GND */}
-      <TransistorBody cx={230} cy={175} r={17} mirror />
-      <line x1={230} y1={175} x2={230} y2={160} stroke={C.wire} strokeWidth={1.6} />
-      <line x1={230} y1={175} x2={230} y2={190} stroke={C.wire} strokeWidth={1.6} />
+      <TransistorBody cx={230} cy={169} r={17} mirror />
+      <line x1={230} y1={169} x2={230} y2={154} stroke={C.wire} strokeWidth={1.6} />
+      <line x1={230} y1={169} x2={230} y2={190} stroke={C.wire} strokeWidth={1.6} />
       <Gnd x={230} y={190} />
 
       {/* 输入 a：P1 栅 + N1 栅 */}
@@ -665,15 +665,13 @@ function CmosNandDiagram({ compact }: { compact?: boolean }): React.JSX.Element 
       <line x1={74} y1={136} x2={103} y2={136} stroke={C.wire} strokeWidth={1.6} />
 
       {/* 输入 b：P2 栅 + N2 栅 */}
-      <Port x={300} y={175} label="b" dir="in" />
-      <line x1={295} y1={175} x2={270} y2={175} stroke={C.wire} strokeWidth={1.6} />
-      <line x1={270} y1={175} x2={247} y2={175} stroke={C.wire} strokeWidth={1.6} />
-      <line x1={270} y1={175} x2={270} y2={48} stroke={C.wire} strokeWidth={1.6} />
+      <Port x={300} y={169} label="b" dir="in" />
+      <line x1={295} y1={169} x2={270} y2={169} stroke={C.wire} strokeWidth={1.6} />
+      <line x1={270} y1={169} x2={247} y2={169} stroke={C.wire} strokeWidth={1.6} />
+      <line x1={270} y1={169} x2={270} y2={48} stroke={C.wire} strokeWidth={1.6} />
       <line x1={270} y1={48} x2={247} y2={48} stroke={C.wire} strokeWidth={1.6} />
 
-      {!compact && (
-        <Takeaway text="上 pMOS 并联（任一 0 拉高）· 下 nMOS 串联（全 1 才拉低）= 与非" x={24} />
-      )}
+      {!compact && <Takeaway text="pMOS 并联 · nMOS 串联 = 与非" x={24} />}
     </g>
   );
 }
