@@ -167,10 +167,6 @@ function gateTemplateFor(name: string, family: LogicFamily = 'rtl'): ModuleTempl
  * （calc 组装关的粗粒度积木）。内部可经「双击模块」下钻查看。
  */
 const COMPOSITE_ORDER = [
-  '译码器公共部分',
-  '段码abc',
-  '段码de',
-  '段码fg',
   '加3单元',
   '主从D触发器',
   'BCD→二进制',
@@ -183,10 +179,6 @@ const COMPOSITE_ORDER = [
   '显示控制',
 ] as const;
 const COMPOSITE_KIND: Record<string, ModuleKind> = {
-  译码器公共部分: 'arith',
-  段码abc: 'arith',
-  段码de: 'arith',
-  段码fg: 'arith',
   加3单元: 'arith',
   主从D触发器: 'seq',
   'BCD→二进制': 'arith',
@@ -203,14 +195,6 @@ const compositeCache = new Map<string, ModuleTemplate>();
 /** 复合积木的 body：按依赖顺序引用已存在的积木（绝不自引用/循环） */
 function compositeBodyOf(name: string, family: LogicFamily): Design {
   switch (name) {
-    case '译码器公共部分':
-      return segTermByModules(`brick-segterm-${family}`, '译码器公共部分', family);
-    case '段码abc':
-      return segABCByModules(`brick-segabc-${family}`, '段码abc', family);
-    case '段码de':
-      return segDEByModules(`brick-segde-${family}`, '段码de', family);
-    case '段码fg':
-      return segFGByModules(`brick-segfg-${family}`, '段码fg', family);
     case '加3单元':
       return plus3BrickRef(family);
     case '主从D触发器':
@@ -574,9 +558,7 @@ export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl')
     case 's3-bin2bcd':
       return bin2bcdByModules('teach-s3-bin2bcd', '二进制→BCD（门版）', family);
     case 's3-display':
-      return segTermByModules('teach-s3-segterm', '译码器公共部分（门版）', family);
-    case 's3-seg-abc':
-      return segABCByModules('teach-s3-segabc', '段码abc（门版）', family);
+      return segABCByModules('teach-s3-display', '段码abc（门版）', family);
     case 's3-seg-de':
       return segDEByModules('teach-s3-segde', '段码de（门版）', family);
     case 's3-seg-fg':
@@ -964,8 +946,17 @@ function seg7ByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
   return b.build();
 }
 
-/** 译码器公共部分（门版）：bcd0..3 → nA..nD、t1..t9，14 个【与非门】积木（4 反相并接 + 9 共享项 + t3n 内反相） */
-function segTermByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
+/**
+ * 段码关（门版）：自包含 18~19 个【与非门】积木 = 4 反相 + 本关共享项 + 段链（N 项链 = 2N-3 门）。
+ * 每关输入 bcd0..3、输出段线（a/b/c 或 d/e 或 f/g）；玩家照 0-9 真值表手搭即可，不依赖任何复合积木。
+ */
+function segByModules(
+  id: string,
+  name: string,
+  chains: Record<string, string[]>,
+  terms: Record<string, [string, string]>,
+  family: LogicFamily = 'rtl',
+): Design {
   const b = new DesignBuilder(id, name);
   b.vcc('vcc');
   b.gnd('gnd');
@@ -975,185 +966,91 @@ function segTermByModules(id: string, name: string, family: LogicFamily = 'rtl')
     b.module(nand, { a, b: c, y }, `G${n++}`);
     return y;
   };
-  const nA = g('bcd0', 'bcd0', 'nA');
-  const nB = g('bcd1', 'bcd1', 'nB');
-  const nC = g('bcd2', 'bcd2', 'nC');
-  g('bcd3', 'bcd3', 'nD'); // nD 仅作输出（共享项不含 D）
-  g(nA, 'bcd1', 't1'); // ¬(A'·B)
-  g(nA, nC, 't2'); // ¬(A'·C')
-  g(nB, 'bcd2', 't3'); // ¬(B'·C)
-  g('bcd1', nC, 't4'); // ¬(B·C')
-  g('bcd0', 'bcd2', 't5'); // ¬(A·C)
-  g(nA, nB, 't6'); // ¬(A'·B')
-  g('bcd0', 'bcd1', 't7'); // ¬(A·B)
-  const t3n = g('t3', 't3', 't3n'); // B'·C（内部信号，不出端口）
-  g('bcd0', t3n, 't8'); // ¬(A·B'·C)
-  g(nA, 'bcd2', 't9'); // ¬(A'·C)
+  g('bcd0', 'bcd0', 'nA');
+  g('bcd1', 'bcd1', 'nB');
+  g('bcd2', 'bcd2', 'nC');
+  g('bcd3', 'bcd3', 'nD');
+  for (const [t, [a, c]] of Object.entries(terms)) g(a, c, t);
+  const orN = (out: string, ts: string[]): void => {
+    if (ts.length === 2) {
+      g(ts[0], ts[1], out);
+      return;
+    }
+    let s = `o${n}`;
+    g(ts[0], ts[1], s);
+    for (let i = 2; i < ts.length; i++) {
+      const inv = `o${n}`;
+      g(s, s, inv);
+      const nxt = i === ts.length - 1 ? out : `o${n}`;
+      g(inv, ts[i], nxt);
+      s = nxt;
+    }
+  };
+  for (const [out, ts] of Object.entries(chains)) orN(out, ts);
   for (const p of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(p, 'in', p);
-  for (const p of ['nA', 'nB', 'nC', 'nD', 't1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9'])
-    b.port(p, 'out', p);
+  for (const out of Object.keys(chains)) b.port(out, 'out', out);
   return b.build();
 }
 
-/** 段码·abc（门版）：1×【译码器公共部分】模块 + 链 a/b/c（12 盒，成本 500） */
+/** 段码·abc（门版）：自包含 19 盒（4 反相 + t2,t5,t6,t7 + 链 5+3+3），成本 380 */
 function segABCByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
-  const b = new DesignBuilder(id, name);
-  b.vcc('vcc');
-  b.gnd('gnd');
-  b.module(
-    hashOf('译码器公共部分', family),
+  return segByModules(
+    id,
+    name,
     {
-      bcd0: 'bcd0',
-      bcd1: 'bcd1',
-      bcd2: 'bcd2',
-      bcd3: 'bcd3',
-      nA: 'nA',
-      nB: 'nB',
-      nC: 'nC',
-      nD: 'nD',
-      t1: 't1',
-      t2: 't2',
-      t3: 't3',
-      t4: 't4',
-      t5: 't5',
-      t6: 't6',
-      t7: 't7',
-      t8: 't8',
-      t9: 't9',
+      a: ['t2', 't5', 'nB', 'nD'],
+      b: ['t6', 't7', 'bcd2'],
+      c: ['nA', 'bcd1', 'nC'],
     },
-    'T',
+    {
+      t2: ['nA', 'nC'],
+      t5: ['bcd0', 'bcd2'],
+      t6: ['nA', 'nB'],
+      t7: ['bcd0', 'bcd1'],
+    },
+    family,
   );
-  const nand = hashOf('与非门', family);
-  let m = 0;
-  const orN = (out: string, terms: string[]): void => {
-    if (terms.length === 2) {
-      b.module(nand, { a: terms[0], b: terms[1], y: out }, `O${m++}`);
-      return;
-    }
-    let s = `o${m}`;
-    b.module(nand, { a: terms[0], b: terms[1], y: s }, `O${m++}`);
-    for (let i = 2; i < terms.length; i++) {
-      const inv = `o${m}`;
-      b.module(nand, { a: s, b: s, y: inv }, `O${m++}`);
-      const nxt = i === terms.length - 1 ? out : `o${m}`;
-      b.module(nand, { a: inv, b: terms[i], y: nxt }, `O${m++}`);
-      s = nxt;
-    }
-  };
-  orN('a', ['t2', 't5', 'nB', 'nD']);
-  orN('b', ['t6', 't7', 'bcd2']);
-  orN('c', ['nA', 'bcd1', 'nC']);
-  for (const p of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(p, 'in', p);
-  b.port('a', 'out', 'a');
-  b.port('b', 'out', 'b');
-  b.port('c', 'out', 'c');
-  return b.build();
 }
 
-/** 段码·de（门版）：1×【译码器公共部分】模块 + 链 d/e（9 盒，成本 440） */
+/** 段码·de（门版）：自包含 18 盒（4 反相 + t1,t2,t3,t3n,t4,t8 + 链 7+1），成本 360 */
 function segDEByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
-  const b = new DesignBuilder(id, name);
-  b.vcc('vcc');
-  b.gnd('gnd');
-  b.module(
-    hashOf('译码器公共部分', family),
+  return segByModules(
+    id,
+    name,
     {
-      bcd0: 'bcd0',
-      bcd1: 'bcd1',
-      bcd2: 'bcd2',
-      bcd3: 'bcd3',
-      nA: 'nA',
-      nB: 'nB',
-      nC: 'nC',
-      nD: 'nD',
-      t1: 't1',
-      t2: 't2',
-      t3: 't3',
-      t4: 't4',
-      t5: 't5',
-      t6: 't6',
-      t7: 't7',
-      t8: 't8',
-      t9: 't9',
+      d: ['t1', 't2', 't8', 't4', 'nD'],
+      e: ['t1', 't2'],
     },
-    'T',
+    {
+      t1: ['nA', 'bcd1'],
+      t2: ['nA', 'nC'],
+      t3: ['nB', 'bcd2'],
+      t3n: ['t3', 't3'],
+      t4: ['bcd1', 'nC'],
+      t8: ['bcd0', 't3n'],
+    },
+    family,
   );
-  const nand = hashOf('与非门', family);
-  let m = 0;
-  const orN = (out: string, terms: string[]): void => {
-    if (terms.length === 2) {
-      b.module(nand, { a: terms[0], b: terms[1], y: out }, `O${m++}`);
-      return;
-    }
-    let s = `o${m}`;
-    b.module(nand, { a: terms[0], b: terms[1], y: s }, `O${m++}`);
-    for (let i = 2; i < terms.length; i++) {
-      const inv = `o${m}`;
-      b.module(nand, { a: s, b: s, y: inv }, `O${m++}`);
-      const nxt = i === terms.length - 1 ? out : `o${m}`;
-      b.module(nand, { a: inv, b: terms[i], y: nxt }, `O${m++}`);
-      s = nxt;
-    }
-  };
-  orN('d', ['t1', 't2', 't8', 't4', 'nD']);
-  orN('e', ['t1', 't2']);
-  for (const p of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(p, 'in', p);
-  b.port('d', 'out', 'd');
-  b.port('e', 'out', 'e');
-  return b.build();
 }
 
-/** 段码·fg（门版）：1×【译码器公共部分】模块 + 链 f/g（11 盒，成本 480） */
+/** 段码·fg（门版）：自包含 19 盒（4 反相 + t1,t3,t4,t6,t9 + 链 5+5），成本 380 */
 function segFGByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
-  const b = new DesignBuilder(id, name);
-  b.vcc('vcc');
-  b.gnd('gnd');
-  b.module(
-    hashOf('译码器公共部分', family),
+  return segByModules(
+    id,
+    name,
     {
-      bcd0: 'bcd0',
-      bcd1: 'bcd1',
-      bcd2: 'bcd2',
-      bcd3: 'bcd3',
-      nA: 'nA',
-      nB: 'nB',
-      nC: 'nC',
-      nD: 'nD',
-      t1: 't1',
-      t2: 't2',
-      t3: 't3',
-      t4: 't4',
-      t5: 't5',
-      t6: 't6',
-      t7: 't7',
-      t8: 't8',
-      t9: 't9',
+      f: ['t6', 't9', 't3', 'nD'],
+      g: ['t1', 't3', 't4', 'nD'],
     },
-    'T',
+    {
+      t1: ['nA', 'bcd1'],
+      t3: ['nB', 'bcd2'],
+      t4: ['bcd1', 'nC'],
+      t6: ['nA', 'nB'],
+      t9: ['nA', 'bcd2'],
+    },
+    family,
   );
-  const nand = hashOf('与非门', family);
-  let m = 0;
-  const orN = (out: string, terms: string[]): void => {
-    if (terms.length === 2) {
-      b.module(nand, { a: terms[0], b: terms[1], y: out }, `O${m++}`);
-      return;
-    }
-    let s = `o${m}`;
-    b.module(nand, { a: terms[0], b: terms[1], y: s }, `O${m++}`);
-    for (let i = 2; i < terms.length; i++) {
-      const inv = `o${m}`;
-      b.module(nand, { a: s, b: s, y: inv }, `O${m++}`);
-      const nxt = i === terms.length - 1 ? out : `o${m}`;
-      b.module(nand, { a: inv, b: terms[i], y: nxt }, `O${m++}`);
-      s = nxt;
-    }
-  };
-  orN('f', ['t6', 't9', 't3', 'nD']);
-  orN('g', ['t1', 't3', 't4', 'nD']);
-  for (const p of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(p, 'in', p);
-  b.port('f', 'out', 'f');
-  b.port('g', 'out', 'g');
-  return b.build();
 }
 
 /** 数码管显示（门版）：2× 七段译码器模块（复用上一关产物），顶层只有 2 盒 */

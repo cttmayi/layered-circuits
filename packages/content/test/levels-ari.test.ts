@@ -41,7 +41,7 @@ function portWidthOf(levelId: string, name: string): number {
 }
 
 describe('阶段 3 关卡内容（位宽/总线）', () => {
-  it('主线按「半加器 → 全加器 → 4位 → 8位 → ALU → BCD↔二进制 → 译码器公共部分/段码×3 → 数码管 → 寄存器 → 计算器」排列，位宽从 1 涨到 8', () => {
+  it('主线按「半加器 → 全加器 → 4位 → 8位 → ALU → BCD↔二进制 → 段码×3 → 数码管 → 寄存器 → 计算器」排列，位宽从 1 涨到 8', () => {
     const ids = STAGE3_LEVELS.map((l) => l.id);
     expect(ids).toEqual([
       's3-half-adder',
@@ -52,7 +52,6 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
       's3-bcd2bin',
       's3-bin2bcd',
       's3-display',
-      's3-seg-abc',
       's3-seg-de',
       's3-seg-fg',
       's3-display2',
@@ -166,7 +165,7 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
     expect(run.rows.every((r) => r.ok)).toBe(true);
   });
 
-  it('段码真值表：bcd 0-9 → a-g（单元参考解与门版一致，拆分自原七段译码器关）', () => {
+  it('段码真值表：bcd 0-9 → a-g（单元参考解与门版一致，拆自原七段译码器关）', () => {
     // 段码（bit0=a..bit6=g）：0→3F 1→06 2→5B 3→4F 4→66 5→6D 6→7D 7→07 8→7F 9→6F
     const ON = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f];
     const bcd = (v: number) => ({
@@ -185,7 +184,7 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
       g: (ON[v]! >> 6) & 1,
     });
     const cases = [
-      ['s3-seg-abc', ['a', 'b', 'c']],
+      ['s3-display', ['a', 'b', 'c']],
       ['s3-seg-de', ['d', 'e']],
       ['s3-seg-fg', ['f', 'g']],
     ] as const;

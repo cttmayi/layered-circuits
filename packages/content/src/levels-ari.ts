@@ -27,7 +27,6 @@ import {
   segABCRef,
   segDERef,
   segFGRef,
-  segTermRef,
 } from './references-ari.js';
 import { bcd2binRef, bin2bcdRef, calcRef, reg8Ref, seg7x2Ref } from './references-calc.js';
 import { digitEntryRef, encoderOrRef } from './references-keypad.js';
@@ -342,207 +341,26 @@ const BIN2BCD: Level = parseLevel({
   referenceSolution: bin2bcdRef('ref-s3-bin2bcd'),
 });
 
-/** 译码器公共部分：先搭 7 条段线共用的反相信号与共享项（14 个与非门），答案即教学内容 */
+/** 段码·abc：BCD 0-9 → 数码管上半 3 段 a/b/c（自包含 15 个与非门，答案即教学内容） */
 const S3_DISPLAY: Level = parseLevel({
   schemaVersion: 1,
   id: 's3-display',
   stage: 3,
   kind: 'main',
-  title: '译码器·公共部分',
-  brief:
-    '七段译码器 = 7 个布尔函数，它们共用不少子表达式。这一关先把「公共部分」搭成模块：' +
-    '4 个反相信号 + 9 个共享项，封装成【译码器公共部分】；接下来 3 关每条段线只从它取数、只搭自己的小链。',
-  teaching:
-    '7 条段线是 7 个函数，逐条单独算要用 70+ 个与非门。化简的诀窍是「提公因数」：把公共子表达式先算好、存成中间线，' +
-    '多处共用。这一关先搭 4 个反相信号（nA=¬bcd0…，与非门两输入接同一条线就是反相器：¬(x·x)=¬x）和 9 个共享项（t1..t9；' +
-    '其中 t8 内部还要用一个小反相 t3n=¬(t3·t3)，不出端口）。搭完封装成【译码器公共部分】，' +
-    '后面 3 关每条段线都从这里取数——总共 43 门，比逐条单独算省一半。',
-  hint:
-    '反相 4 个：nA=¬(bcd0·bcd0)、nB=¬(bcd1·bcd1)、nC=¬(bcd2·bcd2)、nD=¬(bcd3·bcd3)。' +
-    '共享项 9 个：t1=¬(nA·bcd1)、t2=¬(nA·nC)、t3=¬(nB·bcd2)、t4=¬(bcd1·nC)、t5=¬(bcd0·bcd2)、' +
-    't6=¬(nA·nB)、t7=¬(bcd0·bcd1)、t8=¬(bcd0·t3n)（t3n=¬(t3·t3) 是内部小反相）、t9=¬(nA·bcd2)。' +
-    '参考解 14 个与非门，成本 280 半单位。',
-  ports: [
-    port('bcd0', 'in'),
-    port('bcd1', 'in'),
-    port('bcd2', 'in'),
-    port('bcd3', 'in'),
-    port('nA', 'out'),
-    port('nB', 'out'),
-    port('nC', 'out'),
-    port('nD', 'out'),
-    port('t1', 'out'),
-    port('t2', 'out'),
-    port('t3', 'out'),
-    port('t4', 'out'),
-    port('t5', 'out'),
-    port('t6', 'out'),
-    port('t7', 'out'),
-    port('t8', 'out'),
-    port('t9', 'out'),
-  ],
-  mode: 'logic',
-  allowedUnits: [...STAGE3_UNITS],
-  moduleAccess: 'all',
-  budgetHalf: budgetFromOptimal(280, MAIN_OVERHEAD),
-  optimalHalf: 280,
-  checks: {},
-  vectors: [
-    {
-      inputs: { bcd0: 0, bcd1: 0, bcd2: 0, bcd3: 0 },
-      expect: {
-        nA: 1,
-        nB: 1,
-        nC: 1,
-        nD: 1,
-        t1: 1,
-        t2: 0,
-        t3: 1,
-        t4: 1,
-        t5: 1,
-        t6: 0,
-        t7: 1,
-        t8: 1,
-        t9: 1,
-      },
-      note: '0',
-    },
-    {
-      inputs: { bcd0: 1, bcd1: 0, bcd2: 0, bcd3: 0 },
-      expect: {
-        nA: 0,
-        nB: 1,
-        nC: 1,
-        nD: 1,
-        t1: 1,
-        t2: 1,
-        t3: 1,
-        t4: 1,
-        t5: 1,
-        t6: 1,
-        t7: 1,
-        t8: 1,
-        t9: 1,
-      },
-      note: '1',
-    },
-    {
-      inputs: { bcd0: 0, bcd1: 1, bcd2: 0, bcd3: 0 },
-      expect: {
-        nA: 1,
-        nB: 0,
-        nC: 1,
-        nD: 1,
-        t1: 0,
-        t2: 0,
-        t3: 1,
-        t4: 0,
-        t5: 1,
-        t6: 1,
-        t7: 1,
-        t8: 1,
-        t9: 1,
-      },
-      note: '2',
-    },
-    {
-      inputs: { bcd0: 1, bcd1: 0, bcd2: 1, bcd3: 0 },
-      expect: {
-        nA: 0,
-        nB: 1,
-        nC: 0,
-        nD: 1,
-        t1: 1,
-        t2: 1,
-        t3: 0,
-        t4: 1,
-        t5: 0,
-        t6: 1,
-        t7: 1,
-        t8: 0,
-        t9: 1,
-      },
-      note: '5',
-    },
-    {
-      inputs: { bcd0: 0, bcd1: 0, bcd2: 0, bcd3: 1 },
-      expect: {
-        nA: 1,
-        nB: 1,
-        nC: 1,
-        nD: 0,
-        t1: 1,
-        t2: 0,
-        t3: 1,
-        t4: 1,
-        t5: 1,
-        t6: 0,
-        t7: 1,
-        t8: 1,
-        t9: 1,
-      },
-      note: '8',
-    },
-    {
-      inputs: { bcd0: 1, bcd1: 0, bcd2: 0, bcd3: 1 },
-      expect: {
-        nA: 0,
-        nB: 1,
-        nC: 1,
-        nD: 0,
-        t1: 1,
-        t2: 1,
-        t3: 1,
-        t4: 1,
-        t5: 1,
-        t6: 1,
-        t7: 1,
-        t8: 1,
-        t9: 1,
-      },
-      note: '9',
-    },
-  ] satisfies LevelVector[],
-  unlock: {
-    name: '译码器公共部分',
-    kind: 'logic',
-    stage: 3,
-    ports: [
-      port('bcd0', 'in'),
-      port('bcd1', 'in'),
-      port('bcd2', 'in'),
-      port('bcd3', 'in'),
-      port('nA', 'out'),
-      port('nB', 'out'),
-      port('nC', 'out'),
-      port('nD', 'out'),
-      port('t1', 'out'),
-      port('t2', 'out'),
-      port('t3', 'out'),
-      port('t4', 'out'),
-      port('t5', 'out'),
-      port('t6', 'out'),
-      port('t7', 'out'),
-      port('t8', 'out'),
-      port('t9', 'out'),
-    ],
-  },
-  referenceSolution: segTermRef('ref-s3-seg-term'),
-});
-
-/** 段码·abc：BCD → a/b/c 三条段线（1×【译码器公共部分】 + 链 11 = 12 盒） */
-const S3_SEG_ABC: Level = parseLevel({
-  schemaVersion: 1,
-  id: 's3-seg-abc',
-  stage: 3,
-  kind: 'main',
   title: '段码·abc',
   brief:
-    '数码管上半部分的 3 条段线（a 顶横、b 右上竖、c 右下竖）各是一个布尔函数。从上一关的 14 个中间信号里挑几路做与非链，把它们搭出来。',
+    '七段数码管 = 7 段（a 顶横、b 右上竖、c 右下竖、d 底横、e 左下竖、f 左上竖、g 中横）。' +
+    '这一关搭上半的 3 段：输入 4 位 BCD（0-9），输出 a/b/c 谁亮——0 亮 a,b,c；1 只亮 b,c；2 亮 a,b；3 全亮…',
   teaching:
-    '每条段线 = 从中间信号里挑几路做「链式与非」：先两两与非，需要时中间反相，最后得到 ¬(几个信号的与)。' +
-    '比如 a = ¬(t2·t5·nB·nD)、b = ¬(t6·t7·bcd2)、c = ¬(nA·bcd1·nC)。这就是「把多个条件合并成一个输出」的技巧。',
-  hint: '拖 1 个【译码器公共部分】模块 + 11 个【与非门】：a=¬(t2·t5·nB·nD)、b=¬(t6·t7·bcd2)、c=¬(nA·bcd1·nC)。参考解 12 盒，成本 500 半单位。',
+    '每条段线 = 一个布尔函数。先把 4 个输入取反（nA=¬bcd0…，与非门两脚接同一根线就是反相器：¬(x·x)=¬x），' +
+    '再算 4 个共享项（t2=¬(nA·nC)、t5=¬(bcd0·bcd2)、t6=¬(nA·nB)、t7=¬(bcd0·bcd1)），' +
+    '最后每条段线用「链式与非」合并：a=¬(t2·t5·nB·nD)、b=¬(t6·t7·bcd2)、c=¬(nA·bcd1·nC)。' +
+    '记住链的规律：2 项 1 门、3 项 3 门、4 项 5 门——每多合并一项要 +2 门（先反相再合并）。',
+  hint:
+    '反相 4 个：nA=¬(bcd0·bcd0)、nB=¬(bcd1·bcd1)、nC=¬(bcd2·bcd2)、nD=¬(bcd3·bcd3)。' +
+    '项 4 个：t2=¬(nA·nC)、t5=¬(bcd0·bcd2)、t6=¬(nA·nB)、t7=¬(bcd0·bcd1)。' +
+    '链 11 个：a=¬(t2·t5·nB·nD)（4 项 5 门）、b=¬(t6·t7·bcd2)（3 项 3 门）、c=¬(nA·bcd1·nC)（3 项 3 门）。' +
+    '参考解 19 个与非门，成本 380 半单位。',
   ports: [
     port('bcd0', 'in'),
     port('bcd1', 'in'),
@@ -555,8 +373,8 @@ const S3_SEG_ABC: Level = parseLevel({
   mode: 'logic',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
-  budgetHalf: budgetFromOptimal(500, MAIN_OVERHEAD),
-  optimalHalf: 500,
+  budgetHalf: budgetFromOptimal(380, MAIN_OVERHEAD),
+  optimalHalf: 380,
   checks: {},
   vectors: [
     { inputs: { bcd0: 0, bcd1: 0, bcd2: 0, bcd3: 0 }, expect: { a: 1, b: 1, c: 1 }, note: '0' },
@@ -587,16 +405,23 @@ const S3_SEG_ABC: Level = parseLevel({
   referenceSolution: segABCRef('ref-s3-seg-abc'),
 });
 
-/** 段码·de：BCD → d/e 两条段线（1×【译码器公共部分】 + 链 8 = 9 盒） */
+/** 段码·de：BCD 0-9 → 中段 2 条段线 d/e（自包含 15 个与非门） */
 const S3_SEG_DE: Level = parseLevel({
   schemaVersion: 1,
   id: 's3-seg-de',
   stage: 3,
   kind: 'main',
   title: '段码·de',
-  brief: '中段的 2 条段线（d 底横、e 左下竖）。和前两关同样的手法：挑中间信号做与非链。',
-  teaching: 'd = ¬(t1·t2·t8·t4·nD)、e = ¬(t1·t2)。e 只要 2 路，一条链 2 个与非门就行。',
-  hint: '拖 1 个【译码器公共部分】+ 8 个【与非门】：d=¬(t1·t2·t8·t4·nD)、e=¬(t1·t2)。参考解 9 盒，成本 440 半单位。',
+  brief:
+    '这关搭中段的 2 段：d 底横、e 左下竖。输入 4 位 BCD（0-9），输出 d/e 谁亮——0 亮 d,e；1 全灭；2 亮 d；3 只亮 d…',
+  teaching:
+    '和前关同样的手法：先取反（nA..nD），再算共享项（t1=¬(nA·bcd1)、t2=¬(nA·nC)、t3=¬(nB·bcd2)、t4=¬(bcd1·nC)、' +
+    't8=¬(bcd0·t3n)，其中 t3n=¬(t3·t3)），最后链式与非：d=¬(t1·t2·t8·t4·nD)（5 项 7 门）、e=¬(t1·t2)（1 门）。',
+  hint:
+    '反相 4 个：nA=¬(bcd0·bcd0)、nB=¬(bcd1·bcd1)、nC=¬(bcd2·bcd2)、nD=¬(bcd3·bcd3)。' +
+    '项 6 个：t1=¬(nA·bcd1)、t2=¬(nA·nC)、t3=¬(nB·bcd2)、t3n=¬(t3·t3)、t4=¬(bcd1·nC)、t8=¬(bcd0·t3n)。' +
+    '链 8 个：d=¬(t1·t2·t8·t4·nD)（5 项 7 门）、e=¬(t1·t2)（1 门）。' +
+    '参考解 18 个与非门，成本 360 半单位。',
   ports: [
     port('bcd0', 'in'),
     port('bcd1', 'in'),
@@ -608,8 +433,8 @@ const S3_SEG_DE: Level = parseLevel({
   mode: 'logic',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
-  budgetHalf: budgetFromOptimal(440, MAIN_OVERHEAD),
-  optimalHalf: 440,
+  budgetHalf: budgetFromOptimal(360, MAIN_OVERHEAD),
+  optimalHalf: 360,
   checks: {},
   vectors: [
     { inputs: { bcd0: 0, bcd1: 0, bcd2: 0, bcd3: 0 }, expect: { d: 1, e: 1 }, note: '0' },
@@ -639,16 +464,24 @@ const S3_SEG_DE: Level = parseLevel({
   referenceSolution: segDERef('ref-s3-seg-de'),
 });
 
-/** 段码·fg：BCD → f/g 两条段线（1×【译码器公共部分】 + 链 10 = 11 盒） */
+/** 段码·fg：BCD 0-9 → 低段 2 条段线 f/g（自包含 15 个与非门） */
 const S3_SEG_FG: Level = parseLevel({
   schemaVersion: 1,
   id: 's3-seg-fg',
   stage: 3,
   kind: 'main',
   title: '段码·fg',
-  brief: '低段的 2 条段线（f 左上竖、g 中横）。7 条段线全部搭完，译码器就齐了。',
-  teaching: 'f = ¬(t6·t9·t3·nD)、g = ¬(t1·t3·t4·nD)。',
-  hint: '拖 1 个【译码器公共部分】+ 10 个【与非门】：f=¬(t6·t9·t3·nD)、g=¬(t1·t3·t4·nD)。参考解 11 盒，成本 480 半单位。',
+  brief:
+    '最后 2 段：f 左上竖、g 中横。输入 4 位 BCD（0-9），输出 f/g 谁亮——0 亮 f；1 全灭；2 亮 g；4、5、6 亮 f,g…' +
+    '7 条段线全部搭完，译码器就齐了。',
+  teaching:
+    'f=¬(t6·t9·t3·nD)、g=¬(t1·t3·t4·nD)。同样先取反（nA..nD），再算 5 个共享项：' +
+    't1=¬(nA·bcd1)、t3=¬(nB·bcd2)、t4=¬(bcd1·nC)、t6=¬(nA·nB)、t9=¬(nA·bcd2)，最后每条段线 4 项链式与非（各 5 门）。',
+  hint:
+    '反相 4 个：nA=¬(bcd0·bcd0)、nB=¬(bcd1·bcd1)、nC=¬(bcd2·bcd2)、nD=¬(bcd3·bcd3)。' +
+    '项 5 个：t1=¬(nA·bcd1)、t3=¬(nB·bcd2)、t4=¬(bcd1·nC)、t6=¬(nA·nB)、t9=¬(nA·bcd2)。' +
+    '链 10 个：f=¬(t6·t9·t3·nD)（4 项 5 门）、g=¬(t1·t3·t4·nD)（4 项 5 门）。' +
+    '参考解 19 个与非门，成本 380 半单位。',
   ports: [
     port('bcd0', 'in'),
     port('bcd1', 'in'),
@@ -660,8 +493,8 @@ const S3_SEG_FG: Level = parseLevel({
   mode: 'logic',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
-  budgetHalf: budgetFromOptimal(480, MAIN_OVERHEAD),
-  optimalHalf: 480,
+  budgetHalf: budgetFromOptimal(380, MAIN_OVERHEAD),
+  optimalHalf: 380,
   checks: {},
   vectors: [
     { inputs: { bcd0: 0, bcd1: 0, bcd2: 0, bcd3: 0 }, expect: { f: 1, g: 0 }, note: '0' },
@@ -691,7 +524,7 @@ const S3_SEG_FG: Level = parseLevel({
   referenceSolution: segFGRef('ref-s3-seg-fg'),
 });
 
-/** 数码管显示：2 位数码管 = 2× 七段译码器模块（复用上一关产物），教学点 = 模块复用/位宽扩展 */
+/** 数码管显示：2 位数码管 = 2× 七段译码器模块（复用段码 3 关产物），教学点 = 模块复用/位宽扩展 */
 const S3_DISPLAY2: Level = parseLevel({
   schemaVersion: 1,
   id: 's3-display2',
@@ -699,7 +532,7 @@ const S3_DISPLAY2: Level = parseLevel({
   kind: 'main',
   title: '数码管显示',
   brief:
-    '一台两位数计算器需要 2 个数码管。7 条段线前面已经分 4 关搭完了——这一关把 3 个段模块各复制一份，一个管十位、一个管个位。',
+    '一台两位数计算器需要 2 个数码管。7 条段线前面已经分 3 关搭完了——这一关把 3 个段模块各复制一份，一个管十位、一个管个位。',
   teaching:
     '组件库里现在有【段码abc】【段码de】【段码fg】三个段模块，合起来就是完整的七段译码器。' +
     '这一关放两组：D1 接十位 bcd1、D2 接个位 bcd2，各自的 7 根段线接到对应数码管。' +
@@ -1218,7 +1051,6 @@ export const STAGE3_LEVELS: Level[] = [
   BCD2BIN,
   BIN2BCD,
   S3_DISPLAY,
-  S3_SEG_ABC,
   S3_SEG_DE,
   S3_SEG_FG,
   S3_DISPLAY2,

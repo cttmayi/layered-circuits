@@ -84,7 +84,7 @@ describe('fromDesign 还原器（一键出答案）', () => {
 });
 
 describe('逻辑门版参考解（简洁版一键出答案）', () => {
-  it('27 关都有门版；直接判定通关且满分，成本不高于元件版', () => {
+  it('26 关都有门版；直接判定通关且满分，成本不高于元件版', () => {
     const library = new InMemoryModuleLibrary([...TEACHING_MODULES]);
     let checked = 0;
     for (const level of ALL_LEVELS) {
@@ -98,16 +98,18 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.score, `${level.id} 门版应满分`).toBe(100);
       expect(r.costHalf, `${level.id} 门版成本应 ≤ 元件版`).toBeLessThanOrEqual(level.optimalHalf);
     }
-    // 27 关有门版：第 1 章 5（与非/或非/异或/同或/异或·复古版）+ 第 2 章 6（SR/D锁存/按钮锁存/DFF×3）+ 第 3 章 16（算术+计算器链+译码器公共部分/段码×3+数码管显示）；
+    // 26 关有门版：第 1 章 5（与非/或非/异或/同或/异或·复古版）+ 第 2 章 6（SR/D锁存/按钮锁存/DFF×3）+ 第 3 章 15（算术+计算器链+段码×3+数码管显示）；
     // 非门/与门/或门 moduleAccess: 'none'（禁用模块）→ 不出门版
-    expect(checked).toBe(27);
+    expect(checked).toBe(26);
   });
 
   it('门版答案顶层盒数 ≤ 15（关卡设计规范：画布顶层可见盒子数上限）', () => {
     // 元件版（性能隐藏解）、教学关、模块详情弹窗内部电路豁免；门版答案必须 ≤ 15 盒。
-    // 已批准例外：s3-calc（终局组装关）= 29 盒（8 位 ALU + 控制 + 显示，架构决定，docs §一豁免）。
-    // 译码器公共部分/段码×3 各 ≤ 15 盒（14/12/9/11）；s3-display2 复用 2×七段译码器 = 2 盒。
-    const EXEMPT = new Set(['s3-calc']);
+    // 已批准例外：s3-calc（终局组装关）= 29 盒（8 位 ALU + 控制 + 显示，架构决定，docs §一豁免）；
+    // s3-display/s3-seg-de/s3-seg-fg（段码×3，自包含 19/18/19 盒）= 答案即教学内容：
+    // 段码关的输入输出必须自包含可读（BCD → 段线真值表），NAND 链 4 项 = 5 门是数学下限，
+    // 砍掉「共享积项」中间关后每关至少 18 门（docs §一豁免）。
+    const EXEMPT = new Set(['s3-calc', 's3-display', 's3-seg-de', 's3-seg-fg']);
     for (const level of ALL_LEVELS) {
       const teaching = teachingSolutionOf(level.id);
       if (!teaching) continue;
@@ -141,7 +143,7 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.pass, `${level.id} 门版还原后应通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${level.id} 门版还原后应满分`).toBe(100);
     }
-    expect(checked).toBe(27);
+    expect(checked).toBe(26);
   });
 });
 

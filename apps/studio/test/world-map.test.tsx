@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * 关卡地图（选关界面）：31 关都应在动态 viewBox 内、地图区可上下滚动。
+ * 关卡地图（选关界面）：30 关都应在动态 viewBox 内、地图区可上下滚动。
  * 防回归：加关后节点不再被裁剪（viewBox 高度随总行数增长）。
  */
 import { ALL_LEVELS } from '@lc/content';
@@ -10,7 +10,7 @@ import { emptyProgress } from '../src/level/progress';
 import { WorldMap } from '../src/panels/WorldMap';
 
 describe('关卡地图（选关界面）', () => {
-  it('31 个关卡节点全部落在动态 viewBox 内（top% < 100，无裁剪）', () => {
+  it('30 个关卡节点全部落在动态 viewBox 内（top% < 100，无裁剪）', () => {
     const { container } = render(
       <WorldMap
         progress={emptyProgress()}

@@ -247,8 +247,8 @@ export function seg7Into(
 }
 
 /**
- * 译码器公共部分：输入反相 + 共享项（14 个与非门）。
- * 网名带前缀 p（nA..nD、t1..t9、t3n 内部），可被段级子电路与完整译码器复用。
+ * 七段译码器的共享子电路（seg7Into 内部使用）：输入反相 + 共享项（14 个与非门）。
+ * 网名带前缀 p（nA..nD、t1..t9、t3n 内部），供完整译码器复用。
  */
 export function segTermInto(
   b: DesignBuilder,
@@ -299,60 +299,87 @@ export function segChainInto(b: DesignBuilder, p: string, out: string, terms: st
   }
 }
 
-/** 译码器公共部分参考解：bcd0..3 → nA..nD、t1..t9（14 个与非门，成本 280） */
-export function segTermRef(id = 'ref-s3-seg-term'): Design {
-  const b = new DesignBuilder(id, '译码器公共部分');
+/**
+ * 段码关参考解（自包含）：bcd0..3 → 本关段线。
+ * 结构 = 4 反相信号 + 本关需要的共享项 + 每段的链式与非（N 项链 = 2N-3 门），
+ * abc 19 门 / de 18 门 / fg 19 门。不做「公共部分」拆分：每关的输入输出本身就是可理解的（BCD → 哪几根段线亮）。
+ */
+function segRef(
+  id: string,
+  name: string,
+  chains: Record<string, string[]>,
+  terms: Record<string, [string, string]>,
+): Design {
+  const b = new DesignBuilder(id, name);
   b.vcc('vcc');
   b.gnd('gnd');
-  segTermInto(b, '', 'bcd0', 'bcd1', 'bcd2', 'bcd3');
+  nandInto(b, 'iA', 'bcd0', 'bcd0', 'nA');
+  nandInto(b, 'iB', 'bcd1', 'bcd1', 'nB');
+  nandInto(b, 'iC', 'bcd2', 'bcd2', 'nC');
+  nandInto(b, 'iD', 'bcd3', 'bcd3', 'nD');
+  for (const [t, [a, c]] of Object.entries(terms)) nandInto(b, `t${t}`, a, c, t);
+  for (const [out, ts] of Object.entries(chains)) segChainInto(b, out, out, ts);
   for (const n of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(n, 'in', n);
-  for (const n of ['nA', 'nB', 'nC', 'nD', 't1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9'])
-    b.port(n, 'out', n);
+  for (const n of Object.keys(chains)) b.port(n, 'out', n);
   return b.build();
 }
 
-/** 段码·高段参考解：bcd0..3 → a,b,c（积项 14 + 链 5+3+3 = 25 个与非门，成本 500） */
+/** 段码·abc 参考解：bcd0..3 → a,b,c（4 反相 + t2,t5,t6,t7 + 链 5+3+3 = 19 个与非门，成本 380） */
 export function segABCRef(id = 'ref-s3-seg-abc'): Design {
-  const b = new DesignBuilder(id, '段码abc');
-  b.vcc('vcc');
-  b.gnd('gnd');
-  segTermInto(b, '', 'bcd0', 'bcd1', 'bcd2', 'bcd3');
-  segChainInto(b, 'a', 'a', ['t2', 't5', 'nB', 'nD']);
-  segChainInto(b, 'b', 'b', ['t6', 't7', 'bcd2']);
-  segChainInto(b, 'c', 'c', ['nA', 'bcd1', 'nC']);
-  for (const n of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(n, 'in', n);
-  b.port('a', 'out', 'a');
-  b.port('b', 'out', 'b');
-  b.port('c', 'out', 'c');
-  return b.build();
+  return segRef(
+    id,
+    '段码abc',
+    {
+      a: ['t2', 't5', 'nB', 'nD'],
+      b: ['t6', 't7', 'bcd2'],
+      c: ['nA', 'bcd1', 'nC'],
+    },
+    {
+      t2: ['nA', 'nC'],
+      t5: ['bcd0', 'bcd2'],
+      t6: ['nA', 'nB'],
+      t7: ['bcd0', 'bcd1'],
+    },
+  );
 }
 
-/** 段码·中段参考解：bcd0..3 → d,e（积项 14 + 链 7+1 = 22 个与非门，成本 440） */
+/** 段码·de 参考解：bcd0..3 → d,e（4 反相 + t1,t2,t3,t3n,t4,t8 + 链 7+1 = 18 个与非门，成本 360） */
 export function segDERef(id = 'ref-s3-seg-de'): Design {
-  const b = new DesignBuilder(id, '段码de');
-  b.vcc('vcc');
-  b.gnd('gnd');
-  segTermInto(b, '', 'bcd0', 'bcd1', 'bcd2', 'bcd3');
-  segChainInto(b, 'd', 'd', ['t1', 't2', 't8', 't4', 'nD']);
-  segChainInto(b, 'e', 'e', ['t1', 't2']);
-  for (const n of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(n, 'in', n);
-  b.port('d', 'out', 'd');
-  b.port('e', 'out', 'e');
-  return b.build();
+  return segRef(
+    id,
+    '段码de',
+    {
+      d: ['t1', 't2', 't8', 't4', 'nD'],
+      e: ['t1', 't2'],
+    },
+    {
+      t1: ['nA', 'bcd1'],
+      t2: ['nA', 'nC'],
+      t3: ['nB', 'bcd2'],
+      t3n: ['t3', 't3'],
+      t4: ['bcd1', 'nC'],
+      t8: ['bcd0', 't3n'],
+    },
+  );
 }
 
-/** 段码·低段参考解：bcd0..3 → f,g（积项 14 + 链 5+5 = 24 个与非门，成本 480） */
+/** 段码·fg 参考解：bcd0..3 → f,g（4 反相 + t1,t3,t4,t6,t9 + 链 5+5 = 19 个与非门，成本 380） */
 export function segFGRef(id = 'ref-s3-seg-fg'): Design {
-  const b = new DesignBuilder(id, '段码fg');
-  b.vcc('vcc');
-  b.gnd('gnd');
-  segTermInto(b, '', 'bcd0', 'bcd1', 'bcd2', 'bcd3');
-  segChainInto(b, 'f', 'f', ['t6', 't9', 't3', 'nD']);
-  segChainInto(b, 'g', 'g', ['t1', 't3', 't4', 'nD']);
-  for (const n of ['bcd0', 'bcd1', 'bcd2', 'bcd3']) b.port(n, 'in', n);
-  b.port('f', 'out', 'f');
-  b.port('g', 'out', 'g');
-  return b.build();
+  return segRef(
+    id,
+    '段码fg',
+    {
+      f: ['t6', 't9', 't3', 'nD'],
+      g: ['t1', 't3', 't4', 'nD'],
+    },
+    {
+      t1: ['nA', 'bcd1'],
+      t3: ['nB', 'bcd2'],
+      t4: ['bcd1', 'nC'],
+      t6: ['nA', 'nB'],
+      t9: ['nA', 'bcd2'],
+    },
+  );
 }
 
 /** 七段译码器参考解：bcd[3:0] → seg[6:0]（成本 860） */
