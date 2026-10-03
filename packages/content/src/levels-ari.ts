@@ -61,6 +61,7 @@ const HALF_ADDER: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(120, MAIN_OVERHEAD),
   optimalHalf: 120,
+  timingBudgetPs: 13000,
   checks: {},
   vectors: [
     { inputs: { a: 0, b: 0 }, expect: { s: 0, c: 0 }, note: '0+0=0' },
@@ -105,6 +106,7 @@ const FULL_ADDER: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(180, MAIN_OVERHEAD),
   optimalHalf: 180,
+  timingBudgetPs: 26000,
   checks: {},
   vectors: [
     { inputs: { a: 0, b: 0, cin: 0 }, expect: { s: 0, cout: 0 } },
@@ -152,6 +154,7 @@ const ADDER_4: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(720, MAIN_OVERHEAD),
   optimalHalf: 720,
+  timingBudgetPs: 30000,
   checks: {},
   vectors: [
     { inputs: { a: 0, b: 0 }, expect: { y: 0, cout: 0 }, note: '0+0=0' },
@@ -191,6 +194,7 @@ const ADDER_8: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(1440, MAIN_OVERHEAD),
   optimalHalf: 1440,
+  timingBudgetPs: 30000,
   checks: {},
   vectors: [
     { inputs: { a: 0, b: 0 }, expect: { y: 0, cout: 0 }, note: '0+0=0' },
@@ -232,6 +236,7 @@ const ALU: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(1040, MAIN_OVERHEAD),
   optimalHalf: 1040,
+  timingBudgetPs: 60000,
   checks: {},
   vectors: [
     { inputs: { op: 0, a: 5, b: 3 }, expect: { y: 8 }, note: '加法 5+3=8' },
@@ -277,6 +282,7 @@ const BCD2BIN: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(2160, MAIN_OVERHEAD),
   optimalHalf: 2160,
+  timingBudgetPs: 70000,
   checks: {},
   vectors: [
     { inputs: { bcd: 0x00 }, expect: { bin: 0 }, note: '0 → 0' },
@@ -375,6 +381,7 @@ const S3_DISPLAY: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(380, MAIN_OVERHEAD),
   optimalHalf: 380,
+  timingBudgetPs: 25000,
   checks: {},
   vectors: [
     { inputs: { bcd0: 0, bcd1: 0, bcd2: 0, bcd3: 0 }, expect: { a: 1, b: 1, c: 1 }, note: '0' },
@@ -435,6 +442,7 @@ const S3_SEG_DE: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(360, MAIN_OVERHEAD),
   optimalHalf: 360,
+  timingBudgetPs: 33000,
   checks: {},
   vectors: [
     { inputs: { bcd0: 0, bcd1: 0, bcd2: 0, bcd3: 0 }, expect: { d: 1, e: 1 }, note: '0' },
@@ -495,6 +503,7 @@ const S3_SEG_FG: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(380, MAIN_OVERHEAD),
   optimalHalf: 380,
+  timingBudgetPs: 26000,
   checks: {},
   vectors: [
     { inputs: { bcd0: 0, bcd1: 0, bcd2: 0, bcd3: 0 }, expect: { f: 1, g: 0 }, note: '0' },
@@ -549,6 +558,7 @@ const S3_DISPLAY2: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(1720, MAIN_OVERHEAD),
   optimalHalf: 1720,
+  timingBudgetPs: 33000,
   checks: {},
   vectors: [
     { inputs: { bcd1: 0, bcd2: 0 }, expect: { seg1: 0x3f, seg2: 0x3f }, note: '00 → 两个 0' },
@@ -662,6 +672,7 @@ const S3_OR_CHAIN: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(12, MAIN_OVERHEAD),
   optimalHalf: 12,
+  timingBudgetPs: 3200,
   checks: {},
   vectors: [
     { inputs: { a: 0, b: 0, c: 0, d: 0 }, expect: { y: 0 }, note: '全 0 → 0' },
@@ -718,6 +729,7 @@ const S3_ENCODER: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(88, MAIN_OVERHEAD),
   optimalHalf: 88,
+  timingBudgetPs: 5000,
   checks: {},
   vectors: (() => {
     // 判定器只设置向量里列出的输入、其余默认 Z —— 组合关必须显式写全所有键位

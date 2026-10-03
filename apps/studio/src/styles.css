@@ -771,6 +771,20 @@ body,
 }
 
 /* ---- 任务卡（直接表达，无场景话术）：需求 + 任务图 + 约束，别把图纸和引导条挤到视口外 ---- */
+.task-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.task-head h3 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .task-brief {
   margin: 6px 0 4px;
   font-size: 12px;
@@ -783,7 +797,8 @@ body,
 }
 
 .task-detail-btn {
-  margin: 4px 0 2px;
+  flex-shrink: 0;
+  white-space: nowrap;
   padding: 3px 8px;
   font-size: 11px;
   color: #0d141a;

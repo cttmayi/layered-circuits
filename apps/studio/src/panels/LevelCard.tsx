@@ -63,12 +63,14 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
 
   return (
     <section className="panel level-card">
-      <h3>任务 · {level.title}</h3>
+      <div className="task-head">
+        <h3>任务 · {level.title}</h3>
+        <button type="button" className="task-detail-btn" onClick={() => setShowTask(true)}>
+          任务详情 · 真值表 ↗
+        </button>
+      </div>
       <p className="task-brief">{level.brief}</p>
       <SegmentTaskDiagram level={level} />
-      <button type="button" className="task-detail-btn" onClick={() => setShowTask(true)}>
-        任务详情 · 真值表 ↗
-      </button>
       {showTask && (
         <Modal title={`任务详情 · ${level.title}`} onClose={() => setShowTask(false)}>
           <div className="task-full">

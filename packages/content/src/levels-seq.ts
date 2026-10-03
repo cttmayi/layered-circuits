@@ -92,6 +92,7 @@ export const STAGE2_LEVELS: Level[] = [
     moduleAccess: 'all',
     budgetHalf: budgetFromOptimal(40, MAIN_OVERHEAD),
     optimalHalf: 40,
+    timingBudgetPs: 8000,
     clock: { freqHz: 100_000 },
     checks: {},
     vectors: [
@@ -132,6 +133,7 @@ export const STAGE2_LEVELS: Level[] = [
     moduleAccess: 'all',
     budgetHalf: budgetFromOptimal(64, MAIN_OVERHEAD),
     optimalHalf: 64,
+    timingBudgetPs: 11000,
     clock: { freqHz: 100_000 },
     checks: {},
     vectors: [
@@ -168,6 +170,7 @@ export const STAGE2_LEVELS: Level[] = [
     moduleAccess: 'all',
     budgetHalf: budgetFromOptimal(92, MAIN_OVERHEAD),
     optimalHalf: 92,
+    timingBudgetPs: 14000,
     clock: { freqHz: 100_000 },
     checks: {},
     vectors: [
