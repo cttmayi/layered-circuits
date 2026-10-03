@@ -111,7 +111,7 @@ judgeDesign(design, level, options)
 
 ```
 content/src/
-  levels.ts           第 1 章 + 教学关（gateLevel 工厂；classroom/seedDoc/guideSteps/familyRefs）
+  levels.ts           第 1 章关卡（gateLevel 工厂）+ TEACH_LEVELS 教学关（classroom/seedDoc/guideSteps/familyRefs）
   levels-seq.ts       第 2 章 时序（seqLevel 工厂；mode:'timing'、clock、空翻/建立保持断言）
   levels-ari.ts       第 3 章 算术 + 计算器链（ariLevel 工厂；bus 端口、button、display:'segment'）
   references.ts       门级参考解（RTL + cmosInv/cmosNand）

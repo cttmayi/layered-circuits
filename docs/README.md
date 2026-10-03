@@ -56,7 +56,7 @@ packages/
   schema/src/           # ★数据模型（Zod）：design.ts（Design/Doc 核心 DTO）+ module.ts（模块模板/库）+ level.ts（关卡 + familySpecOf + scoreOf）+ family.ts（FAMILY_CONTRACTS）+ units.ts（UNIT_COST_HALF）+ builder.ts（DesignBuilder）
   sim-core/src/         # ★仿真内核（零 DOM）：ir.ts（FlatNet）+ engine.ts（事件驱动 DES）+ signal.ts（4值×2强度）+ harness.ts（测试驱动）+ waveform.ts
   compiler/src/         # ★编译与判定：flatten.ts（Design→FlatNet）+ cost.ts（递归成本）+ wrap.ts（封装/hash/环检测）+ timing.ts（延迟实测/反馈环）+ judge.ts（judgeDesign）+ sha256.ts
-  content/src/          # ★关卡内容包：levels.ts（第1章+教学关）+ levels-seq.ts（第2章）+ levels-ari.ts（第3章+计算器）+ references*.ts（参考解）+ teachings.ts（★门版教学积木/FAMILY_GATES）+ commissions.ts（委托文案）
+  content/src/          # ★关卡内容包：levels.ts（第1章关卡 + TEACH_LEVELS 教学关）+ levels-seq.ts（第2章）+ levels-ari.ts（第3章+计算器）+ references*.ts（参考解）+ teachings.ts（★门版教学积木/FAMILY_GATES）+ commissions.ts（委托文案）
 tools/
   opt-solver/           # 离线最优解求解器（预算源头；只覆盖 1~2 输入组合逻辑）
   level-editor/         # spec → 已验收关卡（README 见 tools/level-editor/README.md）
@@ -95,6 +95,9 @@ docs/
 - **familyRefs 覆盖现状**：TTL 只 s1-not/and/or/nand/nor（5 基础门）；CMOS 覆盖 s1 全部（含 xor/xnor/xor-retro + 教学关）；
   **s2/s3 无 familyRefs** → TTL/CMOS 契约下回退 RTL 判定，门版仍用 RTL 积木即可。
 - 教学关（classroom）：s1-npn / s1-dio / s1-float / s1-cmos-inv / s1-cmos-nand。**不评星、不设预算与延迟标准**（App 里 `classroom ? 0 : starsOf(...)`）。
+- **教学模式**：5 个教学关已从关卡链拆出（`TEACH_LEVELS`），与关卡模式并列 —— 主菜单独立入口 → 元件图鉴墙
+  （`TeachPanel.tsx`，概念卡摘要 + 已掌握标记）→ 点开引导搭建（`gameMode = 'teach'`，独立存档 key `lc-studio-teach-<id>-v1`）。
+  不参与解锁链、不计任务墙「已交付」与星数；交付标「已掌握」（复用 `progress.cleared`，stars 恒 0）。
 
 ### 4.3 关卡定义（schema/level.ts + content/levels*.ts）
 
@@ -254,7 +257,7 @@ b044091 完全按契约：各功能关按契约给参考解/满分线/预算，�
 
 ## 10. 30 秒自检（改完代码问自己）
 
-- [ ] `pnpm check` 全绿（211/34）
+- [ ] `pnpm check` 全绿（242/42）
 - [ ] 新参考解/门版成本 = optimalHalf？门版无循环依赖？
 - [ ] 契约关强度检查过了吗（TTL/CMOS 输出强 1）？
 - [ ] 结算款项/利润按玩家契约显示？评星不被教学关拖累？
