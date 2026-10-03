@@ -124,8 +124,6 @@ export function App(): React.JSX.Element {
   // 会话（模式 / 当前关卡 / 存档）一次性装载
   const session = useMemo(() => initialSession(), []);
   const [doc, setDoc] = useState<Doc>(() => session.doc);
-  /** 最近一次「一键出答案门版」搭出的画布（引用跟踪：玩家未修改时 lenient 判定） */
-  const lastGateDocRef = useRef<Doc | null>(null);
   // 模块库瘦身：同名模块只留最新版本（旧版是展示用的版本历史，没有玩法用途，
   // 删掉后存档变小；持久化 effect 会把它写回 localStorage，存档自动瘦身）
   const [progress, setProgress] = useState<Progress>(() => ({
@@ -844,20 +842,20 @@ export function App(): React.JSX.Element {
       setToast(kind === 'gate' ? '本关没有逻辑门版参考解' : '本关没有参考解，无法一键出答案');
       return;
     }
-    // 门版引用了教学门积木（按玩家工艺）：并入画布库（同时出现在左侧「我的模块」，可直接拖用）
+    // 门版引用了教学门积木（按玩家工艺）：并入画布库供渲染/判定编译用；
+    // 这些积木标记 teaching，不出现在左侧「我的模块」（玩家没亲手搭，不算他的资产）
     const extra = kind === 'gate' ? teachingStoredFor(spec.family) : [];
     const library = [...doc.library, ...extra];
     const next = fromDesign(ref, docForLevel(currentLevel, library));
     const nextDoc = { ...next, library };
     loadDoc(nextDoc);
-    lastGateDocRef.current = kind === 'gate' ? nextDoc : null;
     if (kind === 'gate') {
       // 元件版相对门版占优（更省/更快）时如实提示：门版是默认答案，元件版是更优解
       const edge = elementEdgeOf(currentLevel, spec.family);
       setToast(
         edge
           ? `逻辑门版已搭好（可直接验收）—— 元件版${edge === 'cost' ? '造价更低' : '延迟更短'}，需要可重新一键出答案选择`
-          : '逻辑门版已搭好（造价不高于元件版，可直接验收）—— 门积木已加入左侧「我的模块」',
+          : '逻辑门版已搭好（造价不高于元件版，可直接验收）',
       );
     } else {
       setToast('参考解已搭好（调试模式）—— 可以直接交付验收');
@@ -915,7 +913,6 @@ export function App(): React.JSX.Element {
     setPlacing(null);
     setPendingPin(null);
     setPendingPoint(null);
-    lastGateDocRef.current = null;
   };
 
   /** 进入关卡/教学关工作台：教学关走「教学模式」（独立入口，不评星不锁链）；
@@ -997,9 +994,8 @@ export function App(): React.JSX.Element {
     setProgress((prev) => recordAttempt(prev, judgedLevel.id));
     try {
       const design = toDesign(doc, { id: `level-${judgedLevel.id}`, name: judgedLevel.title });
-      // 门版答案宽松：画布还是「一键出答案门版」原样（玩家没改过）时，判定不卡玩家
-      // 成本/时序预算（成本超了只降评分）——「门版是默认答案」；改过/自搭照常从严。
-      const lenient = lastGateDocRef.current !== null && doc === lastGateDocRef.current;
+      // 判定规则（用户定稿）：功能正确即可过关——成本/时序超预算只降评分/星级，
+      // 不判失败；强度契约/端口/素材等结构检查仍硬性。门版答案照常过关。
       const response = await runner.send({
         type: 'judge',
         design,
@@ -1007,7 +1003,6 @@ export function App(): React.JSX.Element {
         level: judgedLevel,
         hardcore: forcedHardcore || mode === 'timing',
         family: progress.family,
-        lenient,
       });
       if (response.error || !response.judge) {
         setToast(`校验失败：${response.error ?? '未知错误'}`);
@@ -1670,7 +1665,8 @@ export function App(): React.JSX.Element {
   );
 }
 
-/** 教学用门级模块 → 画布库条目（按玩家工艺给对应工艺的积木，hash 内容稳定，重复注入无害） */
+/** 教学用门级模块 → 画布库条目（按玩家工艺给对应工艺的积木，hash 内容稳定，重复注入无害；
+ *  teaching: true 标记使其不出现在「我的模块」与放置面板，见 editor/model.ts StoredModule） */
 const teachingStoredFor = (family: LogicFamily): StoredModule[] =>
   teachingModulesFor(family).map((m) => ({
     hash: m.hash,
@@ -1683,6 +1679,7 @@ const teachingStoredFor = (family: LogicFamily): StoredModule[] =>
     template: m,
     sources: [],
     createdAt: 0,
+    teaching: true,
   }));
 
 /** 面板开合等 UI 偏好的持久化：刷新后保持用户上次的选择 */

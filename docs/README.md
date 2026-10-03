@@ -17,7 +17,7 @@
 - ✅ M0 内核（sim-core / compiler / schema）、M1 阶段 1 闭环、M2 时序、M3 内容基建（求解器/关卡编辑器/组件库版本/存档）
 - ✅ **契约系统**：新游戏选 RTL/DTL/TTL/CMOS，判定按契约换元件集/满分线/预算/输出强度检查；教学关按契约换内容（教什么用什么）
 - ✅ **阶段 3 内容**：半加器/全加器/4·8 位加法器/简易 ALU/BCD↔二进制/八位寄存器/**简易计算器**（27 关全可玩）
-- ✅ **门版教学积木**（一键出答案）：每个关卡按玩家工艺给"用其他门搭"的门级参考解，元件版仅在更省/更快时作为更优解弹窗；`lenient` 判定保证门版答案可交付
+- ✅ **门版教学积木**（一键出答案）：每个关卡按玩家工艺给"用其他门搭"的门级参考解，元件版仅在更省/更快时作为更优解弹窗；判定只看功能（门版成本/时序超标也过关，只降评分）
 - ✅ **门模块形象**：中文门名为主（居中，按长度自动缩字号），右上角小字标 IEC 符号（& / ≥1 / =1 / 1），反相门输出侧带气泡；**双击模块展开详情**（内部电路图 + 递归成本明细树，Inspector 也有按钮）
 - ✅ 结算/评星/钱包/称号/工具铺/黑盒侦察/存档导入导出
 - ⏳ 待办：蓝图 4 关（s1-mux2/s2-gated-sr/s3-adder-2/s3-sub-4）仅设计未实现；低成本版计算器优化；延迟线补全；GUI 视觉自动验证；阶段 4+（寄存器组/ALU/RAM/CPU）
@@ -128,7 +128,7 @@ unlockName（通关解锁的模块名）/ reference（空库可编译的参考�
     - s1-nand = 【与门】+【非门】；s1-nor = 【或门】+【非门】（仅这些关如此，且全契约都给）
     - s1-xor = 4×【与非门】；s1-xnor = 【异或门】+【非门】；半加器 = 异或+与；全加器 = 9×与非门；加法器 = N×全加器；计算器链 = bcd2bin/bin2bcd/寄存器/全加器拼装
   - **一键出答案原则（用户拍板）**：**门版是默认答案**；元件版仅在相对门版占优（成本更低 `'cost'` / 延迟更短 `'delay'`，见 `elementEdgeOf`）时作为弹窗选项并标注；两者都无 → 元件版兜底。
-  - 门版判定走 **`lenient`**（只查功能+强度契约，不卡玩家成本/时序预算——成本超了只降评分，见 §4.6）。
+  - 门版判定与玩家电路同规则：**功能正确即可过关**（成本/时序超标只降评分，见 §4.6）。
 
 ### 4.5 编辑器模型与存档（studio/editor/model.ts + level/progress.ts + session.ts）
 
@@ -138,16 +138,15 @@ unlockName（通关解锁的模块名）/ reference（空库可编译的参考�
 
 ### 4.6 判定管道（compiler/judge.ts）
 
-`judgeDesign(design, level, { library, family, units, optimalHalf, budgetHalf, timingBudgetPs, hardcore, lenient })`：
+`judgeDesign(design, level, { library, family, units, optimalHalf, budgetHalf, timingBudgetPs, hardcore })`：
 
 1. 编译（flatten：模块展开/端口绑定/unknown-module/depth-exceeded 报错）
 2. 功能：逐向量仿真对比（`fn` 生成的全组合真值表）
 3. 结构：逻辑门关要求组合逻辑（`wantsCombinational`，有反馈环 → fail）；强度契约检查（§4.2）
-4. 成本：`costHalf ≤ budgetHalf` 才 pass（**lenient 时不判死**，只降评分）
-5. 时序（hardcore）：关键路径 ≤ timingBudgetPs；空翻次数；建立/保持时间
-6. 评分：`scoreOf`（成本 ≤ optimalHalf = 100，线性降到 budgetHalf = 0）+ 延迟分；评星见 §4.5
+4. 成本/时序（含空翻、建立/保持）：**只看功能才决定 pass**——这些是性能指标，超标只降评分/星级、进 `warnings`，不判失败（用户定稿 2025-10）
+5. 评分：`scoreOf`（成本 ≤ optimalHalf = 100，线性降到 budgetHalf = 0）+ 延迟分；评星见 §4.5
 
-**lenient 语义**：一键出答案门版搭出后，App 用 `lastGateDocRef`（引用跟踪）记住"画布没被玩家改过"→ 交付时传 `lenient: true`（协议 `StudioRequest` 增加字段）；玩家动过画布 → 照常从严。**门版答案超玩家标准（如 TTL 拼两门 44 > 预算 40）也能交付，只是低分**——这是"门版是默认答案"的技术保障。
+**判定口径（用户定稿 2025-10）**：**功能正确即可过关**。成本、关键路径、空翻、建立/保持时间都只影响评分与星级（`overBudget` / `timingOk` 标记仍在结果里供面板展示）；玩家自搭、门版答案一视同仁——所以 TTL 拼两门 44 > 预算 40 的门版答案也能交付，只是低分。强度契约（TTL/CMOS 强 1）、端口、素材、组合性仍是硬性检查。
 
 ### 4.7 仿真通道（studio/sim/）
 
@@ -196,7 +195,7 @@ pnpm lc-level tools/level-editor/specs/s1-majority.json /tmp/x.ts  # 生成关�
 | `compiler/test/timing.test.ts` | 延迟实测/反馈环 |
 | `content/test/levels*.test.ts` | 每关参考解判定满分 + 门版判定 + 反例（错误电路必须判失败） |
 | `content/test/family-refs.test.ts` | 契约规格/强度检查 |
-| `studio/test/fromDesign.test.ts` | 一键出答案往返 + 契约门版 lenient 判定 + 布局快照 + **无循环依赖断言** |
+| `studio/test/fromDesign.test.ts` | 一键出答案往返 + 契约门版判定 + 布局快照 + **无循环依赖断言** |
 | `studio/test/debug-mode.test.tsx` | 一键出答案 UI（含计算器门版 60s） |
 | `studio/test/calc-sim.test.ts` | 计算器链仿真 |
 
@@ -230,9 +229,9 @@ pnpm lc-level tools/level-editor/specs/s1-majority.json /tmp/x.ts  # 生成关�
 1. **通路元件传递规则**：无条件双向传递会伪造假稳态（RTL 与非门中点锁死 0）——必须"只向更弱侧传"。
 2. **时序分析不能用编译期图论**：双向通路产生伪环，改用"同一套时序仿真逐输入翻转实测"（Tech-Plan §0 修正 2）。
 3. **模块成本回写漏 MOS**：`cost.ts` 的 `addCounts` 回写曾漏 `nmos/pmos`（CMOS 积木成本恒 0）——已修并有测试钉住（`design-compile.test.ts`「CMOS 模块成本固化」）。
-4. **hash 往返不一致**：`hashDesign(fromDesign(toDesign))` 不保证相等（fromDesign 还原会重排/改名）——所以 lenient 识别**不能用 hash 比较**，用 App 侧 `lastGateDocRef` 引用跟踪。
+4. **hash 往返不一致**：`hashDesign(fromDesign(toDesign))` 不保证相等（fromDesign 还原会重排/改名）——需要识别"画布=某参考解"时不能用 hash 比较（历史方案 `lastGateDocRef` 引用跟踪已随 lenient 移除）。
 5. **门版不能自引用**：s1-nand 答案用「与非门积木」= 答案=题目（用户否决）；必须"用其他门搭"，且 wrap 时 `findDependencyCycle` 检出互相引用成环。
-6. **TTL/CMOS 契约门版成本**：TTL 拼两门 = 44 > 预算 40（满分线是单门成本）——**不要为门版放宽预算/时序**（用户明确"不用管门版超标准"），用 lenient 判定承接。
+6. **TTL/CMOS 契约门版成本**：TTL 拼两门 = 44 > 预算 40（满分线是单门成本）——**不用为门版放宽预算/时序**：判定只看功能，超标只降评分（用户定稿"只要逻辑正确就能过关"）。
 7. **moduleAccess ≠ 门版有无**：s1-not/and/or 是 `none`（无门版，禁模块）；s1-nand/nor 是 `all`（有门版但用其他门拼）；s1-xor/xnor 是 `listed`（限定积木拼）。改门版前先看关的 moduleAccess。
 8. **结算语义**：页面文案用「款项」（= 客户按成本线付的固定总价），利润 = 款项 − 材料费；契约关的款项/对标/委托卡按玩家契约显示（修过"契约关结算亏钱"）。
 9. **教学关不评星不设预算**：`classroom` 关直接 `starsOf → 0`，别给它加预算断言。

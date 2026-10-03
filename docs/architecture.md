@@ -70,16 +70,14 @@ solveOneKey（App.tsx）
 
 applyAnswer(kind)
   ├─ gate  → teachingSolutionOf(...)（引用教学积木，需带 TEACHING_MODULES/FAMILY_GATES 建库）
-  │          extra = teachingStoredFor(family) 并入画布库（门积木进左侧「我的模块」）
+  │          extra = teachingStoredFor(family) 并入画布库（教学积木标 teaching，不显示在「我的模块」）
   ├─ element → spec.reference（契约工艺答案）
   ├─ next = fromDesign(ref, docForLevel(level, library))；loadDoc(next)
-  └─ lastGateDocRef.current = kind==='gate' ? nextDoc : null   # lenient 判定依据
 
 交付（runJudge）
   ├─ design = toDesign(doc)
-  ├─ lenient = lastGateDocRef.current !== null && doc === lastGateDocRef.current（引用相等 = 画布未被玩家改过）
-  └─ runner.send({type:'judge', design, lenient, …}) → handle.ts → judgeDesign(...)
-       · lenient=true：不卡成本/时序预算（成本超了只降评分），功能/强度/元件集照常
+  └─ runner.send({type:'judge', design, …}) → handle.ts → judgeDesign(...)
+       · 判定只看功能（用户定稿）：成本/关键路径/空翻/建立保持超标 → 只降评分/星级（warnings）
        · pass → wrapAndSettle（自动封装 + 结算：款项−材料费=利润、S/A/B/C、三星）
 ```
 

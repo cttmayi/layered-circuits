@@ -1,8 +1,10 @@
 /**
  * 关卡判定：玩家的电路能不能过关、能得几分。
  *
- * 唯一硬性通关条件（GDD 2.2.3）：功能断言全通过 **且** 成本 ≤ 预算。
- * 硬核工程模式再加一条：关键路径 ≤ 关卡时序预算（双难度设计的落点）。
+ * 唯一硬性通关条件（用户定稿 2025-10）：**功能断言全通过**。
+ * 成本、关键路径/时序预算、空翻、建立/保持时间都只影响评分与星级（过预算 → 低分/无星，
+ * 仍可交付）——「只要逻辑正确就能过关」，避免成本/延迟卡死玩家（含与非门的门版答案）。
+ * 强度契约（TTL/CMOS 推挽输出）、端口、素材约束、组合性等结构/接口检查仍是硬性的。
  *
  * 判定用的仿真与编辑器所见完全一致（同一套 compileDesign + runVectors + analyzeTiming），
  * 所以「面板上看到的现象」就是「判定的依据」，不会出现两套真相。
@@ -42,12 +44,6 @@ export interface JudgeOptions {
   budgetHalf?: number;
   /** 生效已知最省（半分）；契约感知时由 familySpecOf 算出；缺省 = level.bestKnownHalf */
   bestKnownHalf?: number;
-  /**
-   * 宽松判定（门版答案专用）：内容提供的教学门版（如 TTL 与非门 = 与门+非门 两门拼）
-   * 是「默认答案」，不按玩家电路的成本/时序预算卡死——成本超了只降评分，不判失败。
-   * 功能断言、强度契约、元件集照常检查。玩家自搭电路不得传此标志。
-   */
-  lenient?: boolean;
 }
 
 export interface JudgeRow {
@@ -401,11 +397,13 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
   }
 
   // 3) 成本预算：成本挑战关（GDD 4.2）不设上限，只比谁更省 → 不算「超预算」；
-  //    门版答案（lenient）是内容提供的默认答案，成本超了只降评分，不判失败
-  const budgetEnforced = level.kind !== 'cost' && !options.lenient;
+  //    成本只影响评分/星级，不判失败——功能正确即可交付（用户定稿 2025-10）。
+  const budgetEnforced = level.kind !== 'cost';
   const overBudget = budgetEnforced && costHalf > effectiveBudgetHalf;
   if (overBudget) {
-    errors.push(`成本超预算：${costHalf / 2} > ${effectiveBudgetHalf / 2}`);
+    warnings.push(
+      `成本超预算：${costHalf / 2} > ${effectiveBudgetHalf / 2}（功能正确仍可交付，只是评分/星级低）`,
+    );
   }
 
   // 4) 结构与时序检查
@@ -441,19 +439,12 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     if (analysis.uncertain && wantsCombinational)
       warnings.push('时序分析存在不确定项（X / 振荡），结果仅供参考');
   }
-  if (effectiveTimingBudgetPs !== undefined && criticalPathPs > effectiveTimingBudgetPs) {
-    warnings.push(
-      `关键路径 ${(criticalPathPs / 1000).toFixed(2)}ns 超过硬核要求 ${(effectiveTimingBudgetPs / 1000).toFixed(2)}ns（科普模式仍可通过）`,
-    );
-  }
+  // 关键路径超预算 → 只降评分/星级，不判失败（用户定稿：延迟与成本一样是「性能指标」）
   const timingOk =
-    options.lenient ||
-    !options.hardcore ||
-    effectiveTimingBudgetPs === undefined ||
-    criticalPathPs <= effectiveTimingBudgetPs;
+    effectiveTimingBudgetPs === undefined || criticalPathPs <= effectiveTimingBudgetPs;
   if (!timingOk) {
-    errors.push(
-      `硬核模式时序不达标：${(criticalPathPs / 1000).toFixed(2)}ns > ${((effectiveTimingBudgetPs ?? 0) / 1000).toFixed(2)}ns`,
+    warnings.push(
+      `关键路径 ${(criticalPathPs / 1000).toFixed(2)}ns 超过硬核要求 ${((effectiveTimingBudgetPs ?? 0) / 1000).toFixed(2)}ns（功能正确仍可交付，只是星级低）`,
     );
   }
 
@@ -469,8 +460,7 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
       const message = `输出在 ${over.length} 个向量里跳变超过 ${max} 次（第 ${over
         .map((r) => r.index + 1)
         .join('、')} 组）：时钟翻转期间输出跟着抖动，就是竞争冒险/空翻`;
-      if (mode === 'timing') errors.push(message);
-      else warnings.push(`${message}（科普模式忽略延迟，切硬核模式才判定）`);
+      warnings.push(`${message}（只降星级，不影响交付）`);
     } else if (mode === 'timing') {
       notes.push('所有向量的输出跳变都不超过预算，没有空翻');
     }
@@ -501,8 +491,8 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
       if (options.hardcore && measured.setupPs !== null) {
         const needed = criticalPathPs + measured.setupPs;
         if (freq && needed > period) {
-          errors.push(
-            `跑不到 ${(freq / 1e6).toFixed(0)}MHz：数据路径 ${(criticalPathPs / 1000).toFixed(2)}ns + 建立时间 ${(measured.setupPs / 1000).toFixed(2)}ns > 时钟周期 ${(period / 1000).toFixed(2)}ns`,
+          warnings.push(
+            `跑不到 ${(freq / 1e6).toFixed(0)}MHz：数据路径 ${(criticalPathPs / 1000).toFixed(2)}ns + 建立时间 ${(measured.setupPs / 1000).toFixed(2)}ns > 时钟周期 ${(period / 1000).toFixed(2)}ns（只降星级，不影响交付）`,
           );
         } else if (freq) {
           notes.push(
@@ -512,13 +502,13 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
       }
       if (options.hardcore && measured.setupPs !== null && measured.holdPs !== null) {
         if (checks.setupBudgetPs !== undefined && measured.setupPs > checks.setupBudgetPs) {
-          errors.push(
-            `建立时间超标：数据要提前 ${(measured.setupPs / 1000).toFixed(2)}ns 稳定，预算 ${(checks.setupBudgetPs / 1000).toFixed(2)}ns`,
+          warnings.push(
+            `建立时间超标：数据要提前 ${(measured.setupPs / 1000).toFixed(2)}ns 稳定，预算 ${(checks.setupBudgetPs / 1000).toFixed(2)}ns（只降星级，不影响交付）`,
           );
         }
         if (checks.holdBudgetPs !== undefined && measured.holdPs > checks.holdBudgetPs) {
-          errors.push(
-            `保持时间超标：时钟沿后数据还要保持 ${(measured.holdPs / 1000).toFixed(2)}ns，预算 ${(checks.holdBudgetPs / 1000).toFixed(2)}ns`,
+          warnings.push(
+            `保持时间超标：时钟沿后数据还要保持 ${(measured.holdPs / 1000).toFixed(2)}ns，预算 ${(checks.holdBudgetPs / 1000).toFixed(2)}ns（只降星级，不影响交付）`,
           );
         }
       }
@@ -563,18 +553,10 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
       isSequential,
       notes,
     },
-    score: pass
-      ? scoreOf(
-          { ...level, optimalHalf: effectiveOptimalHalf, budgetHalf: effectiveBudgetHalf },
-          costHalf,
-        )
-      : Math.max(
-          0,
-          scoreOf(
-            { ...level, optimalHalf: effectiveOptimalHalf, budgetHalf: effectiveBudgetHalf },
-            costHalf,
-          ),
-        ),
+    score: scoreOf(
+      { ...level, optimalHalf: effectiveOptimalHalf, budgetHalf: effectiveBudgetHalf },
+      costHalf,
+    ),
     portCheck: { missingInputs, missingOutputs, extraPorts },
     errors,
     warnings,

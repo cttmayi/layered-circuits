@@ -97,7 +97,80 @@ describe('避障布线', () => {
     const segs = routeSegments({ x: -22, y: 0 }, { x: -80, y: 0 }, 0, [DIO], 'd1', 'b');
     expect(hitsAny(segs, [DIO])).toBe(false);
   });
+
+  it('走线不压未连接的引脚（点障碍）：直连会被引脚弹开', () => {
+    // 矩形在 y∈[30,50]（离直连路径 y=0 很远），但引脚 (40,0) 正好在直连线上——
+    // 只有点障碍能拦下它，矩形拦不到。
+    const OBS: RouteObstacle = { id: 'q1', x: -10, y: 30, w: 20, h: 20, pins: [{ x: 40, y: 0 }] };
+    const segs = routeSegments({ x: -80, y: 0 }, { x: 80, y: 0 }, 0, [OBS], 'a', 'b');
+    // 直连被引脚淘汰：结果不再是单段直线
+    expect(segs.length).toBeGreaterThan(1);
+    // 任何一段都不进入引脚 (40,0) 的 7px 邻域
+    for (const [p, q] of segs) {
+      expect(distToPoint(p, q, { x: 40, y: 0 })).toBeGreaterThan(7);
+    }
+    // 端点元件自己的引脚不算障碍（豁免）
+    const own = routeSegments({ x: 40, y: 0 }, { x: 80, y: 0 }, 0, [OBS], 'q1', 'b');
+    expect(own).toEqual([
+      [
+        { x: 40, y: 0 },
+        { x: 80, y: 0 },
+      ],
+    ]);
+  });
+
+  it('新线不与已布导线平行重叠（避让 placed），垂直交叉仍允许', () => {
+    // 已布好一条 y=20 的水平线
+    const placed: Array<[{ x: number; y: number }, { x: number; y: number }]> = [
+      [
+        { x: 0, y: 20 },
+        { x: 200, y: 20 },
+      ],
+    ];
+    // 与 placed 完全重合的直连被淘汰：结果换路（y=20 上的长段不应出现）
+    const segs = routeSegments({ x: 0, y: 20 }, { x: 200, y: 20 }, 0, [], 'a', 'b', placed);
+    const overlaps = segs.some(
+      ([p, q]) =>
+        p.y === 20 &&
+        q.y === 20 &&
+        Math.max(p.x, q.x) - Math.min(p.x, q.x) > 1 &&
+        Math.max(p.x, q.x) > 0 &&
+        Math.min(p.x, q.x) < 200,
+    );
+    expect(overlaps).toBe(false);
+    // 垂直交叉于一点不淘汰：竖线照常直连
+    const cross = routeSegments({ x: 100, y: 0 }, { x: 100, y: 40 }, 0, [], 'a', 'b', placed);
+    expect(cross).toEqual([
+      [
+        { x: 100, y: 0 },
+        { x: 100, y: 40 },
+      ],
+    ]);
+    // 平行但相距够远（> 6）不算重叠，允许
+    const apart = routeSegments({ x: 0, y: 40 }, { x: 200, y: 40 }, 0, [], 'a', 'b', placed);
+    expect(apart).toEqual([
+      [
+        { x: 0, y: 40 },
+        { x: 200, y: 40 },
+      ],
+    ]);
+  });
 });
+
+/** 点到线段的最短距离（测试断言用） */
+function distToPoint(
+  p: { x: number; y: number },
+  q: { x: number; y: number },
+  pt: { x: number; y: number },
+): number {
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.hypot(pt.x - p.x, pt.y - p.y);
+  let t = ((pt.x - p.x) * dx + (pt.y - p.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(pt.x - (p.x + t * dx), pt.y - (p.y + t * dy));
+}
 
 describe('signalText（端口强度标注）', () => {
   it('输入端口只显示 0/1，不标强度', () => {

@@ -222,13 +222,14 @@ describe('阶段 1 关卡内容', () => {
     expect(wrongPortResult.pass).toBe(false);
     expect(wrongPortResult.portCheck.missingInputs).toEqual(['a']);
 
-    // 超预算：给它一个 1 半单位的预算
+    // 超预算：给它一个 1 半单位的预算 —— 逻辑正确仍过关，只是评分/星级低（用户定稿）
     const tightLevel = { ...notLevel, budgetHalf: 1 };
     const overBudget = judgeDesign(notLevel.referenceSolution!, tightLevel, {
       library: emptyLibrary,
     });
     expect(overBudget.overBudget).toBe(true);
-    expect(overBudget.pass).toBe(false);
+    expect(overBudget.pass).toBe(true);
+    expect(overBudget.warnings.join('；')).toContain('超预算');
 
     // 功能错：把输入直接当输出（不是非门）
     const passthrough = structuredClone(notLevel.referenceSolution!);

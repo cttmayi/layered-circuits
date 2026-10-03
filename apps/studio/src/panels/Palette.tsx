@@ -285,45 +285,50 @@ export function Palette({
       <Section
         open={openSections.has(SECTIONS.modules)}
         onToggle={() => toggleSection(SECTIONS.modules)}
-        title={`我的模块（${library.length}）`}
+        title={`我的模块（${library.filter((m) => !m.teaching).length}）`}
       >
         {level && !modulesAllowed && (
           <p className="palette-empty">本关要求从底层元件手搭，暂不开放组件库模块。</p>
         )}
-        {library.length === 0 && (
+        {library.filter((m) => !m.teaching).length === 0 && (
           <p className="palette-empty">
             搭好电路后点「封装为模块」，就能像元件一样复用，造价会自动递归累加。
           </p>
         )}
-        {library.map((mod) => {
-          const locked = !modulesAllowed || !moduleAllowed(mod.name);
-          return (
-            <button
-              key={mod.hash}
-              type="button"
-              className={isArmed('module', mod.hash) ? 'palette-item active' : 'palette-item'}
-              disabled={locked}
-              draggable={!locked}
-              onDragStart={(e) => {
-                e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'module', hash: mod.hash }));
-                e.dataTransfer.effectAllowed = 'copy';
-                e.dataTransfer.setDragImage(dragImage('module'), 48, 48);
-              }}
-              onClick={() => pick('module', undefined, mod.hash)}
-              title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}（拖到画布放置）`}
-            >
-              <span className="palette-name">
-                {mod.name} v{mod.version} {mod.isSequential && <em>时序</em>}
-              </span>
-              <span className="palette-cost">成本 {mod.costHalf / 2}</span>
-              <span className="palette-note">
-                {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
-                {mod.ports.filter((p) => p.dir === 'out').length} 出 · #{mod.hash.slice(0, 6)}
-              </span>
-              {locked && <span className="palette-lock">{moduleLockReason(mod.name)}</span>}
-            </button>
-          );
-        })}
+        {library
+          .filter((m) => !m.teaching) // 教学积木（一键出答案砖块）不出现在放置面板
+          .map((mod) => {
+            const locked = !modulesAllowed || !moduleAllowed(mod.name);
+            return (
+              <button
+                key={mod.hash}
+                type="button"
+                className={isArmed('module', mod.hash) ? 'palette-item active' : 'palette-item'}
+                disabled={locked}
+                draggable={!locked}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(
+                    DRAG_MIME,
+                    dragPayload({ kind: 'module', hash: mod.hash }),
+                  );
+                  e.dataTransfer.effectAllowed = 'copy';
+                  e.dataTransfer.setDragImage(dragImage('module'), 48, 48);
+                }}
+                onClick={() => pick('module', undefined, mod.hash)}
+                title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}（拖到画布放置）`}
+              >
+                <span className="palette-name">
+                  {mod.name} v{mod.version} {mod.isSequential && <em>时序</em>}
+                </span>
+                <span className="palette-cost">成本 {mod.costHalf / 2}</span>
+                <span className="palette-note">
+                  {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
+                  {mod.ports.filter((p) => p.dir === 'out').length} 出 · #{mod.hash.slice(0, 6)}
+                </span>
+                {locked && <span className="palette-lock">{moduleLockReason(mod.name)}</span>}
+              </button>
+            );
+          })}
       </Section>
     </aside>
   );

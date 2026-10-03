@@ -93,7 +93,6 @@ export function handleRequest(req: StudioRequest): StudioResponse {
         optimalHalf: spec.optimalHalf,
         budgetHalf: spec.budgetHalf,
         bestKnownHalf: spec.bestKnownHalf,
-        lenient: req.lenient,
       });
       return { id: req.id, judge: result };
     }

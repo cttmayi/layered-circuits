@@ -44,6 +44,11 @@ export interface StoredModule {
   /** 溯源树的子节点：封装时用到的下层模块哈希 */
   sources: string[];
   createdAt: number;
+  /**
+   * 教学积木（一键出答案的门版砖块）：由 teachingStoredFor 注入画布库，仅供答案渲染与
+   * 判定编译使用；玩家没有亲手搭过它，不算个人资产 → 不出现在「我的模块」/放置面板。
+   */
+  teaching?: boolean;
 }
 
 export interface Sym {

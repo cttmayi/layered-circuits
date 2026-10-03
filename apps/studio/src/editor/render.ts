@@ -203,12 +203,11 @@ export function hitTest(scene: Scene, wx: number, wy: number, tolerance = 9): Ho
       return { kind: 'sym', id: sym.id };
   }
   const wireTol = 6 / scene.camera.scale + 2;
-  const obstacles = routeObstacles(doc);
+  const routes = routeWires(doc);
   for (const wire of doc.wires) {
-    const a = pinWorld(doc, wire.a.inst, wire.a.pin, wire.a.bit ?? 0);
-    const b = pinWorld(doc, wire.b.inst, wire.b.pin, wire.b.bit ?? 0);
-    if (!a || !b) continue;
-    for (const [p, q] of routeSegments(a, b, wire.id.length, obstacles, wire.a.inst, wire.b.inst)) {
+    const segs = routes.get(wire.id);
+    if (!segs || segs.length === 0) continue;
+    for (const [p, q] of segs) {
       if (distanceToSegment(wx, wy, p, q) <= wireTol) return { kind: 'wire', id: wire.id };
     }
   }
@@ -238,6 +237,8 @@ export interface RouteObstacle {
   y: number;
   w: number;
   h: number;
+  /** 该元件伸出盒子外的引脚世界坐标：走线也要避开未连接的引脚，防止看起来像接了线 */
+  pins?: Array<{ x: number; y: number }>;
 }
 
 /** 画布上所有元件的矩形（含锁定的端口/电源轨），当作走线障碍 */
@@ -246,7 +247,13 @@ export function routeObstacles(doc: Doc): RouteObstacle[] {
     .map((sym) => {
       const f = footprintOf(sym, doc.library);
       const m = 5; // 边距：离元件太近也算撞
-      return { id: sym.id, x: f.x - m, y: f.y - m, w: f.w + m * 2, h: f.h + m * 2 };
+      // 引脚伸出盒子（含边距）之外的部分单列为点障碍；盒内部分已被矩形覆盖，免重复
+      const pins = pinOffsets(sym, doc.library)
+        .map((p) => ({ x: sym.x + p.x, y: sym.y + p.y }))
+        .filter(
+          (p) => p.x < f.x - m || p.x > f.x + f.w + m || p.y < f.y - m || p.y > f.y + f.h + m,
+        );
+      return { id: sym.id, x: f.x - m, y: f.y - m, w: f.w + m * 2, h: f.h + m * 2, pins };
     })
     .filter((o) => o.w > 0 && o.h > 0);
 }
@@ -322,25 +329,81 @@ export function segHitsRect(
   return false;
 }
 
+/** 线段是否进入引脚点的邻域（引脚点与线段距离 ≤ 半径） */
+function segHitsPins(
+  p: { x: number; y: number },
+  q: { x: number; y: number },
+  pins: Array<{ x: number; y: number }> | undefined,
+  radius: number,
+): boolean {
+  if (!pins) return false;
+  for (const pt of pins) if (distanceToSegment(pt.x, pt.y, p, q) <= radius) return true;
+  return false;
+}
+
+/**
+ * 两条轴对齐线段是否「平行贴近/重叠」：同向（水平-水平 / 垂直-垂直）、
+ * 间距 < gap、且投影区间有超过 1 单位的长度的交集（仅端点相接不算重叠 —— 那是合法汇合点）。
+ * 交叉（垂直相交一点）不算重叠，永远允许。
+ */
+function segsOverlap(
+  p: { x: number; y: number },
+  q: { x: number; y: number },
+  r: { x: number; y: number },
+  s: { x: number; y: number },
+  gap: number,
+): boolean {
+  const ph = p.y === q.y;
+  const qh = r.y === s.y;
+  if (ph && qh) {
+    if (Math.abs(p.y - r.y) > gap) return false;
+    const a0 = Math.min(p.x, q.x);
+    const a1 = Math.max(p.x, q.x);
+    const b0 = Math.min(r.x, s.x);
+    const b1 = Math.max(r.x, s.x);
+    return Math.min(a1, b1) - Math.max(a0, b0) > 1;
+  }
+  const pv = p.x === q.x;
+  const qv = r.x === s.x;
+  if (pv && qv) {
+    if (Math.abs(p.x - r.x) > gap) return false;
+    const a0 = Math.min(p.y, q.y);
+    const a1 = Math.max(p.y, q.y);
+    const b0 = Math.min(r.y, s.y);
+    const b1 = Math.max(r.y, s.y);
+    return Math.min(a1, b1) - Math.max(a0, b0) > 1;
+  }
+  return false;
+}
+
 function routeClear(
   segs: Array<[{ x: number; y: number }, { x: number; y: number }]>,
   obstacles: RouteObstacle[],
   skipA: string,
   skipB: string,
+  /** 已布好的其他导线线段：候选线不得与它们平行重叠/贴近（交叉仍允许） */
+  avoid: Array<[{ x: number; y: number }, { x: number; y: number }]> = [],
+  /** 引脚邻域半径（世界单位）：走线不得压过未连接的引脚 */
+  pinRadius = 7,
 ): boolean {
   for (const [p, q] of segs) {
     for (const ob of obstacles) {
       if (ob.id === skipA || ob.id === skipB) continue;
       if (segHitsRect(p, q, ob)) return false;
+      if (segHitsPins(p, q, ob.pins, pinRadius)) return false;
+    }
+    for (const [r, s] of avoid) {
+      if (segsOverlap(p, q, r, s, 6)) return false;
     }
   }
   return true;
 }
 
 /**
- * 避障布线：优先走「不穿过任何元件」的折线。
+ * 避障布线：优先走「不穿过任何元件、不压未连接引脚、不与已有导线重叠」的折线。
  * 候选依次尝试 —— 直连 / 横先 Z / 竖先 Z / 各自向两侧挪 48/96/144，
- * 第一个不撞元件矩形（两端点所属元件除外）的方案胜出；都不行再退回默认中点线。
+ * 第一个不撞元件矩形（两端点所属元件除外）与未连接引脚、且不与已布线段平行贴近的
+ * 方案胜出（交叉仍允许）；都不行再退回默认中点线（保证永远画得出）。
  */
 export function routeSegments(
   a: { x: number; y: number },
@@ -349,6 +412,8 @@ export function routeSegments(
   obstacles: RouteObstacle[] = [],
   skipA = '',
   skipB = '',
+  /** 已布好的其他导线线段（平行重叠/贴近则淘汰候选；交叉仍允许） */
+  avoid: Array<[{ x: number; y: number }, { x: number; y: number }]> = [],
 ): Array<[{ x: number; y: number }, { x: number; y: number }]> {
   const off = seed === 0 ? 0 : seedOffset(String(seed));
   const alignedX = Math.abs(a.x - b.x) < 1;
@@ -415,10 +480,42 @@ export function routeSegments(
       !outwardTurn(cand[cand.length - 1][0], cand[cand.length - 1][1], sideB)
     )
       continue;
-    if (!obstacles.length || routeClear(cand, obstacles, skipA, skipB)) return cand;
+    if (!obstacles.length && !avoid.length) return cand;
+    if (routeClear(cand, obstacles, skipA, skipB, avoid)) return cand;
   }
   // 兜底：默认中点折线（旧行为），保证永远画得出线
   return candidates[0] ?? [[a, b]];
+}
+
+export type WireRoute = Array<[{ x: number; y: number }, { x: number; y: number }]>;
+
+/** 布线结果缓存：画布对象不变时，渲染与命中测试共用同一份布线，不重复计算 */
+const routeCache = new WeakMap<Doc, Map<string, WireRoute>>();
+
+/**
+ * 一次性为整份画布布线：按导线顺序逐条避障——每条新线都把「已布好的线段」当障碍
+ * （平行重叠/贴近的候选直接淘汰，交叉仍允许），从根源上杜绝导线重叠。
+ * 结果按 wire id 存进 Map（doc 每次编辑都是新对象，缓存自动失效）。
+ */
+export function routeWires(doc: Doc): Map<string, WireRoute> {
+  const cached = routeCache.get(doc);
+  if (cached) return cached;
+  const obstacles = routeObstacles(doc);
+  const placed: WireRoute = [];
+  const result = new Map<string, WireRoute>();
+  for (const wire of doc.wires) {
+    const a = pinWorld(doc, wire.a.inst, wire.a.pin, wire.a.bit ?? 0);
+    const b = pinWorld(doc, wire.b.inst, wire.b.pin, wire.b.bit ?? 0);
+    if (!a || !b) {
+      result.set(wire.id, []);
+      continue;
+    }
+    const segs = routeSegments(a, b, wire.id.length, obstacles, wire.a.inst, wire.b.inst, placed);
+    result.set(wire.id, segs);
+    placed.push(...segs);
+  }
+  routeCache.set(doc, result);
+  return result;
 }
 
 /** 线段去重 key（端点取整到 0.5，同一条公共段只画一次，消灭扇出重影） */
@@ -484,7 +581,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
     if (net) activeNets.add(net);
   }
   const netDimmed = activeNets.size > 0;
-  const obstacles = routeObstacles(doc);
+  const routes = routeWires(doc);
 
   const segments: Array<{ wire: Wire; a: { x: number; y: number }; b: { x: number; y: number } }> =
     [];
@@ -498,11 +595,9 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
     ctx.stroke();
   };
   for (const wire of doc.wires) {
-    const a = pinWorld(doc, wire.a.inst, wire.a.pin, wire.a.bit ?? 0);
-    const b = pinWorld(doc, wire.b.inst, wire.b.pin, wire.b.bit ?? 0);
-    if (!a || !b) continue;
-    for (const [p, q] of routeSegments(a, b, wire.id.length, obstacles, wire.a.inst, wire.b.inst))
-      segments.push({ wire, a: p, b: q });
+    const segs = routes.get(wire.id);
+    if (!segs) continue;
+    for (const [p, q] of segs) segments.push({ wire, a: p, b: q });
   }
   ctx.save();
   ctx.lineCap = 'round';
@@ -559,7 +654,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
     }
   }
 
-  // 连线中的橡皮筋
+  // 连线中的橡皮筋（预览也走避障布线：绕开元件/引脚/已布导线，所见即所得）
   if (scene.pendingPin && scene.pendingPoint) {
     const from = pinWorld(
       doc,
@@ -568,15 +663,32 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
       scene.pendingPin.bit ?? 0,
     );
     if (from) {
-      const sp = worldToScreen(camera, width, height, from.x, from.y);
-      const sq = worldToScreen(camera, width, height, scene.pendingPoint.x, scene.pendingPoint.y);
+      const placed: WireRoute = [];
+      for (const segs of routeWires(doc).values()) placed.push(...segs);
+      const segs = routeSegments(
+        from,
+        scene.pendingPoint,
+        0,
+        routeObstacles(doc),
+        scene.pendingPin.inst,
+        '',
+        placed,
+      );
       ctx.save();
       ctx.strokeStyle = PALETTE.hover;
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 5]);
       ctx.beginPath();
-      ctx.moveTo(sp.x, sp.y);
-      ctx.lineTo(sq.x, sq.y);
+      let first = true;
+      for (const [p, q] of segs) {
+        const sp = worldToScreen(camera, width, height, p.x, p.y);
+        const sq = worldToScreen(camera, width, height, q.x, q.y);
+        if (first) {
+          ctx.moveTo(sp.x, sp.y);
+          first = false;
+        }
+        ctx.lineTo(sq.x, sq.y);
+      }
       ctx.stroke();
       ctx.restore();
     }

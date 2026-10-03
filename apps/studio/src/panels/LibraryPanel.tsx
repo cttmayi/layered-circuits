@@ -66,9 +66,11 @@ export function LibraryPanel({
   const [expanded, setExpanded] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
+  // 教学积木（一键出答案的门版砖块）不算玩家资产：不出现在「我的模块」
+  const owned = library.filter((m) => !m.teaching);
   const names = useMemo(
-    () => [...new Set(library.map((m) => m.name))].sort((a, b) => a.localeCompare(b)),
-    [library],
+    () => [...new Set(owned.map((m) => m.name))].sort((a, b) => a.localeCompare(b)),
+    [owned],
   );
   const cleared = rows.filter((row) => row.cleared);
 
@@ -83,10 +85,12 @@ export function LibraryPanel({
     <section className="panel library">
       <h3>组件库与成绩</h3>
 
-      <h4>我的模块（{library.length}）</h4>
-      {library.length === 0 && <p className="panel-empty">还没有封装过模块。</p>}
+      <h4>我的模块（{owned.length}）</h4>
+      {owned.length === 0 && <p className="panel-empty">还没有封装过模块。</p>}
       {names.map((name) => {
-        const versions = versionsOfName(library, name);
+        // 版本只列玩家自有的（教学积木即使同名也不算玩家的版本）；
+        // 溯源树仍用完整库解析（玩家模块可能引用教学积木作为子节点）
+        const versions = versionsOfName(owned, name);
         const newest = versions[0] as StoredModule;
         const open = expanded === name;
         const trace = open ? traceOf(library, newest.hash) : null;
