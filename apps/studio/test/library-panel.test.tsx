@@ -224,7 +224,7 @@ describe('任务与结算（P0 游戏化外壳）', () => {
   });
 });
 
-describe('任务墙与星级（P1）', () => {
+describe('地图与星级（P1）', () => {
   beforeEach(() => localStorage.clear());
 
   it('交付后结算页显示星级（星级规则与进度测试同源）', () => {
@@ -233,14 +233,13 @@ describe('任务墙与星级（P1）', () => {
     expect(screen.queryByText(/验收报告/)).toBeNull();
   });
 
-  it('点「任务墙」弹出章节地图：未解锁的章节节点是禁用的', () => {
+  it('返回地图：章节标题齐全，未解锁的关卡节点是禁用的', () => {
     renderApp();
     startJob('非门');
-    fireEvent.click(screen.getByText('任务墙'));
-    expect(screen.getByRole('dialog', { name: '任务墙' })).toBeTruthy();
-    expect(screen.getByText('第一章 · 街道维修铺（逻辑门）')).toBeTruthy();
-    expect(screen.getByText('第二章 · 研究所（时序单元）')).toBeTruthy();
-    // 第一关可接单，第二关未解锁（禁用），挑战关标出类型
+    fireEvent.click(screen.getByText('← 返回地图'));
+    expect(screen.getByText('第一章 · 元件入门与基础门电路')).toBeTruthy();
+    expect(screen.getByText('第二章 · 时序电路')).toBeTruthy();
+    // 第一关可接单，第二关未解锁（禁用）
     const node = (title: string): HTMLButtonElement | undefined =>
       screen
         .getAllByText(title)
@@ -248,10 +247,9 @@ describe('任务墙与星级（P1）', () => {
         .find((b): b is HTMLButtonElement => b !== null);
     expect(node('非门')?.disabled).toBe(false);
     expect(node('与门')?.disabled).toBe(true);
-    expect(screen.getAllByText('元件成本挑战').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('已交付的关卡显示星数与称号；钱包不足时给出升级提示', () => {
+  it('地图显示已交付关卡的星数与称号', () => {
     localStorage.setItem(
       PROGRESS_KEY,
       JSON.stringify({
@@ -266,11 +264,11 @@ describe('任务墙与星级（P1）', () => {
     );
     render(<App />);
     goToLevel('非门');
-    fireEvent.click(screen.getByText('任务墙'));
+    fireEvent.click(screen.getByText('← 返回地图'));
     expect(screen.getByText('★★★')).toBeTruthy();
     // 1 单 + 1 元 → 还是学徒，提示升到维修铺师傅还差什么
-    expect(screen.getByText(/学徒/)).toBeTruthy();
-    expect(screen.getByText(/已交付 1\/30 · 星 3\/90/)).toBeTruthy(); // 教学关不在关卡链：主线 30 关，星上限 = 30 关 × 3
+    expect(screen.getByText(/称号 学徒/)).toBeTruthy();
+    expect(screen.getByText(/已通关 1\/30/)).toBeTruthy(); // 教学关不在关卡链：主线 30 关
   });
 });
 

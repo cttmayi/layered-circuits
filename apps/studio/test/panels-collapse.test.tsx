@@ -47,19 +47,19 @@ describe('左右侧面板展开/收起', () => {
   it('右侧整体收起：验收面板隐藏但迷你侧栏可用；展开恢复', async () => {
     renderApp();
     startJob('非门');
-    // 右侧面板默认展开：「交付验收」出现两处（工具栏 + 验收面板）
-    expect(screen.getAllByText('交付验收').length).toBeGreaterThanOrEqual(2);
-    fireEvent.click(screen.getByRole('button', { name: '收起右侧面板' }));
-    // 验收面板没了（只剩工具栏那一处），但迷你侧栏的任务墙/组件库还在
+    // 右侧面板默认展开：「交付验收」在验收面板里（工具栏已不设该按钮）
     expect(screen.getAllByText('交付验收').length).toBe(1);
-    expect(screen.getByText('任务墙')).toBeTruthy();
-    // 迷你侧栏仍能开任务墙弹窗
-    fireEvent.click(screen.getByText('任务墙'));
-    await waitFor(() => expect(screen.getByRole('dialog', { name: '任务墙' })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: '收起右侧面板' }));
+    // 验收面板没了（0 处），但迷你侧栏的工具铺还在
+    expect(screen.queryAllByText('交付验收').length).toBe(0);
+    expect(screen.getByText('工具铺')).toBeTruthy();
+    // 迷你侧栏仍能开工具铺弹窗
+    fireEvent.click(screen.getByText('工具铺'));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: '工具铺' })).toBeTruthy());
     // 收起弹窗、展开右侧面板
     fireEvent.click(screen.getByRole('button', { name: '关闭' }));
     fireEvent.click(screen.getByRole('button', { name: '展开右侧面板' }));
-    await waitFor(() => expect(screen.getAllByText('交付验收').length).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(screen.getAllByText('交付验收').length).toBe(1));
   });
 
   it('开合选择持久化：收起左侧后重进工作台仍是收起', () => {

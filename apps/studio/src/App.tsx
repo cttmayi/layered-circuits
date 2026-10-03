@@ -16,7 +16,7 @@ import {
   type ModuleTemplate,
 } from '@lc/schema';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { emptyDoc, notGateDemo } from './editor/demos';
+import { notGateDemo } from './editor/demos';
 import {
   createDeviceSym,
   createSym,
@@ -67,6 +67,7 @@ import {
 import {
   docFor,
   FREE_STORAGE_KEY,
+  freshDocFor,
   type GameMode,
   initialSession,
   levelOf,
@@ -77,7 +78,6 @@ import { FamilyPicker } from './panels/FamilyPicker';
 import { Inspector } from './panels/Inspector';
 import { JudgePanel } from './panels/JudgePanel';
 import { LevelCard } from './panels/LevelCard';
-import { LevelMap } from './panels/LevelMap';
 import { LibraryPanel } from './panels/LibraryPanel';
 import { MainMenu } from './panels/MainMenu';
 import { Modal } from './panels/Modal';
@@ -183,8 +183,8 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('debug') === '1') setDebugMode(true);
   }, [setDebugMode]);
-  /** 低频面板弹窗：任务墙 / 工具铺 / 组件库 / 波形（点击启动，不用时不留侧栏） */
-  const [panelOpen, setPanelOpen] = useState<null | 'map' | 'shop' | 'library' | 'wave'>(null);
+  /** 低频面板弹窗：工具铺 / 组件库 / 波形（点击启动，不用时不留侧栏） */
+  const [panelOpen, setPanelOpen] = useState<null | 'shop' | 'library' | 'wave'>(null);
   /** 画布探针：买下探针后可点连线钉读数 */
   const [probes, setProbes] = useState<
     Array<{ id: string; x: number; y: number; inst: string; pin: string }>
@@ -958,12 +958,12 @@ export function App(): React.JSX.Element {
     setScreen('bench');
   };
 
-  /** 重载当前关：丢弃草图回到本关初始画布（组件库保留），不改变所在关 */
+  /** 重载当前关：清空画布并回到本关初始画布（组件库保留），不改变所在关 */
   const reloadLevel = (): void => {
     if (gameMode === 'free') return;
-    setDoc(docFor(gameMode, levelId, progress.library));
+    setDoc(freshDocFor(gameMode, levelId, progress.library));
     clearTransient();
-    setToast('已重载本关初始画布');
+    setToast('已清空并重载本关初始画布');
   };
 
   /** 回主菜单 */
@@ -1258,9 +1258,6 @@ export function App(): React.JSX.Element {
             ← 主菜单
           </button>
         )}
-        <button type="button" onClick={copyCircuit} title="复制当前电路 JSON（贴给我检查布线）">
-          复制电路
-        </button>
         <div className="group debug-group">
           <button
             type="button"
@@ -1272,6 +1269,13 @@ export function App(): React.JSX.Element {
           </button>
           {debugMode && (
             <>
+              <button
+                type="button"
+                onClick={copyCircuit}
+                title="复制当前电路 JSON（贴给我检查布线）"
+              >
+                复制电路
+              </button>
               <button
                 type="button"
                 className="primary"
@@ -1291,21 +1295,11 @@ export function App(): React.JSX.Element {
           )}
         </div>
         {gameMode !== 'free' && (
-          <div className="group">
-            <button
-              type="button"
-              className="primary"
-              onClick={() => void runJudge()}
-              disabled={judging}
-            >
-              {judging ? '验收中…' : '交付验收'}
-            </button>
-            <span className="cleared-count">
-              已通关 {ALL_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
-              {ALL_LEVELS.length} · 可用余额 {(progress.walletHalf - progress.spentHalf) / 2} 元 ·{' '}
-              {rankOf(progress).title}
-            </span>
-          </div>
+          <span className="cleared-count">
+            已通关 {ALL_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
+            {ALL_LEVELS.length} · 可用余额 {(progress.walletHalf - progress.spentHalf) / 2} 元 ·{' '}
+            {rankOf(progress).title}
+          </span>
         )}
         <div className="group">
           <button
@@ -1353,16 +1347,23 @@ export function App(): React.JSX.Element {
             <button
               type="button"
               onClick={reloadLevel}
-              title="丢弃当前草图，回到本关初始画布（组件库保留）"
+              title="清空画布，回到本关初始画布（组件库保留）"
             >
               重载本关
             </button>
           )}
-          <button type="button" onClick={() => loadDoc({ ...emptyDoc(), library: doc.library })}>
-            清空
+          {gameMode === 'free' && (
+            <button type="button" className="primary" onClick={() => void wrapSelection()}>
+              封装为模块
+            </button>
+          )}
+        </div>
+        <div className="group">
+          <button type="button" onClick={() => setPanelOpen('library')} title="封装复用 / 存档">
+            组件库
           </button>
-          <button type="button" className="primary" onClick={() => void wrapSelection()}>
-            封装为模块
+          <button type="button" onClick={() => setPanelOpen('wave')} title="端口波形">
+            波形
           </button>
         </div>
         <div className="spacer" />
@@ -1552,17 +1553,8 @@ export function App(): React.JSX.Element {
               />
             )}
             <div className="rail">
-              <button type="button" onClick={() => setPanelOpen('map')} title="章节地图 / 选关">
-                任务墙
-              </button>
               <button type="button" onClick={() => setPanelOpen('shop')} title="花钱买设备">
                 工具铺
-              </button>
-              <button type="button" onClick={() => setPanelOpen('library')} title="封装复用 / 存档">
-                组件库
-              </button>
-              <button type="button" onClick={() => setPanelOpen('wave')} title="端口波形">
-                波形
               </button>
             </div>
             <Inspector
@@ -1600,19 +1592,6 @@ export function App(): React.JSX.Element {
           </div>
         )}
 
-        {panelOpen === 'map' && currentLevel && (
-          <Modal title="任务墙" onClose={() => setPanelOpen(null)}>
-            <LevelMap
-              progress={progress}
-              family={progress.family}
-              currentLevelId={currentLevel.id}
-              onPick={(id) => {
-                setPanelOpen(null);
-                enterLevel(id);
-              }}
-            />
-          </Modal>
-        )}
         {panelOpen === 'shop' && (
           <Modal title="工具铺" onClose={() => setPanelOpen(null)}>
             <WorkshopPanel
@@ -1667,17 +1646,8 @@ export function App(): React.JSX.Element {
           </button>
           {!rightOpen && (
             <div className="rail-mini">
-              <button type="button" onClick={() => setPanelOpen('map')} title="章节地图 / 选关">
-                任务墙
-              </button>
               <button type="button" onClick={() => setPanelOpen('shop')} title="花钱买设备">
                 工具铺
-              </button>
-              <button type="button" onClick={() => setPanelOpen('library')} title="封装复用 / 存档">
-                组件库
-              </button>
-              <button type="button" onClick={() => setPanelOpen('wave')} title="端口波形">
-                波形
               </button>
             </div>
           )}

@@ -83,6 +83,20 @@ function resolveMissingModules(doc: Doc, library: readonly StoredModule[]): Stor
   return extra.length === 0 ? [...library] : [...library, ...extra];
 }
 
+/** 重载本关：丢弃玩家存档，回到本关初始画布（教学关回半成品种子图，主线关回空画布+库） */
+export function freshDocFor(mode: GameMode, levelId: string, library: StoredModule[]): Doc {
+  const level = mode === 'teach' ? findTeachLevel(levelId) : findLevel(levelId);
+  if (!level) return notGateDemo();
+  if (level.seedDoc) {
+    return {
+      ...teachingSeedDoc(level.id),
+      library: level.moduleAccess === 'none' ? [] : library,
+      name: level.title,
+    };
+  }
+  return docForLevel(level, library);
+}
+
 /** 取某一关/自由模式/教学模式的画布：优先玩家自己的存档，否则初始画布 */
 export function docFor(mode: GameMode, levelId: string, library: StoredModule[]): Doc {
   const stored = readStoredDoc(storageKeyFor(mode, levelId));

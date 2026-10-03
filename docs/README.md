@@ -97,7 +97,7 @@ docs/
 - 教学关（classroom）：s1-npn / s1-dio / s1-float / s1-cmos-inv / s1-cmos-nand。**不评星、不设预算与延迟标准**（App 里 `classroom ? 0 : starsOf(...)`）。
 - **教学模式**：5 个教学关已从关卡链拆出（`TEACH_LEVELS`），与关卡模式并列 —— 主菜单独立入口 → 元件图鉴墙
   （`TeachPanel.tsx`，概念卡摘要 + 已掌握标记）→ 点开引导搭建（`gameMode = 'teach'`，独立存档 key `lc-studio-teach-<id>-v1`）。
-  不参与解锁链、不计任务墙「已交付」与星数；交付标「已掌握」（复用 `progress.cleared`，stars 恒 0）。
+  不参与解锁链、不计主线「已交付」与星数；交付标「已掌握」（复用 `progress.cleared`，stars 恒 0）。
 
 ### 4.3 关卡定义（schema/level.ts + content/levels*.ts）
 
