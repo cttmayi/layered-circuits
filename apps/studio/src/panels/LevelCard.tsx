@@ -1,5 +1,7 @@
 import { commissionOf, contractOf } from '@lc/content';
 import type { Level } from '@lc/schema';
+import { useState } from 'react';
+import { Modal } from './Modal';
 
 export interface LevelCardProps {
   level: Level;
@@ -10,8 +12,10 @@ export interface LevelCardProps {
 const CELL: Record<string, string> = { 0: 'lo', 1: 'hi', X: 'bad', Z: 'dim' };
 
 /** 左侧「图纸卡」：图纸（真值表）+ 合同摘要 + 用料进度 —— 搭建时的高频参考。
- * 需求真值表完全展示（不做黑盒隐藏）；客户/需求等叙事内容只在「新委托」弹窗里出现。 */
+ * 需求真值表完全展示（不做黑盒隐藏）；委托方/需求正文在卡片上只压 2 行，
+ * 点「委托单」弹窗可看完整需求、教学说明与提示。 */
 export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Element {
+  const [showCommission, setShowCommission] = useState(false);
   const contract = contractOf(level);
   const commission = commissionOf(level);
   const budget = level.budgetHalf;
@@ -26,12 +30,55 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
   return (
     <section className="panel level-card">
       <h3>委托单 · {level.title}</h3>
-      <p className="commission-client">
-        <span className="client-tag">委托方</span>
-        <span className="commission-note" title={commission.note}>
-          {commission.client} —— 「{commission.note}」
+      <button
+        type="button"
+        className="commission-toggle"
+        onClick={() => setShowCommission(true)}
+        aria-label={`查看委托详情 · ${level.title}`}
+      >
+        <span className="commission-client">
+          <span className="client-tag">委托方</span>
+          <span className="commission-note">
+            {commission.client} —— 「{commission.note}」
+          </span>
+          <span className="commission-more">查看全文 ↗</span>
         </span>
-      </p>
+      </button>
+      {showCommission && (
+        <Modal title={`委托详情 · ${level.title}`} onClose={() => setShowCommission(false)}>
+          <div className="commission-full">
+            <p className="commission-full-client">
+              <span className="client-tag">委托方</span>
+              <strong>{commission.client}</strong>
+            </p>
+            <h4>需求</h4>
+            <p>{commission.note}</p>
+            {level.teaching && (
+              <>
+                <h4>教学说明</h4>
+                <p>{level.teaching}</p>
+              </>
+            )}
+            {level.hint && (
+              <>
+                <h4>提示</h4>
+                <p>{level.hint}</p>
+              </>
+            )}
+            {!level.classroom && (
+              <>
+                <h4>合同条款</h4>
+                <p>
+                  元件成本{' '}
+                  {contract.costCap === null ? '按最省结算' : `≤ ${contract.costCap.toFixed(1)} 元`}
+                  {contract.timingCap !== null &&
+                    ` · 传播延迟 ≤ ${contract.timingCap.toFixed(1)} ns`}
+                </p>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
       {!level.classroom && (
         <ul className="contract-list">
           <li>
