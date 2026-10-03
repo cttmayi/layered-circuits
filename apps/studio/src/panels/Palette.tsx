@@ -94,6 +94,32 @@ function useOpenSections(): [Set<string>, (key: string) => void] {
   return [open, toggle];
 }
 
+/** 「隐藏本关不可用」筛选条的持久化键：值为 '1' / '0' */
+const HIDE_LOCKED_KEY = 'lc-ui-palette-hide-locked';
+
+function useHideLocked(): [boolean, () => void] {
+  const [hide, setHide] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(HIDE_LOCKED_KEY) === '1';
+    } catch {
+      // 忽略坏存档
+    }
+    return false;
+  });
+  const toggle = (): void => {
+    setHide((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(HIDE_LOCKED_KEY, next ? '1' : '0');
+      } catch {
+        // 忽略写入失败
+      }
+      return next;
+    });
+  };
+  return [hide, toggle];
+}
+
 function SectionHead({
   title,
   badge,
@@ -150,6 +176,7 @@ export function Palette({
   header,
 }: PaletteProps): React.JSX.Element {
   const [openSections, toggleSection] = useOpenSections();
+  const [hideLocked, toggleHideLocked] = useHideLocked();
   const unitAllowed = (unit: UnitKind): boolean => !level || level.allowedUnits.includes(unit);
   const modulesAllowed = level?.moduleAccess !== 'none';
   /** 模块关卡的可用性：白名单 / 复古关禁用（与判定里的策略保持一致） */
@@ -199,17 +226,34 @@ export function Palette({
   };
 
   const availableUnits = UNITS.filter((u) => unitAllowed(u.unit)).length;
+  /** 电源/端口锁定判定：关卡模式下端口已预置（a/b/y 是契约），不开放自加；VCC/GND 保留就近取电 */
+  const portLocked = (kind: string): boolean =>
+    (kind === 'input' || kind === 'output' || kind === 'button' || kind === 'segment') &&
+    Boolean(level);
+  /** 勾选「隐藏本关不可用」后的展示列表 */
+  const filteredUnits = hideLocked ? UNITS.filter((u) => unitAllowed(u.unit)) : UNITS;
+  const userModules = library.filter((m) => !m.teaching);
+  const filteredModules = hideLocked
+    ? userModules.filter((m) => modulesAllowed && moduleAllowed(m.name))
+    : userModules;
 
   return (
     <aside className="palette">
       {header}
+      {level && (
+        <label className="palette-filter">
+          <input type="checkbox" checked={hideLocked} onChange={toggleHideLocked} />
+          <span>隐藏本关不可用</span>
+        </label>
+      )}
       <Section
         open={openSections.has(SECTIONS.parts)}
         onToggle={() => toggleSection(SECTIONS.parts)}
         title="我的元件"
         badge={level ? `可用 ${availableUnits}/${UNITS.length}` : String(UNITS.length)}
       >
-        {UNITS.map((item) => {
+        {filteredUnits.length === 0 && <p className="palette-empty">本关没有可用元件。</p>}
+        {filteredUnits.map((item) => {
           const locked = !unitAllowed(item.unit);
           return (
             <button
@@ -253,82 +297,79 @@ export function Palette({
             ['button', '按钮', '瞬时按键：点击 = 电平 1，自动弹回 0'],
             ['segment', '七段数码管', '按端口值（BCD 0-9）点亮段'],
           ] as Array<[string, string, string]>
-        ).map(([kind, name, note]) => {
-          // 关卡模式下端口已预置（a/b/y 是契约），输入/输出/按钮/数码管不开放自加；VCC/GND 保留就近取电
-          const locked =
-            (kind === 'input' || kind === 'output' || kind === 'button' || kind === 'segment') &&
-            Boolean(level);
-          return (
-            <button
-              key={kind}
-              type="button"
-              disabled={locked}
-              draggable={!locked}
-              onDragStart={(e) => {
-                e.dataTransfer.setData(DRAG_MIME, kind);
-                e.dataTransfer.effectAllowed = 'copy';
-                e.dataTransfer.setDragImage(dragImage(kind), 48, 48);
-              }}
-              title={locked ? portLockReason : `${note}（拖到画布放置）`}
-              className={isArmed(kind) ? 'palette-item active' : 'palette-item'}
-              onClick={() => pick(kind)}
-            >
-              <span className="palette-name">
-                {name} {locked && <em className="locked">本关不可用</em>}
-              </span>
-              <span className="palette-note">{locked ? portLockReason : note}</span>
-            </button>
-          );
-        })}
+        )
+          .filter(([kind]) => !hideLocked || !portLocked(kind))
+          .map(([kind, name, note]) => {
+            const locked = portLocked(kind);
+            return (
+              <button
+                key={kind}
+                type="button"
+                disabled={locked}
+                draggable={!locked}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(DRAG_MIME, kind);
+                  e.dataTransfer.effectAllowed = 'copy';
+                  e.dataTransfer.setDragImage(dragImage(kind), 48, 48);
+                }}
+                title={locked ? portLockReason : `${note}（拖到画布放置）`}
+                className={isArmed(kind) ? 'palette-item active' : 'palette-item'}
+                onClick={() => pick(kind)}
+              >
+                <span className="palette-name">
+                  {name} {locked && <em className="locked">本关不可用</em>}
+                </span>
+                <span className="palette-note">{locked ? portLockReason : note}</span>
+              </button>
+            );
+          })}
       </Section>
 
       <Section
         open={openSections.has(SECTIONS.modules)}
         onToggle={() => toggleSection(SECTIONS.modules)}
-        title={`我的模块（${library.filter((m) => !m.teaching).length}）`}
+        title={`我的模块（${userModules.length}）`}
       >
         {level && !modulesAllowed && (
           <p className="palette-empty">本关要求从底层元件手搭，暂不开放组件库模块。</p>
         )}
-        {library.filter((m) => !m.teaching).length === 0 && (
+        {userModules.length === 0 && (
           <p className="palette-empty">
             搭好电路后点「封装为模块」，就能像元件一样复用，造价会自动递归累加。
           </p>
         )}
-        {library
-          .filter((m) => !m.teaching) // 教学积木（一键出答案砖块）不出现在放置面板
-          .map((mod) => {
-            const locked = !modulesAllowed || !moduleAllowed(mod.name);
-            return (
-              <button
-                key={mod.hash}
-                type="button"
-                className={isArmed('module', mod.hash) ? 'palette-item active' : 'palette-item'}
-                disabled={locked}
-                draggable={!locked}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(
-                    DRAG_MIME,
-                    dragPayload({ kind: 'module', hash: mod.hash }),
-                  );
-                  e.dataTransfer.effectAllowed = 'copy';
-                  e.dataTransfer.setDragImage(dragImage('module'), 48, 48);
-                }}
-                onClick={() => pick('module', undefined, mod.hash)}
-                title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}（拖到画布放置）`}
-              >
-                <span className="palette-name">
-                  {mod.name} v{mod.version} {mod.isSequential && <em>时序</em>}
-                </span>
-                <span className="palette-cost">成本 {mod.costHalf / 2}</span>
-                <span className="palette-note">
-                  {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
-                  {mod.ports.filter((p) => p.dir === 'out').length} 出 · #{mod.hash.slice(0, 6)}
-                </span>
-                {locked && <span className="palette-lock">{moduleLockReason(mod.name)}</span>}
-              </button>
-            );
-          })}
+        {hideLocked && filteredModules.length === 0 && userModules.length > 0 && (
+          <p className="palette-empty">已按「隐藏本关不可用」过滤，本关没有可用的模块。</p>
+        )}
+        {filteredModules.map((mod) => {
+          const locked = !modulesAllowed || !moduleAllowed(mod.name);
+          return (
+            <button
+              key={mod.hash}
+              type="button"
+              className={isArmed('module', mod.hash) ? 'palette-item active' : 'palette-item'}
+              disabled={locked}
+              draggable={!locked}
+              onDragStart={(e) => {
+                e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'module', hash: mod.hash }));
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setDragImage(dragImage('module'), 48, 48);
+              }}
+              onClick={() => pick('module', undefined, mod.hash)}
+              title={locked ? moduleLockReason(mod.name) : `哈希 #${mod.hash}（拖到画布放置）`}
+            >
+              <span className="palette-name">
+                {mod.name} v{mod.version} {mod.isSequential && <em>时序</em>}
+              </span>
+              <span className="palette-cost">成本 {mod.costHalf / 2}</span>
+              <span className="palette-note">
+                {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
+                {mod.ports.filter((p) => p.dir === 'out').length} 出 · #{mod.hash.slice(0, 6)}
+              </span>
+              {locked && <span className="palette-lock">{moduleLockReason(mod.name)}</span>}
+            </button>
+          );
+        })}
       </Section>
     </aside>
   );
