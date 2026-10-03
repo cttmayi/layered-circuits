@@ -9,6 +9,7 @@
 import { TEACH_LEVELS } from '@lc/content';
 import { type LogicFamily, levelViewOf } from '@lc/schema';
 import { isCleared, type Progress } from '../level/progress';
+import { ComponentDiagram } from './ComponentDiagram';
 
 export interface TeachPanelProps {
   progress: Progress;
@@ -53,6 +54,7 @@ export function TeachPanel({
                 }`}
                 onClick={() => onPick(level.id)}
               >
+                <ComponentDiagram level={view} family={family} compact />
                 <span className="teach-card-title">{view.title}</span>
                 {card && (
                   <>

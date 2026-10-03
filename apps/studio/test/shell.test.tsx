@@ -38,6 +38,8 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     const dialog = screen.getByRole('dialog', { name: '元件课堂' });
     expect(dialog).toBeTruthy();
     expect(within(dialog).getByText(/反着来的开关/)).toBeTruthy();
+    // 概念卡图文并茂：SVG 原理图（可被屏幕阅读器读出）
+    expect(within(dialog).getByRole('img', { name: /示意图/ })).toBeTruthy();
     // 点「去搭一下试试」→ 工作台：委托单 + 引导条（跟着做）
     fireEvent.click(screen.getByText(/去搭一下试试/));
     expect(screen.getByText(/任务 · 认识三极管/)).toBeTruthy();

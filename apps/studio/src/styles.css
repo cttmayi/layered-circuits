@@ -1843,17 +1843,18 @@ body,
   font-size: 18px;
   color: #ffd479;
 }
-.classroom-art {
-  margin: 0 0 10px;
-  padding: 10px 14px;
-  background: #0a0f14;
-  border: 1px dashed #3a4a58;
-  border-radius: 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #cfe3f5;
-  white-space: pre;
+/* 元件课堂示意图：SVG 原理图（ComponentDiagram），随框宽自适应、保持 340:200 比例 */
+.classroom-diagram {
+  margin: 0 0 12px;
+}
+.component-diagram {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+.teach-card .component-diagram {
+  margin-bottom: 2px;
 }
 .classroom-analogy {
   margin: 0 0 10px;

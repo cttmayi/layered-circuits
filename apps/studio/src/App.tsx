@@ -1444,7 +1444,11 @@ export function App(): React.JSX.Element {
                 : '拖动空白处平移 · 滚轮缩放 · 点两个引脚连线 · 双击连线删除 · 双击模块展开内部电路 · 点输入符号切换 0/1（Alt 循环 X/Z）'}
           </div>
           {classroomOpen && currentLevel?.classroom && (
-            <ClassroomModal level={currentLevel} onStart={() => setClassroomOpen(false)} />
+            <ClassroomModal
+              level={currentLevel}
+              family={progress.family}
+              onStart={() => setClassroomOpen(false)}
+            />
           )}
           {answerCandidates && (
             <Modal title="一键出答案" onClose={() => setAnswerCandidates(null)}>
