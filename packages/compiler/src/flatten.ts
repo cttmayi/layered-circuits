@@ -25,7 +25,8 @@ export type CompileDiagnosticKind =
 
 export interface CompileDiagnostic {
   kind: CompileDiagnosticKind;
-  severity: 'error' | 'warning';
+  /** info = 提示（不接也不影响过关，如未连接的引脚）；warning/error = 需要处理 */
+  severity: 'error' | 'warning' | 'info';
   message: string;
   instanceId?: string;
 }
@@ -151,7 +152,8 @@ export function compileDesign(design: Design, options: CompileOptions): CompileR
             if (netId === undefined) {
               note({
                 kind: 'unconnected-pin',
-                severity: 'warning',
+                // 单元引脚不是都必须接：悬空只影响仿真（显示 X），功能对不对由判定兜底
+                severity: 'info',
                 message: `基础元件 ${inst.label ?? inst.id} 的引脚「${pinName}」未连接，按悬空处理`,
                 instanceId: inst.id,
               });
@@ -201,7 +203,8 @@ export function compileDesign(design: Design, options: CompileOptions): CompileR
               if (netId === undefined) {
                 note({
                   kind: 'unconnected-pin',
-                  severity: 'warning',
+                  // 模块端口同理：用不上的输出/位不接也行，悬空不判失败
+                  severity: 'info',
                   message: `模块实例 ${inst.label ?? inst.id} 的端口「${port.name}」第 ${bit} 位未连接，按悬空处理`,
                   instanceId: inst.id,
                 });

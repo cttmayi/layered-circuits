@@ -237,7 +237,7 @@ export interface RouteObstacle {
   y: number;
   w: number;
   h: number;
-  /** 该元件伸出盒子外的引脚世界坐标：走线也要避开未连接的引脚，防止看起来像接了线 */
+  /** 该元件的引脚世界坐标：走线也要避开未连接的引脚，防止看起来像接了线 */
   pins?: Array<{ x: number; y: number }>;
 }
 
@@ -247,12 +247,8 @@ export function routeObstacles(doc: Doc): RouteObstacle[] {
     .map((sym) => {
       const f = footprintOf(sym, doc.library);
       const m = 5; // 边距：离元件太近也算撞
-      // 引脚伸出盒子（含边距）之外的部分单列为点障碍；盒内部分已被矩形覆盖，免重复
-      const pins = pinOffsets(sym, doc.library)
-        .map((p) => ({ x: sym.x + p.x, y: sym.y + p.y }))
-        .filter(
-          (p) => p.x < f.x - m || p.x > f.x + f.w + m || p.y < f.y - m || p.y > f.y + f.h + m,
-        );
+      // 引脚全部单列为点障碍：半径比边距大，能拦下「贴着盒边擦过未连接引脚」的走线
+      const pins = pinOffsets(sym, doc.library).map((p) => ({ x: sym.x + p.x, y: sym.y + p.y }));
       return { id: sym.id, x: f.x - m, y: f.y - m, w: f.w + m * 2, h: f.h + m * 2, pins };
     })
     .filter((o) => o.w > 0 && o.h > 0);
@@ -376,6 +372,11 @@ function segsOverlap(
   return false;
 }
 
+/** 引脚邻域半径（世界单位）：走线不得压过未连接的引脚 */
+const PIN_RADIUS = 8;
+/** 绕行候选的侧向偏移档位：从近到远依次尝试，密集区域自动走更远的外圈 */
+const ROUTE_OFFSETS = [48, -48, 96, -96, 144, -144, 192, -192, 240, -240];
+
 function routeClear(
   segs: Array<[{ x: number; y: number }, { x: number; y: number }]>,
   obstacles: RouteObstacle[],
@@ -383,8 +384,7 @@ function routeClear(
   skipB: string,
   /** 已布好的其他导线线段：候选线不得与它们平行重叠/贴近（交叉仍允许） */
   avoid: Array<[{ x: number; y: number }, { x: number; y: number }]> = [],
-  /** 引脚邻域半径（世界单位）：走线不得压过未连接的引脚 */
-  pinRadius = 7,
+  pinRadius = PIN_RADIUS,
 ): boolean {
   for (const [p, q] of segs) {
     for (const ob of obstacles) {
@@ -397,6 +397,36 @@ function routeClear(
     }
   }
   return true;
+}
+
+/**
+ * 候选的「坏」程度（没有候选全清时的兜底排序）：
+ * 优先少穿元件（×1000），其次少压引脚（×100），再其次少贴已有导线（×10），最后看总长。
+ */
+function routeViolations(
+  segs: Array<[{ x: number; y: number }, { x: number; y: number }]>,
+  obstacles: RouteObstacle[],
+  skipA: string,
+  skipB: string,
+  avoid: Array<[{ x: number; y: number }, { x: number; y: number }]>,
+  pinRadius = PIN_RADIUS,
+): number {
+  let rects = 0;
+  let pins = 0;
+  let overlaps = 0;
+  let len = 0;
+  for (const [p, q] of segs) {
+    len += Math.abs(p.x - q.x) + Math.abs(p.y - q.y);
+    for (const ob of obstacles) {
+      if (ob.id === skipA || ob.id === skipB) continue;
+      if (segHitsRect(p, q, ob)) rects++;
+      else if (segHitsPins(p, q, ob.pins, pinRadius)) pins++;
+    }
+    for (const [r, s] of avoid) {
+      if (segsOverlap(p, q, r, s, 6)) overlaps++;
+    }
+  }
+  return rects * 1000 + pins * 100 + overlaps * 10 + len / 1000;
 }
 
 /**
@@ -421,7 +451,7 @@ export function routeSegments(
   const candidates: Array<Array<[{ x: number; y: number }, { x: number; y: number }]>> = [];
   if (alignedX || alignedY) {
     candidates.push([[a, b]]);
-    for (const d of [48, -48, 96, -96, 144, -144]) {
+    for (const d of ROUTE_OFFSETS) {
       if (alignedX)
         candidates.push([
           [a, { x: a.x + d, y: a.y }],
@@ -463,7 +493,7 @@ export function routeSegments(
       ]);
     };
     pick(mx0, my0);
-    for (const d of [48, -48, 96, -96, 144, -144]) pick(mx0 + d, my0 + d);
+    for (const d of ROUTE_OFFSETS) pick(mx0 + d, my0 + d);
   }
   const boxOf = (id: string): RouteObstacle | undefined => obstacles.find((o) => o.id === id);
   for (const cand of candidates) {
@@ -483,8 +513,18 @@ export function routeSegments(
     if (!obstacles.length && !avoid.length) return cand;
     if (routeClear(cand, obstacles, skipA, skipB, avoid)) return cand;
   }
-  // 兜底：默认中点折线（旧行为），保证永远画得出线
-  return candidates[0] ?? [[a, b]];
+  // 兜底：没有候选全清时，挑「坏」得最少的（优先不穿元件、不压引脚、不贴线），
+  // 而不是无脑取第一条直连——密集区也不会横穿引脚/元件。
+  let best = candidates[0] ?? [[a, b]];
+  let bestScore = Infinity;
+  for (const cand of candidates) {
+    const score = routeViolations(cand, obstacles, skipA, skipB, avoid);
+    if (score < bestScore) {
+      bestScore = score;
+      best = cand;
+    }
+  }
+  return best;
 }
 
 export type WireRoute = Array<[{ x: number; y: number }, { x: number; y: number }]>;
