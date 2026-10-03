@@ -794,7 +794,13 @@ function encoderByModules(id: string, name: string, family: LogicFamily = 'rtl')
       const o = `o${n}`;
       b.module(
         or4,
-        { a: terms[0] as string, b: terms[1] as string, c: terms[2] as string, d: terms[3] as string, y: o },
+        {
+          a: terms[0] as string,
+          b: terms[1] as string,
+          c: terms[2] as string,
+          d: terms[3] as string,
+          y: o,
+        },
         `OR${n++}`,
       );
       return o;
@@ -1008,9 +1014,21 @@ function calcControlByModules(id: string, name: string, family: LogicFamily = 'r
   b.port('eq', 'in', 'eq');
   b.port('c', 'in', 'c');
   b.port('any', 'in', 'any');
-  b.port('acc', 'in', Array.from({ length: 8 }, (_, i) => `acc${i}`));
-  b.port('er', 'in', Array.from({ length: 8 }, (_, i) => `er${i}`));
-  b.port('alu', 'in', Array.from({ length: 8 }, (_, i) => `alu${i}`));
+  b.port(
+    'acc',
+    'in',
+    Array.from({ length: 8 }, (_, i) => `acc${i}`),
+  );
+  b.port(
+    'er',
+    'in',
+    Array.from({ length: 8 }, (_, i) => `er${i}`),
+  );
+  b.port(
+    'alu',
+    'in',
+    Array.from({ length: 8 }, (_, i) => `alu${i}`),
+  );
   b.port('borrow', 'in', 'borrow');
   b.port('aSrc', 'out', aSrc);
   b.port('accD', 'out', accD);
@@ -1047,12 +1065,18 @@ function calcDisplayByModules(id: string, name: string, family: LogicFamily = 'r
   const decU = Array.from({ length: 7 }, (_, i) => `decU${i}`);
   b.module(
     hashOf('七段译码器', family),
-    { bcd: [disp[4] as string, disp[5] as string, disp[6] as string, disp[7] as string], seg: decT },
+    {
+      bcd: [disp[4] as string, disp[5] as string, disp[6] as string, disp[7] as string],
+      seg: decT,
+    },
     'DEC_T',
   );
   b.module(
     hashOf('七段译码器', family),
-    { bcd: [disp[0] as string, disp[1] as string, disp[2] as string, disp[3] as string], seg: decU },
+    {
+      bcd: [disp[0] as string, disp[1] as string, disp[2] as string, disp[3] as string],
+      seg: decU,
+    },
     'DEC_U',
   );
   // err = neg ∧ ¬ein；E 段码 0x79：a(0),d(3),e(4),f(5),g(6) 亮；b(1),c(2) 灭
@@ -1073,8 +1097,16 @@ function calcDisplayByModules(id: string, name: string, family: LogicFamily = 'r
     }
   }
   b.port('ein', 'in', 'ein');
-  b.port('er', 'in', Array.from({ length: 8 }, (_, i) => `er${i}`));
-  b.port('acc', 'in', Array.from({ length: 8 }, (_, i) => `acc${i}`));
+  b.port(
+    'er',
+    'in',
+    Array.from({ length: 8 }, (_, i) => `er${i}`),
+  );
+  b.port(
+    'acc',
+    'in',
+    Array.from({ length: 8 }, (_, i) => `acc${i}`),
+  );
   b.port('neg', 'in', 'neg');
   b.port('segT', 'out', segT);
   b.port('segU', 'out', segU);
@@ -1094,7 +1126,20 @@ function calcByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
   const code = Array.from({ length: 4 }, (_, i) => `code${i}`);
   b.module(
     hashOf('数字键盘编码器', family),
-    { d0: 'd0', d1: 'd1', d2: 'd2', d3: 'd3', d4: 'd4', d5: 'd5', d6: 'd6', d7: 'd7', d8: 'd8', d9: 'd9', code, any: 'any' },
+    {
+      d0: 'd0',
+      d1: 'd1',
+      d2: 'd2',
+      d3: 'd3',
+      d4: 'd4',
+      d5: 'd5',
+      d6: 'd6',
+      d7: 'd7',
+      d8: 'd8',
+      d9: 'd9',
+      code,
+      any: 'any',
+    },
     'ENC',
   );
   // any 延迟 4 级 → 输入寄存器写脉冲（建立时间）
@@ -1106,7 +1151,11 @@ function calcByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
     ad = next;
   }
   const er = Array.from({ length: 8 }, (_, i) => `er${i}`);
-  b.module(hashOf('数字输入寄存器', family), { d: code, wr: anyD, fresh: 'erFresh', q: er }, 'DENT');
+  b.module(
+    hashOf('数字输入寄存器', family),
+    { d: code, wr: anyD, fresh: 'erFresh', q: er },
+    'DENT',
+  );
   // 运算控制 —— alu 网名 = bin2bcd 输出（u/t），先声明后接线（网名与调用顺序无关）
   const acc = Array.from({ length: 8 }, (_, i) => `acc${i}`);
   const t = Array.from({ length: 4 }, (_, i) => `t${i}`);
@@ -1117,10 +1166,23 @@ function calcByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
   b.module(
     hashOf('运算控制', family),
     {
-      plus: 'plus', minus: 'minus', eq: 'eq', c: 'c', any: 'any',
-      acc, er, alu, borrow: 'borrow',
-      aSrc, accD, accClk: 'accClk', erFresh: 'erFresh', pending: 'pending',
-      opMinus: 'opMinus', ein: 'ein', neg: 'neg',
+      plus: 'plus',
+      minus: 'minus',
+      eq: 'eq',
+      c: 'c',
+      any: 'any',
+      acc,
+      er,
+      alu,
+      borrow: 'borrow',
+      aSrc,
+      accD,
+      accClk: 'accClk',
+      erFresh: 'erFresh',
+      pending: 'pending',
+      opMinus: 'opMinus',
+      ein: 'ein',
+      neg: 'neg',
     },
     'CTRL',
   );
@@ -1143,7 +1205,11 @@ function calcByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
   );
   const bx = Array.from({ length: 7 }, (_, i) => `bx${i}`);
   for (let i = 0; i < 7; i++) {
-    b.module(hashOf('异或门', family), { a: bBin[i] as string, b: mode, y: bx[i] as string }, `X${i}`);
+    b.module(
+      hashOf('异或门', family),
+      { a: bBin[i] as string, b: mode, y: bx[i] as string },
+      `X${i}`,
+    );
   }
   const sum = Array.from({ length: 8 }, (_, i) => `sum${i}`);
   let carry = mode;

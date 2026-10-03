@@ -59,6 +59,7 @@ export function TeachPanel({
                     <span className="teach-card-analogy">{card.analogy}</span>
                     <ul className="teach-card-points">
                       {card.points.slice(0, 2).map((point, i) => (
+                        // biome-ignore lint/suspicious/noArrayIndexKey: 概念卡要点是静态只读展示列表（无增删/排序），用内容做 key 反而会因重复文案触发 React 警告
                         <li key={i}>{point}</li>
                       ))}
                     </ul>

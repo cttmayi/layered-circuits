@@ -22,7 +22,7 @@
 - ✅ 结算/评星/钱包/称号/工具铺/黑盒侦察/存档导入导出
 - ⏳ 待办：蓝图 4 关（s1-mux2/s2-gated-sr/s3-adder-2/s3-sub-4）仅设计未实现；低成本版计算器优化；延迟线补全；GUI 视觉自动验证；阶段 4+（寄存器组/ALU/RAM/CPU）
 
-**质量基线**：`pnpm check` 全绿 = 218 个测试 / 36 个测试文件。
+**质量基线**：`pnpm check` 全绿 = 242 个测试 / 42 个测试文件。
 
 ---
 
@@ -186,7 +186,7 @@ pnpm lc-level tools/level-editor/specs/s1-majority.json /tmp/x.ts  # 生成关�
 
 ---
 
-## 6. 测试策略（34 文件 / 211 测试）
+## 6. 测试策略（42 文件 / 242 测试）
 
 | 测试文件 | 覆盖 |
 |---|---|
@@ -207,7 +207,9 @@ pnpm lc-level tools/level-editor/specs/s1-majority.json /tmp/x.ts  # 生成关�
 ## 7. 已知限制与待办（接手时从这里继续）
 
 1. **蓝图 4 关未实现**：`docs/关卡循序渐进设计蓝图（待审核）.md` 里的 s1-mux2 / s2-gated-sr / s3-adder-2 / s3-sub-4（仅设计文档，未做关卡）。
-2. **门版答案规模违规**：`docs/关卡设计规范（规模与积木复用）.md` 规定门版答案顶层盒数 ≤ 15，当前 s3-bin2bcd（190）、s3-calc（239）、s3-reg-8（17）超限（加3单元/D触发器没封装复用），s1-xor-retro 无门版。修复预案见该规范 §五。
+2. **门版答案规模**（已达标，见 `docs/关卡设计规范（规模与积木复用）.md` §四体检表）：规范要求门版顶层盒数 ≤ 15，
+   当前 s3-reg-8（8）、s3-bin2bcd（15）、s3-encoder（8）等全部达标；仅 s3-display（43）与 s3-calc（29）
+   超限但属文档批准的豁免（答案即教学内容 / 终局组装关，测试 EXEMPT 集登记）；s1-xor-retro 已有门版（8 盒）。
 3. **低成本版计算器**：当前计算器链是"高成本完整链"（bcd2bin + 加法 + bin2bcd + 寄存器，optimalHalf 15200）；用户已确认后续做"低成本版"优化（复用求解器找更省结构）。
 4. **延迟线未补**：reg-8 / calc 暂不评延迟档（starsOf 对 timingBudgetPs 为 null 的关只按成本评星）；部分关未给时序预算。
 5. **GUI 视觉未自动验证**：画布 Canvas 渲染无截图回归（曾用 headless Chrome + CDP 人工验证；vision 后端会话内有限流）。
@@ -221,7 +223,7 @@ pnpm lc-level tools/level-editor/specs/s1-majority.json /tmp/x.ts  # 生成关�
 
 **约定**
 - commit 消息用**中文**，格式 `类型+主题：一句话`（如 `修复门版循环引用：…`），可带要点列表。
-- 提交前必跑 `pnpm check`（typecheck + biome + 211 测试全绿）；改动后 `pnpm build` 验证单文件产物。
+- 提交前必跑 `pnpm check`（typecheck + biome + 242 测试全绿）；改动后 `pnpm build` 验证单文件产物。
 - 新概念先在 `docs/sim-semantics.md`（仿真）或本文件/architecture.md（机制）留痕，再写代码。
 
 **坑（都是真实踩过、已修/已绕过的）**

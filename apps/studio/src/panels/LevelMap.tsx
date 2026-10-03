@@ -52,8 +52,8 @@ export function LevelMap({
       <h3>任务墙</h3>
       <p className="panel-note">
         已交付 {ALL_LEVELS.filter((l) => (progress.cleared[l.id]?.clearedAt ?? 0) > 0).length}/
-        {ALL_LEVELS.length} · 星 {earned}/
-        {ratedLevels.length * MAX_STARS_PER_LEVEL} · 自主测绘 {reconCount(progress)}
+        {ALL_LEVELS.length} · 星 {earned}/{ratedLevels.length * MAX_STARS_PER_LEVEL} · 自主测绘{' '}
+        {reconCount(progress)}
       </p>
       {stages.map((stage) => {
         const levels = ALL_LEVELS.filter((level) => level.stage === stage);

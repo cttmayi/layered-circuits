@@ -539,8 +539,7 @@ export function inputValues(doc: Doc): Record<string, 0 | 1 | 2 | 3> {
     } else {
       // 多 bit 输入端口：整个端口共用一个驱动值（0..2^width-1），按位展开成逐位 lane 键（与编译器命名一致）
       const v = sym.value ?? 0;
-      for (let bit = 0; bit < width; bit++)
-        out[`${sym.label}[${bit}]`] = ((v >> bit) & 1) as 0 | 1;
+      for (let bit = 0; bit < width; bit++) out[`${sym.label}[${bit}]`] = ((v >> bit) & 1) as 0 | 1;
     }
   }
   return out;
@@ -588,14 +587,18 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
     if (s) return s;
     if (inst.kind === 'module') {
       s = new Set(
-        (baseDoc.library
+        baseDoc.library
           .find((m) => m.hash === inst.module)
           ?.ports.filter((p) => p.dir === 'out')
-          .map((p) => p.name) ?? []),
+          .map((p) => p.name) ?? [],
       );
     } else if (inst.kind === 'unit') {
       s = new Set(
-        inst.unit === 'npn' ? ['c'] : inst.unit === 'nmos' || inst.unit === 'pmos' ? ['d'] : ['a', 'b'],
+        inst.unit === 'npn'
+          ? ['c']
+          : inst.unit === 'nmos' || inst.unit === 'pmos'
+            ? ['d']
+            : ['a', 'b'],
       );
     } else {
       s = new Set(['p']); // vcc / gnd
@@ -604,7 +607,10 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
     return s;
   };
   /** 实例在网 N 上是否有输出侧引脚（即 N 是否由它驱动） */
-  const drivesNet = (instId: string, net: { pins: Array<{ inst: string; pin: string }> }): boolean => {
+  const drivesNet = (
+    instId: string,
+    net: { pins: Array<{ inst: string; pin: string }> },
+  ): boolean => {
     const inst = instById.get(instId);
     if (!inst) return false;
     const outs = outputPinsOf(inst);

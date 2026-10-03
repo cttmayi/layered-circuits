@@ -54,18 +54,18 @@ describe('按钮端口逻辑模式（s2-btn-latch 交互链路）', () => {
   it('rst 复位 → 按按钮 q=1（回归：曾强制按钮=0 没反应）→ 松开保持 1 → rst 清零', () => {
     // 初始：rst=1 强制复位到 0
     let { snap, next } = btnSim(0, 1, undefined);
-    expect(snap.portValues['q']).toBe(0);
+    expect(snap.portValues.q).toBe(0);
 
     // 按按钮（btn=1）：q 必须变 1 —— 修复前逻辑模式把按钮强制成 0，这里会是 0
     ({ snap, next } = btnSim(1, 0, next));
-    expect(snap.portValues['q']).toBe(1);
+    expect(snap.portValues.q).toBe(1);
     // 松开按钮（btn=0）：锁存保持 1（prevSignals 携带内部状态）
     ({ snap } = btnSim(0, 0, next));
-    expect(snap.portValues['q']).toBe(1);
+    expect(snap.portValues.q).toBe(1);
 
     // rst 清零
     ({ snap } = btnSim(0, 1, next));
-    expect(snap.portValues['q']).toBe(0);
+    expect(snap.portValues.q).toBe(0);
   });
 
   it('真实玩家序列：上电 → 按按钮置位 → 松开保持 → rst 复位 → 松开保持 0（回归：rst 松开后曾弹回 1）', () => {
@@ -73,15 +73,15 @@ describe('按钮端口逻辑模式（s2-btn-latch 交互链路）', () => {
     // 上电：锁存器状态不定（1 或 0 都合法），先按按钮强制置位
     void snap;
     ({ snap, next } = btnSim(1, 0, next));
-    expect(snap.portValues['q']).toBe(1);
+    expect(snap.portValues.q).toBe(1);
     // 松开按钮：保持 1
     ({ snap, next } = btnSim(0, 0, next));
-    expect(snap.portValues['q']).toBe(1);
+    expect(snap.portValues.q).toBe(1);
     // 按 rst：复位到 0
     ({ snap, next } = btnSim(0, 1, next));
-    expect(snap.portValues['q']).toBe(0);
+    expect(snap.portValues.q).toBe(0);
     // 松开 rst：保持 0（修复前会因上电态贡献残留弹回 1）
     ({ snap } = btnSim(0, 0, next));
-    expect(snap.portValues['q']).toBe(0);
+    expect(snap.portValues.q).toBe(0);
   });
 });

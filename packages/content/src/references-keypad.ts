@@ -19,12 +19,7 @@ import { nandInto } from './references-ari.js';
 import { dffInto } from './references-calc.js';
 
 /** 多输入 OR（全与非门，输出可级联）：内部网名用计数器保证唯一 */
-function orNInto(
-  b: DesignBuilder,
-  p: string,
-  terms: string[],
-  out: string,
-): void {
+function orNInto(b: DesignBuilder, p: string, terms: string[], out: string): void {
   let orn = 0;
   if (terms.length === 2) {
     nandInto(b, `${p}or${orn++}`, terms[0], terms[1], out);
@@ -53,15 +48,32 @@ export function encoderInto(
 ): void {
   // 每键一个反相器（各 OR 链共享；OR 链的输入必须是反相信号：NAND(¬p1,¬p2)=p1∨p2）
   const nd = d.map((_, i) => `${p}nd${i}`);
-  d.forEach((di, i) => nandInto(b, `${p}i${i}`, di, di, nd[i] as string));
+  d.forEach((di, i) => {
+    nandInto(b, `${p}i${i}`, di, di, nd[i] as string);
+  });
   // bit3 = d8∨d9
   orNInto(b, `${p}3`, [nd[8] as string, nd[9] as string], code[3] as string);
   // bit2 = d4∨d5∨d6∨d7
-  orNInto(b, `${p}2`, [nd[4] as string, nd[5] as string, nd[6] as string, nd[7] as string], code[2] as string);
+  orNInto(
+    b,
+    `${p}2`,
+    [nd[4] as string, nd[5] as string, nd[6] as string, nd[7] as string],
+    code[2] as string,
+  );
   // bit1 = d2∨d3∨d6∨d7
-  orNInto(b, `${p}1`, [nd[2] as string, nd[3] as string, nd[6] as string, nd[7] as string], code[1] as string);
+  orNInto(
+    b,
+    `${p}1`,
+    [nd[2] as string, nd[3] as string, nd[6] as string, nd[7] as string],
+    code[1] as string,
+  );
   // bit0 = d1∨d3∨d5∨d7∨d9
-  orNInto(b, `${p}0`, [nd[1] as string, nd[3] as string, nd[5] as string, nd[7] as string, nd[9] as string], code[0] as string);
+  orNInto(
+    b,
+    `${p}0`,
+    [nd[1] as string, nd[3] as string, nd[5] as string, nd[7] as string, nd[9] as string],
+    code[0] as string,
+  );
   // any = d0∨…∨d9
   orNInto(b, `${p}A`, nd, any);
 }
@@ -81,7 +93,9 @@ export function encoderOrRef(id = 'ref-s3-encoder'): Design {
     if (terms.length <= 4) {
       const o = `o${n}`;
       b.unit('res', { a: o, b: 'gnd' }, `R${n}`);
-      terms.forEach((t, i) => b.unit('dio', { a: t, k: o }, `D${n}_${i}`));
+      terms.forEach((t, i) => {
+        b.unit('dio', { a: t, k: o }, `D${n}_${i}`);
+      });
       n++;
       return o;
     }

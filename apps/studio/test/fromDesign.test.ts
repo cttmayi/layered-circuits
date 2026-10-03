@@ -17,34 +17,32 @@ import { fromDesign, toDesign } from '../src/editor/model';
 import { docForLevel } from '../src/level/progress';
 
 describe('fromDesign 还原器（一键出答案）', () => {
-  it(
-    '每个有关卡参考解的关：还原 → 再导出 → 判定通关且满分',
-    () => {
-      const library = new InMemoryModuleLibrary();
-      let checked = 0;
-      for (const level of ALL_LEVELS) {
-        const ref = level.referenceSolution;
-        if (!ref) continue;
-        checked++;
-        const base = docForLevel(level, []);
-        const doc = fromDesign(ref, base);
-        // 端口保留：位宽与锁定继承自关卡预置
-        expect(doc.syms.filter((s) => s.kind === 'input' || s.kind === 'output').length).toBe(
-          base.syms.filter((s) => s.kind === 'input' || s.kind === 'output').length,
+  it('每个有关卡参考解的关：还原 → 再导出 → 判定通关且满分', () => {
+    const library = new InMemoryModuleLibrary();
+    let checked = 0;
+    for (const level of ALL_LEVELS) {
+      const ref = level.referenceSolution;
+      if (!ref) continue;
+      checked++;
+      const base = docForLevel(level, []);
+      const doc = fromDesign(ref, base);
+      // 端口保留：位宽与锁定继承自关卡预置
+      expect(doc.syms.filter((s) => s.kind === 'input' || s.kind === 'output').length).toBe(
+        base.syms.filter((s) => s.kind === 'input' || s.kind === 'output').length,
+      );
+      // 元件真的铺上去了
+      expect(doc.syms.filter((s) => s.kind === 'unit' || s.kind === 'module').length).toBe(
+        ref.instances.filter((i) => i.kind === 'unit' || i.kind === 'module').length,
+      );
+      // 多 bit 端口位宽保留
+      for (const p of level.ports) {
+        const sym = doc.syms.find(
+          (s) => s.kind !== 'vcc' && s.kind !== 'gnd' && s.label === p.name,
         );
-        // 元件真的铺上去了
-        expect(doc.syms.filter((s) => s.kind === 'unit' || s.kind === 'module').length).toBe(
-          ref.instances.filter((i) => i.kind === 'unit' || i.kind === 'module').length,
-        );
-        // 多 bit 端口位宽保留
-        for (const p of level.ports) {
-          const sym = doc.syms.find(
-            (s) => s.kind !== 'vcc' && s.kind !== 'gnd' && s.label === p.name,
-          );
-          expect(sym?.width, `${level.id} 端口 ${p.name} 位宽`).toBe(p.width);
-        }
-        // 往返：导出 → 判定（硬核）→ 通过 + 满分
-        const design = toDesign(doc);
+        expect(sym?.width, `${level.id} 端口 ${p.name} 位宽`).toBe(p.width);
+      }
+      // 往返：导出 → 判定（硬核）→ 通过 + 满分
+      const design = toDesign(doc);
       const r = judgeDesign(design, level, { library, hardcore: true });
       expect(r.pass, `${level.id} 还原后应通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${level.id} 还原后应满分`).toBe(100);

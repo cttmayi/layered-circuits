@@ -277,7 +277,9 @@ export function analyzeTiming(net: FlatNet, options: TimingAnalysisOptions = {})
     // 触发器链振荡，单次探测耗尽 120 万事件预算 ~12s，而大电路基本都是时序关，
     // 探测结果不参与判定，纯浪费。
     const probeBudget =
-      net.elemCount > 6_000 ? 0 : Math.min(pairs * 4, Math.max(1, Math.ceil(6_000 / net.elemCount)));
+      net.elemCount > 6_000
+        ? 0
+        : Math.min(pairs * 4, Math.max(1, Math.ceil(6_000 / net.elemCount)));
     let probesDone = 0;
     outer: for (const prime of vectors) {
       if (probesDone >= probeBudget) break;

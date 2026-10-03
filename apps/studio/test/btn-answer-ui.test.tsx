@@ -18,9 +18,7 @@ import type { StudioRequestInput, StudioResponse } from '../src/sim/protocol';
 import { seedTeachCleared } from './helpers';
 
 /** 记录每个 simulate 请求与其（同步）响应 */
-const responses = vi.hoisted(
-  () => [] as Array<{ req: StudioRequestInput; resp: StudioResponse }>,
-);
+const responses = vi.hoisted(() => [] as Array<{ req: StudioRequestInput; resp: StudioResponse }>);
 vi.mock('../src/sim/handle', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../src/sim/handle')>();
   return {
@@ -119,21 +117,19 @@ describe('一键出答案后点按钮（端到端）', () => {
 
     // 点按钮（按住）：必须发出 btn=1 的新仿真，且非门输出翻到强 0
     clickWorld(btnSym.x, btnSym.y);
-    await waitFor(
-      () => expect(responses.some((x) => x.req.inputs['btn'] === 1)).toBe(true),
-      { timeout: 4000 },
-    );
-    const press = responses.find((x) => x.req.inputs['btn'] === 1);
+    await waitFor(() => expect(responses.some((x) => x.req.inputs.btn === 1)).toBe(true), {
+      timeout: 4000,
+    });
+    const press = responses.find((x) => x.req.inputs.btn === 1);
     expect(press).toBeDefined();
     expect(sigOf(press?.resp, notNet!.id)).toBe(8); // 非门输出强 0
 
     // 松开按钮 → 归 0：非门输出回到弱 1
     releaseWorld();
-    await waitFor(
-      () => expect(responses.some((x) => x.req.inputs['btn'] === 0)).toBe(true),
-      { timeout: 4000 },
-    );
-    const release = responses.find((x) => x.req.inputs['btn'] === 0);
+    await waitFor(() => expect(responses.some((x) => x.req.inputs.btn === 0)).toBe(true), {
+      timeout: 4000,
+    });
+    const release = responses.find((x) => x.req.inputs.btn === 0);
     expect(release).toBeDefined();
     expect(sigOf(release?.resp, notNet!.id)).toBe(5);
   });

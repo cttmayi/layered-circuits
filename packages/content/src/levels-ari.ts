@@ -17,8 +17,15 @@ import {
   type ModulePort,
   parseLevel,
 } from '@lc/schema';
-import { adder4Ref, adder8Ref, aluRef, fullAdderRef, halfAdderRef, seg7Ref } from './references-ari.js';
 import { or4Ref } from './references.js';
+import {
+  adder4Ref,
+  adder8Ref,
+  aluRef,
+  fullAdderRef,
+  halfAdderRef,
+  seg7Ref,
+} from './references-ari.js';
 import { bcd2binRef, bin2bcdRef, calcRef, reg8Ref } from './references-calc.js';
 import { digitEntryRef, encoderOrRef } from './references-keypad.js';
 
@@ -456,8 +463,7 @@ const S3_OR_CHAIN: Level = parseLevel({
     '或门的原理是二极管并联：每根输入接一个二极管、共用下拉电阻，任一输入为 1 就把输出拉高。' +
     '多输入或门没有新知识——只是并联更多二极管（或把几个或门级联）。想一想：4 输入或门和 2 输入或门，' +
     '电路差在哪里？',
-  hint:
-    '参考解就是 4 个二极管 + 1 个下拉电阻（和 s2 或门一模一样，只是二极管多两个）。成本 6 半单位。',
+  hint: '参考解就是 4 个二极管 + 1 个下拉电阻（和 s2 或门一模一样，只是二极管多两个）。成本 6 半单位。',
   ports: [
     { id: 'a', name: 'a', dir: 'in' },
     { id: 'b', name: 'b', dir: 'in' },
@@ -484,13 +490,7 @@ const S3_OR_CHAIN: Level = parseLevel({
     name: '多输入或门',
     kind: 'logic',
     stage: 3,
-    ports: [
-      port('a', 'in'),
-      port('b', 'in'),
-      port('c', 'in'),
-      port('d', 'in'),
-      port('y', 'out'),
-    ],
+    ports: [port('a', 'in'), port('b', 'in'), port('c', 'in'), port('d', 'in'), port('y', 'out')],
   },
   referenceSolution: or4Ref('ref-s3-or-chain'),
 });
@@ -535,10 +535,12 @@ const S3_ENCODER: Level = parseLevel({
   checks: {},
   vectors: (() => {
     // 判定器只设置向量里列出的输入、其余默认 Z —— 组合关必须显式写全所有键位
-    const all = Object.fromEntries(
-      Array.from({ length: 10 }, (_, i) => [`d${i}`, 0]),
-    );
-    const none: LevelVector = { inputs: { ...all }, expect: { code: 0, any: 0 }, note: '不按键：code=0、any=0' };
+    const all = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`d${i}`, 0]));
+    const none: LevelVector = {
+      inputs: { ...all },
+      expect: { code: 0, any: 0 },
+      note: '不按键：code=0、any=0',
+    };
     const keys: LevelVector[] = Array.from({ length: 10 }, (_, k) => ({
       inputs: { ...all, [`d${k}`]: 1 },
       expect: { code: k, any: 1 },
@@ -609,15 +611,60 @@ const S3_DIGIT_ENTRY: Level = parseLevel({
     // 建立时间：d / fresh 只能在 wr=0 期间更换（主锁存器低电平透明跟随 D），wr 上升沿采样。
     // DFF 上电 Q=1：一记 fresh=1 + d=0 的脉冲即可归零（fresh 直接钳十位、个位进 0）。
     { inputs: { wr: 0, d: 0, fresh: 1 }, settlePs: 60_000, note: '待命' },
-    { inputs: { wr: 1, d: 0, fresh: 1 }, expect: { q: 0x00 }, settlePs: 60_000, note: 'fresh 载入 0：归零' },
-    { inputs: { wr: 0, d: 0x05, fresh: 1 }, expect: { q: 0x00 }, settlePs: 60_000, note: '释放并备好 5（仍换新）' },
-    { inputs: { wr: 1, d: 0x05, fresh: 1 }, expect: { q: 0x05 }, settlePs: 60_000, note: '按 5 → 05（换新：十位 0）' },
-    { inputs: { wr: 0, d: 0x03, fresh: 0 }, expect: { q: 0x05 }, settlePs: 60_000, note: '释放并切回插入模式' },
-    { inputs: { wr: 1, d: 0x03, fresh: 0 }, expect: { q: 0x53 }, settlePs: 60_000, note: '再按 3 → 53（5 顶到十位）' },
-    { inputs: { wr: 0, d: 0x07, fresh: 0 }, expect: { q: 0x53 }, settlePs: 60_000, note: '释放并备好 7' },
-    { inputs: { wr: 1, d: 0x07, fresh: 0 }, expect: { q: 0x37 }, settlePs: 60_000, note: '再按 7 → 37（3 顶到十位、5 顶掉）' },
-    { inputs: { wr: 0, d: 0x09, fresh: 1 }, expect: { q: 0x37 }, settlePs: 60_000, note: '释放并切回换新模式' },
-    { inputs: { wr: 1, d: 0x09, fresh: 1 }, expect: { q: 0x09 }, settlePs: 60_000, note: '再按 9 → 09（换新：从头开始）' },
+    {
+      inputs: { wr: 1, d: 0, fresh: 1 },
+      expect: { q: 0x00 },
+      settlePs: 60_000,
+      note: 'fresh 载入 0：归零',
+    },
+    {
+      inputs: { wr: 0, d: 0x05, fresh: 1 },
+      expect: { q: 0x00 },
+      settlePs: 60_000,
+      note: '释放并备好 5（仍换新）',
+    },
+    {
+      inputs: { wr: 1, d: 0x05, fresh: 1 },
+      expect: { q: 0x05 },
+      settlePs: 60_000,
+      note: '按 5 → 05（换新：十位 0）',
+    },
+    {
+      inputs: { wr: 0, d: 0x03, fresh: 0 },
+      expect: { q: 0x05 },
+      settlePs: 60_000,
+      note: '释放并切回插入模式',
+    },
+    {
+      inputs: { wr: 1, d: 0x03, fresh: 0 },
+      expect: { q: 0x53 },
+      settlePs: 60_000,
+      note: '再按 3 → 53（5 顶到十位）',
+    },
+    {
+      inputs: { wr: 0, d: 0x07, fresh: 0 },
+      expect: { q: 0x53 },
+      settlePs: 60_000,
+      note: '释放并备好 7',
+    },
+    {
+      inputs: { wr: 1, d: 0x07, fresh: 0 },
+      expect: { q: 0x37 },
+      settlePs: 60_000,
+      note: '再按 7 → 37（3 顶到十位、5 顶掉）',
+    },
+    {
+      inputs: { wr: 0, d: 0x09, fresh: 1 },
+      expect: { q: 0x37 },
+      settlePs: 60_000,
+      note: '释放并切回换新模式',
+    },
+    {
+      inputs: { wr: 1, d: 0x09, fresh: 1 },
+      expect: { q: 0x09 },
+      settlePs: 60_000,
+      note: '再按 9 → 09（换新：从头开始）',
+    },
     { inputs: { wr: 0, d: 0x09, fresh: 1 }, expect: { q: 0x09 }, settlePs: 60_000, note: '释放' },
   ] satisfies LevelVector[],
   unlock: {
@@ -685,8 +732,20 @@ const CALC: Level = parseLevel({
   vectors: (() => {
     // 判定器只设置向量里列出的输入、其余默认 Z —— 时序关每个向量必须写全全部 13 个键位
     const base = {
-      d0: 0, d1: 0, d2: 0, d3: 0, d4: 0, d5: 0, d6: 0, d7: 0, d8: 0, d9: 0,
-      plus: 0, minus: 0, eq: 0, c: 0,
+      d0: 0,
+      d1: 0,
+      d2: 0,
+      d3: 0,
+      d4: 0,
+      d5: 0,
+      d6: 0,
+      d7: 0,
+      d8: 0,
+      d9: 0,
+      plus: 0,
+      minus: 0,
+      eq: 0,
+      c: 0,
     };
     /** 按键序列 → 按下/松开两向量；press expect 只在给定按下键时检查（松开向量检查保持） */
     const seq = (keys: Array<[string, number, string]>): LevelVector[] => {
@@ -703,7 +762,19 @@ const CALC: Level = parseLevel({
       return rows;
     };
     /** 段码对 '20'/'EE' → 打包数值（高字节十位、低字节个位） */
-    const SEG = { 0: 0x3f, 1: 0x06, 2: 0x5b, 3: 0x4f, 4: 0x66, 5: 0x6d, 6: 0x7d, 7: 0x07, 8: 0x7f, 9: 0x6f, E: 0x79 } as Record<string, number>;
+    const SEG = {
+      0: 0x3f,
+      1: 0x06,
+      2: 0x5b,
+      3: 0x4f,
+      4: 0x66,
+      5: 0x6d,
+      6: 0x7d,
+      7: 0x07,
+      8: 0x7f,
+      9: 0x6f,
+      E: 0x79,
+    } as Record<string, number>;
     const d = (s: string) => (SEG[s[0] ?? ''] << 8) | SEG[s[1] ?? ''];
     return [
       { inputs: { ...base }, settlePs: 1_000_000, note: '待命（上电先按 C 清零）' },

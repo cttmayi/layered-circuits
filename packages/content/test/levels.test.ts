@@ -8,7 +8,14 @@
 import { computeCosts, judgeDesign, wrapModule } from '@lc/compiler';
 import { costHalfOf, DesignBuilder, InMemoryModuleLibrary } from '@lc/schema';
 import { describe, expect, it } from 'vitest';
-import { findLevel, findTeachLevel, nextLevelId, requiredPortsOf, STAGE1_LEVELS, TEACH_LEVELS } from '../src/index';
+import {
+  findLevel,
+  findTeachLevel,
+  nextLevelId,
+  requiredPortsOf,
+  STAGE1_LEVELS,
+  TEACH_LEVELS,
+} from '../src/index';
 
 const emptyLibrary = new InMemoryModuleLibrary();
 

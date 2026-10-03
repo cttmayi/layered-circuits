@@ -280,7 +280,9 @@ export function bin2bcdRef(id = 'ref-bin2bcd'): Design {
 export function orNInto(b: DesignBuilder, p: string, terms: string[], y: string): void {
   if (terms.length === 0) return;
   const invs = terms.map((_, i) => `${p}i${i}`);
-  terms.forEach((t, i) => nandInto(b, `${p}ni${i}`, t, t, invs[i] as string));
+  terms.forEach((t, i) => {
+    nandInto(b, `${p}ni${i}`, t, t, invs[i] as string);
+  });
   let acc = invs[0] as string;
   for (let i = 1; i < invs.length; i++) {
     if (i > 1) {
@@ -485,8 +487,18 @@ export function calcRef(id = 'ref-calc'): Design {
   bcd2binInto(
     b,
     'A',
-    [ctrl.aSrc[4] as string, ctrl.aSrc[5] as string, ctrl.aSrc[6] as string, ctrl.aSrc[7] as string],
-    [ctrl.aSrc[0] as string, ctrl.aSrc[1] as string, ctrl.aSrc[2] as string, ctrl.aSrc[3] as string],
+    [
+      ctrl.aSrc[4] as string,
+      ctrl.aSrc[5] as string,
+      ctrl.aSrc[6] as string,
+      ctrl.aSrc[7] as string,
+    ],
+    [
+      ctrl.aSrc[0] as string,
+      ctrl.aSrc[1] as string,
+      ctrl.aSrc[2] as string,
+      ctrl.aSrc[3] as string,
+    ],
     aBin,
   );
   bcd2binInto(
@@ -542,8 +554,24 @@ export function calcRef(id = 'ref-calc'): Design {
   const decU = Array.from({ length: 7 }, (_, i) => `decU${i}`);
   const segT = Array.from({ length: 7 }, (_, i) => `segT${i}`);
   const segU = Array.from({ length: 7 }, (_, i) => `segU${i}`);
-  seg7Into(b, 'T', disp[4] as string, disp[5] as string, disp[6] as string, disp[7] as string, decT);
-  seg7Into(b, 'U', disp[0] as string, disp[1] as string, disp[2] as string, disp[3] as string, decU);
+  seg7Into(
+    b,
+    'T',
+    disp[4] as string,
+    disp[5] as string,
+    disp[6] as string,
+    disp[7] as string,
+    decT,
+  );
+  seg7Into(
+    b,
+    'U',
+    disp[0] as string,
+    disp[1] as string,
+    disp[2] as string,
+    disp[3] as string,
+    decU,
+  );
   calcDisplayInto(b, 'V', ctrl.ein, er, acc, 'neg', decT, decU, disp, segT, segU);
   for (let i = 0; i < 10; i++) b.port(`d${i}`, 'in', `d${i}`);
   b.port('plus', 'in', 'plus');

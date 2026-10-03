@@ -162,7 +162,6 @@ function gateLevel(input: {
   });
 }
 
-
 export const TEACH_LEVELS: Level[] = [
   // ---- 元件教学模式：认识各个元件（教学关从关卡链拆出，5 关，点开引导搭建）----
   gateLevel({

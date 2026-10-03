@@ -19,9 +19,7 @@ import { shouldReuseSimState } from '../src/sim/sim-policy';
 import { seedTeachCleared } from './helpers';
 
 /** 记录每个 simulate 请求与其（同步）响应 */
-const responses = vi.hoisted(
-  () => [] as Array<{ req: StudioRequestInput; resp: StudioResponse }>,
-);
+const responses = vi.hoisted(() => [] as Array<{ req: StudioRequestInput; resp: StudioResponse }>);
 vi.mock('../src/sim/handle', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../src/sim/handle')>();
   return {
@@ -115,7 +113,9 @@ describe('数码管关：点 bcd 输入 seg 跟随 + 组合关不复用终态 + 
     responses.length = 0;
   });
 
-  it('一键出答案后点 bcd 0→1→2，seg 段码跟随；组合关 simulate 全程不带 prevSignals', { timeout: 40_000 }, async () => {
+  it('一键出答案后点 bcd 0→1→2，seg 段码跟随；组合关 simulate 全程不带 prevSignals', {
+    timeout: 40_000,
+  }, async () => {
     enterDisplay();
     await waitFor(() => expect(screen.getByText('调试模式')).toBeTruthy(), { timeout: 4000 });
     fireEvent.click(screen.getByText('调试模式'));
@@ -127,24 +127,25 @@ describe('数码管关：点 bcd 输入 seg 跟随 + 组合关不复用终态 + 
 
     // 组合关：任何 simulate 请求都不应复用终态（否则部分恢复会污染结果）
     for (const r of responses) {
-      expect(r.req.prevSignals, `组合关不复用 prevSignals（${r.req.inputs['bcd[0]']}）`).toBeUndefined();
+      expect(
+        r.req.prevSignals,
+        `组合关不复用 prevSignals（${r.req.inputs['bcd[0]']}）`,
+      ).toBeUndefined();
       expect(r.req.prevContribs).toBeUndefined();
     }
 
     // 点 bcd：值 0 → 1（seg 0x3F → 0x06），再点 → 2（0x5B）
     clickWorld(bcdSym.x, bcdSym.y);
-    await waitFor(
-      () => expect(responses.some((x) => x.req.inputs['bcd[0]'] === 1)).toBe(true),
-      { timeout: 4000 },
-    );
+    await waitFor(() => expect(responses.some((x) => x.req.inputs['bcd[0]'] === 1)).toBe(true), {
+      timeout: 4000,
+    });
     const v1 = [...responses].reverse().find((x) => x.req.inputs['bcd[0]'] === 1);
     expect(readSeg(v1?.resp)).toBe(0x06);
 
     clickWorld(bcdSym.x, bcdSym.y);
-    await waitFor(
-      () => expect(responses.some((x) => x.req.inputs['bcd[1]'] === 1)).toBe(true),
-      { timeout: 4000 },
-    );
+    await waitFor(() => expect(responses.some((x) => x.req.inputs['bcd[1]'] === 1)).toBe(true), {
+      timeout: 4000,
+    });
     const v2 = [...responses].reverse().find((x) => x.req.inputs['bcd[1]'] === 1);
     expect(readSeg(v2?.resp)).toBe(0x5b);
 

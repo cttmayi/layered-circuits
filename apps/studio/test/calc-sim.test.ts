@@ -15,13 +15,39 @@ import type { DriveValue } from '../src/sim/protocol';
 
 const level = ALL_LEVELS.find((l) => l.id === 's3-calc')!;
 const design = level.referenceSolution!;
-const ALL_KEYS = ['d0', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd9', 'plus', 'minus', 'eq', 'c'];
+const ALL_KEYS = [
+  'd0',
+  'd1',
+  'd2',
+  'd3',
+  'd4',
+  'd5',
+  'd6',
+  'd7',
+  'd8',
+  'd9',
+  'plus',
+  'minus',
+  'eq',
+  'c',
+];
 
-/** 段码 → 数字字符（0x79 = E 错误标志） */
-const SEG_DIGIT: Record<number, string> = {
-  0x3f: '0', 0x06: '1', 0x5b: '2', 0x4f: '3', 0x66: '4',
-  0x6d: '5', 0x7d: '6', 0x07: '7', 0x7f: '8', 0x6f: '9', 0x79: 'E',
-};
+/** 段码 → 数字字符（0x79 = E 错误标志）。
+ *  用 Map 而非对象字面量：段码按段位布局用十六进制最直观（bit0=a…bit6=g），
+ *  而 useSimpleNumberKeys 规则只约束对象字面量键，Map 键不受影响。 */
+const SEG_DIGIT = new Map<number, string>([
+  [0x3f, '0'],
+  [0x06, '1'],
+  [0x5b, '2'],
+  [0x4f, '3'],
+  [0x66, '4'],
+  [0x6d, '5'],
+  [0x7d, '6'],
+  [0x07, '7'],
+  [0x7f, '8'],
+  [0x6f, '9'],
+  [0x79, 'E'],
+]);
 
 /** 单键驱动：全部键 0，只有目标键按下 */
 function keyInputs(key: string, pressed: 0 | 1): Record<string, DriveValue> {
@@ -52,7 +78,7 @@ function readDisp(snap: SnapshotLike): string {
     for (let i = 0; i < 7; i++) {
       if ((sig(`${prefix}${i}`) & 0x03) === 1) byte |= 1 << i;
     }
-    return SEG_DIGIT[byte] ?? '?';
+    return SEG_DIGIT.get(byte) ?? '?';
   };
   return seg('segT') + seg('segU');
 }

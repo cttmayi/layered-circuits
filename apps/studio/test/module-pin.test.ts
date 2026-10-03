@@ -5,7 +5,13 @@
  * 方框本体（moduleBox）尺寸不变。
  */
 import { describe, expect, it } from 'vitest';
-import { moduleBox, MODULE_HALF_WIDTH, MODULE_PIN_LEAD, pinOffsets, type Doc } from '../src/editor/model';
+import {
+  type Doc,
+  MODULE_HALF_WIDTH,
+  MODULE_PIN_LEAD,
+  moduleBox,
+  pinOffsets,
+} from '../src/editor/model';
 import { drawScene, type Scene } from '../src/editor/render';
 
 const lib = [
@@ -26,15 +32,16 @@ const lib = [
   },
 ] as never[];
 
-const sym = (rot: 0 | 1 | 2 | 3) => ({
-  id: 'm',
-  kind: 'module',
-  x: 100,
-  y: 100,
-  module: 'h',
-  label: 'N1',
-  rot,
-} as never);
+const sym = (rot: 0 | 1 | 2 | 3) =>
+  ({
+    id: 'm',
+    kind: 'module',
+    x: 100,
+    y: 100,
+    module: 'h',
+    label: 'N1',
+    rot,
+  }) as never;
 
 const doc: Doc = {
   syms: [sym(0)],
@@ -47,8 +54,14 @@ const doc: Doc = {
 describe('模块引脚外引', () => {
   it('rot0：引脚在框外 ±(半宽+引线)，不在框边上', () => {
     const o = pinOffsets(sym(0), lib);
-    expect(o.find((p) => p.name === 'a')).toMatchObject({ x: -(MODULE_HALF_WIDTH + MODULE_PIN_LEAD), y: 0 });
-    expect(o.find((p) => p.name === 'y')).toMatchObject({ x: MODULE_HALF_WIDTH + MODULE_PIN_LEAD, y: 0 });
+    expect(o.find((p) => p.name === 'a')).toMatchObject({
+      x: -(MODULE_HALF_WIDTH + MODULE_PIN_LEAD),
+      y: 0,
+    });
+    expect(o.find((p) => p.name === 'y')).toMatchObject({
+      x: MODULE_HALF_WIDTH + MODULE_PIN_LEAD,
+      y: 0,
+    });
   });
 
   it('旋转：输出引脚 rot1 转上方、rot2 转左侧', () => {

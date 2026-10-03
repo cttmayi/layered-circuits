@@ -78,10 +78,10 @@ import { Modal } from './panels/Modal';
 import { ModuleDetailModal } from './panels/ModuleDetailModal';
 import { Palette } from './panels/Palette';
 import { SettlementPanel } from './panels/SettlementPanel';
+import { TeachPanel } from './panels/TeachPanel';
 import { TruthTable } from './panels/TruthTable';
 import { WaveformPanel } from './panels/WaveformPanel';
 import { WorkshopPanel } from './panels/WorkshopPanel';
-import { TeachPanel } from './panels/TeachPanel';
 import { WorldMap } from './panels/WorldMap';
 import type { SimSnapshot, StudioResponse } from './sim/protocol';
 import { createRunner } from './sim/runner';
@@ -227,8 +227,14 @@ export function App(): React.JSX.Element {
   }, [screen]);
 
   // ---- 自动仿真（Worker 优先，防抖 40ms） ----
+  // currentLevel/gameMode 声明在本 effect 之后（TDZ，不能进 deps 数组）；关卡/教学模式切换
+  // 必然产生新 doc，由 doc 依赖覆盖重跑。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 见上（TDZ 限制，doc 依赖兜底）
   useEffect(() => {
     if (runner.kind !== runnerKind) setRunnerKind(runner.kind);
+    // recomputeNonce 只作「重新计算」按钮的触发信号：值本身不参与计算，仅靠它在依赖
+    // 列表里变化来重跑仿真（读一下避免被判定为多余依赖——删除它会让按钮失效）。
+    void recomputeNonce;
     const timer = setTimeout(() => {
       const design = toDesign(doc);
       // 电路指纹：只在拓扑/布线没变时复用上次信号（锁存器/寄存器状态跨仿真保持）；
@@ -768,7 +774,7 @@ export function App(): React.JSX.Element {
       ...doc,
       syms: doc.syms.map((s) =>
         s.id === id
-          ? { ...s, value: ((((s.value ?? 0) + delta) % max) + max) % max as InputDrive }
+          ? { ...s, value: (((((s.value ?? 0) + delta) % max) + max) % max) as InputDrive }
           : s,
       ),
     });
@@ -1515,8 +1521,7 @@ export function App(): React.JSX.Element {
                 walletHalf={progress.walletHalf}
                 nextLevelTitle={
                   ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) >= 0
-                    ? ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]
-                        ?.title
+                    ? ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]?.title
                     : undefined // 教学关：没有下一关
                 }
                 onNextLevel={() => {

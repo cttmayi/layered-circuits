@@ -166,14 +166,20 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
       expandVectors(vs, widths),
       { mode: 'logic' },
     );
-    expect(runRef.pass, `单元参考解：${JSON.stringify(runRef.rows?.map((r) => (r.ok ? 'ok' : `mismatch:${JSON.stringify(r.mismatches)}`)))}`).toBe(true);
+    expect(
+      runRef.pass,
+      `单元参考解：${JSON.stringify(runRef.rows?.map((r) => (r.ok ? 'ok' : `mismatch:${JSON.stringify(r.mismatches)}`)))}`,
+    ).toBe(true);
     const gateLib = new InMemoryModuleLibrary([...teachingModulesFor('rtl')]);
     const runGate = runVectors(
       compileDesign(teachingSolutionOf('s3-display', 'rtl')!, { library: gateLib }).net,
       expandVectors(vs, widths),
       { mode: 'logic' },
     );
-    expect(runGate.pass, `门版：${JSON.stringify(runGate.rows?.map((r) => (r.ok ? 'ok' : `mismatch:${JSON.stringify(r.mismatches)}`)))}`).toBe(true);
+    expect(
+      runGate.pass,
+      `门版：${JSON.stringify(runGate.rows?.map((r) => (r.ok ? 'ok' : `mismatch:${JSON.stringify(r.mismatches)}`)))}`,
+    ).toBe(true);
   });
 
   it('玩家风格解法：封装【全加器】+【异或门】拼出 ALU（多 bit 模块实例化）', () => {
