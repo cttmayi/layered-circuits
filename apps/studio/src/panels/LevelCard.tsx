@@ -1,7 +1,8 @@
-import { commissionOf, contractOf } from '@lc/content';
+import { contractOf } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { useState } from 'react';
 import { Modal } from './Modal';
+import { SegmentTaskDiagram } from './SegmentDiagram';
 
 export interface LevelCardProps {
   level: Level;
@@ -11,13 +12,11 @@ export interface LevelCardProps {
 
 const CELL: Record<string, string> = { 0: 'lo', 1: 'hi', X: 'bad', Z: 'dim' };
 
-/** 左侧「图纸卡」：图纸（真值表）+ 合同摘要 + 用料进度 —— 搭建时的高频参考。
- * 需求真值表完全展示（不做黑盒隐藏）；委托方/需求正文在卡片上只压 2 行，
- * 点「委托单」弹窗可看完整需求、教学说明与提示。 */
+/** 左侧「任务卡」：直接说清任务（+ 图），高频参考；真值表/教学/提示放「任务详情」弹窗。
+ * 不做场景话术（委托方/客户叙事一律不出现），任务表达 = 需求 + 图 + 约束。 */
 export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Element {
-  const [showCommission, setShowCommission] = useState(false);
+  const [showTask, setShowTask] = useState(false);
   const contract = contractOf(level);
-  const commission = commissionOf(level);
   const budget = level.budgetHalf;
   const ratio = budget > 0 ? Math.min(1, costHalf / budget) : 0;
   const over = costHalf > budget;
@@ -27,32 +26,55 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
   const showPort = (n: string): string =>
     (widthOf.get(n) ?? 1) > 1 ? `${n}[${(widthOf.get(n) ?? 1) - 1}:0]` : n;
 
+  const truthTable = (
+    <table className="truth">
+      <thead>
+        <tr>
+          {inputNames.map((n) => (
+            <th key={n}>{showPort(n)}</th>
+          ))}
+          {outputNames.map((n) => (
+            <th key={n} className="sep">
+              {showPort(n)}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {level.vectors.map((v) => (
+          <tr
+            key={`${inputNames.map((n) => String(v.inputs[n])).join('')}-${outputNames.map((n) => String(v.expect?.[n])).join('')}`}
+          >
+            {inputNames.map((n) => (
+              <td key={n} className={CELL[String(v.inputs[n])] ?? ''}>
+                {String(v.inputs[n])}
+              </td>
+            ))}
+            {outputNames.map((n) => (
+              <td key={n} className={`sep ${CELL[String(v.expect?.[n])] ?? ''}`}>
+                {String(v.expect?.[n])}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
   return (
     <section className="panel level-card">
-      <h3>委托单 · {level.title}</h3>
-      <button
-        type="button"
-        className="commission-toggle"
-        onClick={() => setShowCommission(true)}
-        aria-label={`查看委托详情 · ${level.title}`}
-      >
-        <span className="commission-client">
-          <span className="client-tag">委托方</span>
-          <span className="commission-note">
-            {commission.client} —— 「{commission.note}」
-          </span>
-          <span className="commission-more">查看全文 ↗</span>
-        </span>
+      <h3>任务 · {level.title}</h3>
+      <p className="task-brief">{level.brief}</p>
+      <SegmentTaskDiagram level={level} />
+      <button type="button" className="task-detail-btn" onClick={() => setShowTask(true)}>
+        任务详情 · 真值表 ↗
       </button>
-      {showCommission && (
-        <Modal title={`委托详情 · ${level.title}`} onClose={() => setShowCommission(false)}>
-          <div className="commission-full">
-            <p className="commission-full-client">
-              <span className="client-tag">委托方</span>
-              <strong>{commission.client}</strong>
-            </p>
-            <h4>需求</h4>
-            <p>{commission.note}</p>
+      {showTask && (
+        <Modal title={`任务详情 · ${level.title}`} onClose={() => setShowTask(false)}>
+          <div className="task-full">
+            <h4>任务</h4>
+            <p>{level.brief}</p>
+            <SegmentTaskDiagram level={level} />
             {level.teaching && (
               <>
                 <h4>教学说明</h4>
@@ -74,6 +96,17 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
                   {contract.timingCap !== null &&
                     ` · 传播延迟 ≤ ${contract.timingCap.toFixed(1)} ns`}
                 </p>
+              </>
+            )}
+            {!level.classroom && (
+              <>
+                <h4>真值表</h4>
+                {truthTable}
+                {level.timingBudgetPs !== undefined && (
+                  <p className="dim small">
+                    硬核模式还要求传播延迟 ≤ {(level.timingBudgetPs / 1000).toFixed(2)} ns
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -140,45 +173,6 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
           <span className="dim">对标 {level.optimalHalf / 2}</span>
         </div>
       </div>
-
-      <table className="truth">
-        <thead>
-          <tr>
-            {inputNames.map((n) => (
-              <th key={n}>{showPort(n)}</th>
-            ))}
-            {outputNames.map((n) => (
-              <th key={n} className="sep">
-                {showPort(n)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {level.vectors.map((v) => (
-            <tr
-              key={`${inputNames.map((n) => String(v.inputs[n])).join('')}-${outputNames.map((n) => String(v.expect?.[n])).join('')}`}
-            >
-              {inputNames.map((n) => (
-                <td key={n} className={CELL[String(v.inputs[n])] ?? ''}>
-                  {String(v.inputs[n])}
-                </td>
-              ))}
-              {outputNames.map((n) => (
-                <td key={n} className={`sep ${CELL[String(v.expect?.[n])] ?? ''}`}>
-                  {String(v.expect?.[n])}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {!level.classroom && level.timingBudgetPs !== undefined && (
-        <p className="dim small">
-          硬核模式还要求传播延迟 ≤ {(level.timingBudgetPs / 1000).toFixed(2)} ns
-        </p>
-      )}
     </section>
   );
 }

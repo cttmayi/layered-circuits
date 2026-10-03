@@ -3,7 +3,7 @@
  * 游戏壳：主菜单（开场）→ 关卡地图（选关）→ 工作台；
  * 开工状态持久化：刷新后主菜单出现「继续上次」，直接回工作台不重弹委托。
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { goToLevel, renderApp, startJob } from './helpers';
@@ -35,11 +35,12 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     fireEvent.click(screen.getByText('教学模式'));
     fireEvent.click(screen.getByText('认识三极管'));
     // 先讲课：概念卡弹窗（生活类比 + 要点）
-    expect(screen.getByRole('dialog', { name: '元件课堂' })).toBeTruthy();
-    expect(screen.getByText(/反着来的开关/)).toBeTruthy();
+    const dialog = screen.getByRole('dialog', { name: '元件课堂' });
+    expect(dialog).toBeTruthy();
+    expect(within(dialog).getByText(/反着来的开关/)).toBeTruthy();
     // 点「去搭一下试试」→ 工作台：委托单 + 引导条（跟着做）
     fireEvent.click(screen.getByText(/去搭一下试试/));
-    expect(screen.getByText(/委托单 · 认识三极管/)).toBeTruthy();
+    expect(screen.getByText(/任务 · 认识三极管/)).toBeTruthy();
     expect(screen.getByText(/动手搭 · 跟着做/)).toBeTruthy();
     expect(screen.getByText(/第一步：把三极管的基极/)).toBeTruthy();
   });
@@ -74,7 +75,7 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     fireEvent.click(screen.getByText(/继续上次/));
     // 直接进工作台：不弹「新委托」，图纸卡在
     expect(screen.queryByText('新委托')).toBeNull();
-    expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
+    expect(screen.getByText(/任务 · 非门/)).toBeTruthy();
   });
 
   it('自由搭建从主菜单进：工作台出现，但没有「交付验收」（关卡专属）', () => {
@@ -88,12 +89,12 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     const first = renderApp();
     goToLevel('非门'); // 第一关：新单也直接开工
     expect(screen.queryByText('新委托')).toBeNull();
-    expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
+    expect(screen.getByText(/任务 · 非门/)).toBeTruthy();
     first.unmount();
     render(<App />); // 模拟刷新：started 已持久化
     fireEvent.click(screen.getByText(/继续上次/));
     expect(screen.queryByText('新委托')).toBeNull();
-    expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
+    expect(screen.getByText(/任务 · 非门/)).toBeTruthy();
   });
 
   it('主菜单「新游戏」：确认后先选工艺契约，选定后清空存档、回到全新主菜单', () => {

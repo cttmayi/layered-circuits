@@ -57,7 +57,7 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
   it('用鼠标搭出第 1 关的标准解并通过校验，通关闭环产生可复用的【非门】模块', async () => {
     renderApp();
     startJob('非门');
-    expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
+    expect(screen.getByText(/任务 · 非门/)).toBeTruthy();
 
     // ---- 1. 摆放元件（画布上只有关卡预置的 a / y 端口）----
     place('电阻', 280, 240); // R1 基极限流

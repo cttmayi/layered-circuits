@@ -56,7 +56,7 @@ packages/
   schema/src/           # ★数据模型（Zod）：design.ts（Design/Doc 核心 DTO）+ module.ts（模块模板/库）+ level.ts（关卡 + familySpecOf + scoreOf）+ family.ts（FAMILY_CONTRACTS）+ units.ts（UNIT_COST_HALF）+ builder.ts（DesignBuilder）
   sim-core/src/         # ★仿真内核（零 DOM）：ir.ts（FlatNet）+ engine.ts（事件驱动 DES）+ signal.ts（4值×2强度）+ harness.ts（测试驱动）+ waveform.ts
   compiler/src/         # ★编译与判定：flatten.ts（Design→FlatNet）+ cost.ts（递归成本）+ wrap.ts（封装/hash/环检测）+ timing.ts（延迟实测/反馈环）+ judge.ts（judgeDesign）+ sha256.ts
-  content/src/          # ★关卡内容包：levels.ts（第1章关卡 + TEACH_LEVELS 教学关）+ levels-seq.ts（第2章）+ levels-ari.ts（第3章+计算器）+ references*.ts（参考解）+ teachings.ts（★门版教学积木/FAMILY_GATES）+ commissions.ts（委托文案）
+  content/src/          # ★关卡内容包：levels.ts（第1章关卡 + TEACH_LEVELS 教学关）+ levels-seq.ts（第2章）+ levels-ari.ts（第3章+计算器）+ references*.ts（参考解）+ teachings.ts（★门版教学积木/FAMILY_GATES）+ contract.ts（合同条款）
 tools/
   opt-solver/           # 离线最优解求解器（预算源头；只覆盖 1~2 输入组合逻辑）
   level-editor/         # spec → 已验收关卡（README 见 tools/level-editor/README.md）
@@ -161,7 +161,7 @@ App 40ms 防抖 → `runner.send(req)`（优先 Web Worker，file:// 自动回�
 1. 在 `packages/content/src/levels-*.ts` 用工厂（`gateLevel`/`seqLevel`/`ariLevel`）加定义：真值表 `fn`、端口、`optimalHalf`（= 参考解成本）、`timingBudgetPs`、`moduleAccess`、`reference`。
 2. 写参考解到 `references-*.ts`（纯元件 Design，用 DesignBuilder），成本必须 = optimalHalf（测试断言）。
 3. 有门版 → 在 `teachings.ts` 加组装函数 + `teachingSolutionOf` case（**用其他门拼，别自引用**；元件版更优时 `elementEdgeOf` 自然返回 'cost'/'delay'）。
-4. 委托文案加到 `commissions.ts`（可选）。
+4. （已废弃）早期版本有 `commissions.ts` 委托文案（街道维修铺世界观），任务表达改为「直接说任务 + 图 + 约束」后已删除。
 5. 测试：`packages/content/test/levels-*.test.ts` 断言"参考解判定通过且满分、门版判定通过、成本=满分线"。
 6. `pnpm check`。
 
@@ -236,7 +236,7 @@ pnpm lc-level tools/level-editor/specs/s1-majority.json /tmp/x.ts  # 生成关�
 5. **门版不能自引用**：s1-nand 答案用「与非门积木」= 答案=题目（用户否决）；必须"用其他门搭"，且 wrap 时 `findDependencyCycle` 检出互相引用成环。
 6. **TTL/CMOS 契约门版成本**：TTL 拼两门 = 44 > 预算 40（满分线是单门成本）——**不用为门版放宽预算/时序**：判定只看功能，超标只降评分（用户定稿"只要逻辑正确就能过关"）。
 7. **moduleAccess ≠ 门版有无**：s1-not/and/or 是 `none`（无门版，禁模块）；s1-nand/nor 是 `all`（有门版但用其他门拼）；s1-xor/xnor 是 `listed`（限定积木拼）。改门版前先看关的 moduleAccess。
-8. **结算语义**：页面文案用「款项」（= 客户按成本线付的固定总价），利润 = 款项 − 材料费；契约关的款项/对标/委托卡按玩家契约显示（修过"契约关结算亏钱"）。
+8. **结算语义**：页面文案用「款项」（= 按成本线付的固定总价），利润 = 款项 − 材料费；契约关的款项/对标/任务卡按玩家契约显示（修过"契约关结算亏钱"）。
 9. **教学关不评星不设预算**：`classroom` 关直接 `starsOf → 0`，别给它加预算断言。
 
 ---

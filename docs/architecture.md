@@ -117,7 +117,7 @@ content/src/
   references-seq.ts / references-ari.ts / references-calc.ts  锁存器/触发器/加法器/计算器链
   teachings.ts        ★门版教学积木：FAMILY_GATES（每门 rtl/ttl/cmos 工艺积木）+ hashOf/gateTemplateFor/
                       teachingModulesFor + 组装函数（*ByModules）+ teachingSolutionOf + elementEdgeOf
-  commissions.ts      委托文案（不进 Level schema，纯叙事包装）
+  contract.ts         合同条款（成本/时序上限，由 Level 字段推导；任务表达直接说任务+图+约束，无叙事包装）
 ```
 
 **门版与参考解的关系**：参考解 = 纯元件（空库可编译，进 `reference`/`familyRefs`）；门版 = 引用教学积木 hash 的 Design

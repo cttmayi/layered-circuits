@@ -190,19 +190,20 @@ describe('组件库与成绩面板', () => {
   });
 });
 
-describe('委托单与结算（P0 游戏化外壳）', () => {
+describe('任务与结算（P0 游戏化外壳）', () => {
   beforeEach(() => localStorage.clear());
 
-  it('第 1 关进关即开工：委托方、人话需求、合同条款直接显示在左侧委托卡上', () => {
+  it('第 1 关进关即开工：任务（直接需求）、合同条款直接显示在左侧任务卡上', () => {
     renderApp();
     goToLevel('非门'); // 进关即开工，不再弹「新委托」
     expect(screen.queryByText('新委托')).toBeNull();
-    expect(screen.getAllByText(/修表铺 · 老周/).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/收音机的指示灯接反了/).length).toBeGreaterThanOrEqual(1);
+    // 任务卡 = 直接表达任务（无场景话术/委托方），合同条款照旧
+    expect(screen.getByText('任务 · 非门')).toBeTruthy();
+    expect(screen.getAllByText(/输入为高时输出低/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/修表铺|委托方/)).toBeNull();
     expect(screen.getAllByText(/款项/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/元件成本/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/传播延迟/).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('委托单 · 非门')).toBeTruthy();
   });
 
   it('钱包余额显示在顶栏，并且来自存档', () => {

@@ -215,13 +215,15 @@ describe('关卡判定：第 1 关标准解（单管反相器，成本 6）', ()
 });
 
 describe('关卡界面', () => {
-  it('第 1 关：显示目标真值表、锁住未开放元件；地图上只有第一关可点', async () => {
+  it('第 1 关：直接显示任务、真值表收进详情弹窗；锁住未开放元件；地图上只有第一关可点', async () => {
     renderApp();
     startJob('非门');
 
-    // 关卡卡片：委托单 + 图纸（真值表需求完全展示，不做黑盒隐藏）
-    expect(screen.getByText(/委托单 · 非门/)).toBeTruthy();
-    const targetTable = document.querySelector('.level-card .truth') as HTMLTableElement;
+    // 关卡卡片：任务标题 + 直接需求（不做场景话术）；真值表放「任务详情」弹窗
+    expect(screen.getByText(/任务 · 非门/)).toBeTruthy();
+    expect(document.querySelector('.level-card .truth')).toBeNull();
+    fireEvent.click(screen.getByText(/任务详情 · 真值表/));
+    const targetTable = document.querySelector('.task-full .truth') as HTMLTableElement;
     expect(targetTable).toBeTruthy();
     const cells = [...targetTable.querySelectorAll('tbody tr')].map((tr) =>
       [...tr.querySelectorAll('td')].map((td) => td.textContent),
@@ -290,7 +292,7 @@ describe('关卡界面', () => {
     render(<App />);
     // 主菜单应显示「继续上次」直达第 2 关之前的会话？没有开工记录时走地图选关
     goToLevel('与门'); // 进关即开工（不再弹「新委托」）
-    await waitFor(() => expect(screen.getByText(/委托单 · 与门/)).toBeTruthy(), {
+    await waitFor(() => expect(screen.getByText(/任务 · 与门/)).toBeTruthy(), {
       timeout: 5000,
     });
     expect(screen.getByText(new RegExp(`已通关 1/${LEVEL_TOTAL}`))).toBeTruthy(); // 只有非门在关卡链上
