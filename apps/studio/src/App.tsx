@@ -842,9 +842,12 @@ export function App(): React.JSX.Element {
       setToast(kind === 'gate' ? '本关没有逻辑门版参考解' : '本关没有参考解，无法一键出答案');
       return;
     }
-    // 门版引用了教学门积木（按玩家工艺）：并入画布库供渲染/判定编译用；
-    // 这些积木标记 teaching，不出现在左侧「我的模块」（玩家没亲手搭，不算他的资产）
-    const extra = kind === 'gate' ? teachingStoredFor(spec.family) : [];
+    // 参考解若引用了教学门积木（门版必引；模块化参考解如 s3-display2 的「2×七段译码器」
+    // 也会引），按引用哈希并入画布库供渲染/判定编译用；这些积木标记 teaching，不出现在
+    // 左侧「我的模块」（玩家没亲手搭，不算他的资产）。hash 内容稳定，重复注入无害。
+    const refHashes = new Set<string>();
+    for (const inst of ref.instances) if (inst.kind === 'module') refHashes.add(inst.module);
+    const extra = teachingStoredFor(spec.family).filter((m) => refHashes.has(m.hash));
     const library = [...doc.library, ...extra];
     const next = fromDesign(ref, docForLevel(currentLevel, library));
     const nextDoc = { ...next, library };

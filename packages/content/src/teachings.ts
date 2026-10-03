@@ -266,7 +266,7 @@ function templateFor(name: string, family: LogicFamily = 'rtl'): ModuleTemplate 
   return gateTemplateFor(name, family);
 }
 
-function hashOf(name: string, family: LogicFamily = 'rtl'): string {
+export function hashOf(name: string, family: LogicFamily = 'rtl'): string {
   return templateFor(name, family).hash;
 }
 
@@ -559,6 +559,8 @@ export function teachingSolutionOf(levelId: string, family: LogicFamily = 'rtl')
       return bin2bcdByModules('teach-s3-bin2bcd', '二进制→BCD（门版）', family);
     case 's3-display':
       return seg7ByModules('teach-s3-display', '七段译码器（门版）', family);
+    case 's3-display2':
+      return seg7x2ByModules('teach-s3-display2', '数码管显示（门版）', family);
     case 's3-reg-8':
       return reg8ByModules('teach-s3-reg8', '8位寄存器（门版）', family);
     case 's3-encoder':
@@ -587,11 +589,12 @@ export function elementEdgeOf(level: Level, family: LogicFamily = 'rtl'): 'cost'
   const teach = teachingSolutionOf(level.id, spec.family);
   if (!ref || !teach) return null;
   const gateLib = new InMemoryModuleLibrary([...teachingModulesFor(spec.family)]);
-  const emptyLib = new InMemoryModuleLibrary();
-  const ec = computeCosts(ref, emptyLib).costHalf;
+  // 元件版成本/延迟也用教学库算：参考解如 s3-display2 = 2×七段译码器模块（模块化参考解）
+  // 需要教学库才能解析模块成本与展开网络；纯元件参考解没有模块实例，教学库是无关超集，结果不变。
+  const ec = computeCosts(ref, gateLib).costHalf;
   const gc = computeCosts(teach, gateLib).costHalf;
   if (ec < gc) return 'cost';
-  const refNet = compileDesign(ref, { library: emptyLib }).net;
+  const refNet = compileDesign(ref, { library: gateLib }).net;
   const gateNet = compileDesign(teach, { library: gateLib }).net;
   // 大电路（6000+ 元件，如计算器整机）的传播延迟测量 = 输入数×2 次冷启动全仿真
   // （十几秒/关）；元件版与门版同结构时延迟必然相等，跳过延迟比较——
@@ -936,6 +939,23 @@ function seg7ByModules(id: string, name: string, family: LogicFamily = 'rtl'): D
   ];
   b.port('bcd', 'in', ['bcd0', 'bcd1', 'bcd2', 'bcd3']);
   b.port('seg', 'out', seg);
+  return b.build();
+}
+
+/** 数码管显示（门版）：2× 七段译码器模块（复用上一关产物），顶层只有 2 盒 */
+function seg7x2ByModules(id: string, name: string, family: LogicFamily = 'rtl'): Design {
+  const b = new DesignBuilder(id, name);
+  const seg7 = hashOf('七段译码器', family);
+  const t = Array.from({ length: 4 }, (_, i) => `t${i}`); // 十位 bcd
+  const u = Array.from({ length: 4 }, (_, i) => `u${i}`); // 个位 bcd
+  const ten = Array.from({ length: 7 }, (_, i) => `seg1${i}`);
+  const one = Array.from({ length: 7 }, (_, i) => `seg2${i}`);
+  b.module(seg7, { bcd: t, seg: ten }, 'D1');
+  b.module(seg7, { bcd: u, seg: one }, 'D2');
+  b.port('bcd1', 'in', t);
+  b.port('bcd2', 'in', u);
+  b.port('seg1', 'out', ten);
+  b.port('seg2', 'out', one);
   return b.build();
 }
 

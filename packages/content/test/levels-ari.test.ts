@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest';
 import { computeCosts } from '../../../packages/compiler/src/cost.js';
 import { findLevel, levelOrder } from '../src/levels.js';
 import { STAGE3_LEVELS } from '../src/levels-ari.js';
-import { teachingModulesFor, teachingSolutionOf } from '../src/teachings.js';
+import { TEACHING_MODULES, teachingModulesFor, teachingSolutionOf } from '../src/teachings.js';
 
 const level = (id: string) => {
   const found = findLevel(id);
@@ -52,6 +52,7 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
       's3-bcd2bin',
       's3-bin2bcd',
       's3-display',
+      's3-display2',
       's3-reg-8',
       's3-or-chain',
       's3-encoder',
@@ -70,19 +71,27 @@ describe('阶段 3 关卡内容（位宽/总线）', () => {
   });
 
   it('每关的参考解都能通关（含硬核），成本正好等于最优成本', () => {
+    // s3-display2 的参考解 = 2×七段译码器模块（教学积木哈希）：这关的教学点就是「模块复用」，
+    // 参考解天然依赖教学库——它是纯元件规则（空库可编译）的唯一例外，其余关仍必须纯元件。
     const library = new InMemoryModuleLibrary();
+    const teachingLib = new InMemoryModuleLibrary([...TEACHING_MODULES]);
     for (const l of STAGE3_LEVELS) {
       const design = l.referenceSolution;
       if (!design) throw new Error(`${l.id} 缺少参考解`);
-      // 参考解必须是纯底层元件（工作台判定通道用空库跑，这里显式复核）
-      expect(
-        design.instances.some((i) => i.kind === 'module'),
-        `${l.id} 参考解不能依赖模块库`,
-      ).toBe(false);
-      const r = judgeDesign(design, l, { library, hardcore: true });
+      const usesModules = design.instances.some((i) => i.kind === 'module');
+      if (l.id === 's3-display2') {
+        expect(usesModules, 's3-display2 参考解应复用模块（教学点：模块复用）').toBe(true);
+      } else {
+        expect(
+          usesModules,
+          `${l.id} 参考解不能依赖模块库（空库可编译；s3-display2 是唯一例外）`,
+        ).toBe(false);
+      }
+      const lib = usesModules ? teachingLib : library;
+      const r = judgeDesign(design, l, { library: lib, hardcore: true });
       expect(r.pass, `${l.id} 参考解应在硬核模式通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${l.id} 最优成本拿满分`).toBe(100);
-      const { counts } = computeCosts(design, library);
+      const { counts } = computeCosts(design, lib);
       // 用权威成本口径（@lc/schema 的 costHalfOf），避免测试里重复一份单价表
       const sum = costHalfOf(counts);
       expect(sum, `${l.id} 参考解成本应等于 optimalHalf`).toBe(l.optimalHalf);

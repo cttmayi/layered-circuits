@@ -17,6 +17,7 @@
 import { type Design, DesignBuilder } from '@lc/schema';
 import { fullAdderInto, nandInto, seg7Into, xorInto } from './references-ari.js';
 import { digitEntryInto, encoderInto } from './references-keypad.js';
+import { hashOf } from './teachings.js';
 
 /**
  * 主从 D 触发器（无 rail 拼装块）：clk 上升沿把 d 搬到 q。
@@ -580,5 +581,26 @@ export function calcRef(id = 'ref-calc'): Design {
   b.port('c', 'in', 'c');
   b.port('disp_t', 'out', segT);
   b.port('disp_u', 'out', segU);
+  return b.build();
+}
+
+/**
+ * 数码管显示参考解：2 位数码管 = 2× 七段译码器模块（复用玩家自己的译码器）。
+ * 顶层只有 2 个模块实例，成本 2×860 = 1720。模块引用教学积木「七段译码器」的内容哈希
+ * （hash 内容稳定）；玩家在 s3-display 用门版答案通关封装出的译码器与此同结构同哈希。
+ */
+export function seg7x2Ref(id = 'ref-s3-display2'): Design {
+  const b = new DesignBuilder(id, '数码管显示');
+  const seg7 = hashOf('七段译码器', 'rtl');
+  const t = Array.from({ length: 4 }, (_, i) => `t${i}`); // 十位 bcd
+  const u = Array.from({ length: 4 }, (_, i) => `u${i}`); // 个位 bcd
+  const ten = Array.from({ length: 7 }, (_, i) => `seg1${i}`);
+  const one = Array.from({ length: 7 }, (_, i) => `seg2${i}`);
+  b.module(seg7, { bcd: t, seg: ten }, 'D1');
+  b.module(seg7, { bcd: u, seg: one }, 'D2');
+  b.port('bcd1', 'in', t);
+  b.port('bcd2', 'in', u);
+  b.port('seg1', 'out', ten);
+  b.port('seg2', 'out', one);
   return b.build();
 }

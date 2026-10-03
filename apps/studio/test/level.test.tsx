@@ -7,7 +7,7 @@
  *  - 判定一侧验证关卡数据能通过工作台自己的请求通道（Worker/主线程共用）判定通过。
  */
 
-import { ALL_LEVELS, findLevel } from '@lc/content';
+import { ALL_LEVELS, findLevel, TEACHING_MODULES } from '@lc/content';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
@@ -110,11 +110,15 @@ describe('关卡内容与进度', () => {
 
   it('工作台判定通道：每个关卡的参考解都能通过（含硬核时序）', () => {
     for (const level of ALL_LEVELS) {
+      const ref = level.referenceSolution!;
+      // 模块化参考解（如 s3-display2 = 2×七段译码器模块）引用教学积木哈希，
+      // 通道库需含教学模块才能编译；纯元件参考解空库即可。
+      const library = ref.instances.some((i) => i.kind === 'module') ? [...TEACHING_MODULES] : [];
       const response = handleRequest({
         id: 1,
         type: 'judge',
-        design: level.referenceSolution!,
-        library: [],
+        design: ref,
+        library,
         level,
         hardcore: true,
       });

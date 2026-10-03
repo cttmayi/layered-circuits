@@ -26,7 +26,7 @@ import {
   halfAdderRef,
   seg7Ref,
 } from './references-ari.js';
-import { bcd2binRef, bin2bcdRef, calcRef, reg8Ref } from './references-calc.js';
+import { bcd2binRef, bin2bcdRef, calcRef, reg8Ref, seg7x2Ref } from './references-calc.js';
 import { digitEntryRef, encoderOrRef } from './references-keypad.js';
 
 /** 阶段 3 允许的元件：仍只用 npn/res/dio（电容留给时钟/存储章节） */
@@ -345,9 +345,9 @@ const S3_DISPLAY: Level = parseLevel({
   id: 's3-display',
   stage: 3,
   kind: 'main',
-  title: '数码管显示',
+  title: '七段译码器',
   brief:
-    '七段数码管是计算器的屏幕，它有 7 根线（a-g），每根点亮一段。这一关把 0-9 的 BCD 码译成 7 段信号，亲手搭一个 BCD→七段译码器。',
+    '数码管有 7 根线（a-g），每根点亮一段。这一关把 0-9 的 BCD 码译成 7 段信号，亲手搭一个 BCD→七段译码器；下一关直接把它当积木复用两次。',
   teaching:
     '数码管不理解数字，只认 7 根线：a 是顶横、b 是右上竖、c 是右下竖、d 是底横、e 是左下竖、f 是左上竖、g 是中横。' +
     '每个数字 = 点亮其中几段（0 亮 a-f、1 亮 b-c、2 亮 a,b,g,e,d……）。译码器就是查这张表：' +
@@ -384,6 +384,52 @@ const S3_DISPLAY: Level = parseLevel({
     ports: [port('bcd', 'in', 4), port('seg', 'out', 7)],
   },
   referenceSolution: seg7Ref('ref-s3-display'),
+});
+
+/** 数码管显示：2 位数码管 = 2× 七段译码器模块（复用上一关产物），教学点 = 模块复用/位宽扩展 */
+const S3_DISPLAY2: Level = parseLevel({
+  schemaVersion: 1,
+  id: 's3-display2',
+  stage: 3,
+  kind: 'main',
+  title: '数码管显示',
+  brief:
+    '一台两位数计算器需要 2 个数码管。译码器上一关已经搭过了——这一关把它当积木复用两次：一个管十位、一个管个位。',
+  teaching:
+    '七段译码器已经是组件库里的模块：bcd[3:0] → seg[6:0]。这一关放两个：D1 接十位 bcd1、D2 接个位 bcd2，各自的 7 根段线接到对应数码管。这就是「模块复用」——写一次逻辑，用 N 次，位宽从 1 位扩到 2 位只靠复制粘贴加并线。',
+  hint: '从左侧「我的模块」拖 2 个【七段译码器】：bcd1 → D1.bcd、bcd2 → D2.bcd，D1.seg → seg1、D2.seg → seg2。参考解 = 2 个模块 + 布线，成本 1720 半单位（2×860）。',
+  ports: [
+    port('bcd1', 'in', 4),
+    port('bcd2', 'in', 4),
+    { id: 'seg1', name: 'seg1', dir: 'out', width: 7, display: 'segment' },
+    { id: 'seg2', name: 'seg2', dir: 'out', width: 7, display: 'segment' },
+  ],
+  mode: 'logic',
+  allowedUnits: [...STAGE3_UNITS],
+  moduleAccess: 'all',
+  budgetHalf: budgetFromOptimal(1720, MAIN_OVERHEAD),
+  optimalHalf: 1720,
+  checks: {},
+  vectors: [
+    { inputs: { bcd1: 0, bcd2: 0 }, expect: { seg1: 0x3f, seg2: 0x3f }, note: '00 → 两个 0' },
+    { inputs: { bcd1: 1, bcd2: 2 }, expect: { seg1: 0x06, seg2: 0x5b }, note: '12 → 1 和 2' },
+    { inputs: { bcd1: 3, bcd2: 4 }, expect: { seg1: 0x4f, seg2: 0x66 }, note: '34' },
+    { inputs: { bcd1: 5, bcd2: 6 }, expect: { seg1: 0x6d, seg2: 0x7d }, note: '56' },
+    { inputs: { bcd1: 7, bcd2: 8 }, expect: { seg1: 0x07, seg2: 0x7f }, note: '78' },
+    { inputs: { bcd1: 9, bcd2: 9 }, expect: { seg1: 0x6f, seg2: 0x6f }, note: '99' },
+  ] satisfies LevelVector[],
+  unlock: {
+    name: '双数码管显示',
+    kind: 'logic',
+    stage: 3,
+    ports: [
+      port('bcd1', 'in', 4),
+      port('bcd2', 'in', 4),
+      { id: 'seg1', name: 'seg1', dir: 'out', width: 7 },
+      { id: 'seg2', name: 'seg2', dir: 'out', width: 7 },
+    ],
+  },
+  referenceSolution: seg7x2Ref('ref-s3-display2'),
 });
 
 /** 计算器链的锁存台阶：8 个 D 触发器并排共用 clk，数据「存下来」。 */
@@ -865,6 +911,7 @@ export const STAGE3_LEVELS: Level[] = [
   BCD2BIN,
   BIN2BCD,
   S3_DISPLAY,
+  S3_DISPLAY2,
   REG_8,
   S3_OR_CHAIN,
   S3_ENCODER,

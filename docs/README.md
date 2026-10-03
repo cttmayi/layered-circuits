@@ -207,8 +207,9 @@ pnpm lc-level tools/level-editor/specs/s1-majority.json /tmp/x.ts  # 生成关�
 
 1. **蓝图 4 关未实现**：`docs/关卡循序渐进设计蓝图（待审核）.md` 里的 s1-mux2 / s2-gated-sr / s3-adder-2 / s3-sub-4（仅设计文档，未做关卡）。
 2. **门版答案规模**（已达标，见 `docs/关卡设计规范（规模与积木复用）.md` §四体检表）：规范要求门版顶层盒数 ≤ 15，
-   当前 s3-reg-8（8）、s3-bin2bcd（15）、s3-encoder（8）等全部达标；仅 s3-display（43）与 s3-calc（29）
+    s3-reg-8（8）、s3-bin2bcd（15）、s3-encoder（8）、s3-display2（2）等全部达标；仅 s3-display（43）与 s3-calc（29）
    超限但属文档批准的豁免（答案即教学内容 / 终局组装关，测试 EXEMPT 集登记）；s1-xor-retro 已有门版（8 盒）。
+   数码管显示已拆成两关：s3-display 教译码器本体（43 盒豁免），s3-display2 教模块复用（2×【七段译码器】模块，2 盒达标）。
 3. **低成本版计算器**：当前计算器链是"高成本完整链"（bcd2bin + 加法 + bin2bcd + 寄存器，optimalHalf 15200）；用户已确认后续做"低成本版"优化（复用求解器找更省结构）。
 4. **延迟线未补**：reg-8 / calc 暂不评延迟档（starsOf 对 timingBudgetPs 为 null 的关只按成本评星）；部分关未给时序预算。
 5. **GUI 视觉未自动验证**：画布 Canvas 渲染无截图回归（曾用 headless Chrome + CDP 人工验证；vision 后端会话内有限流）。

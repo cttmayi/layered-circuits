@@ -16,15 +16,32 @@ import { describe, expect, it } from 'vitest';
 import { fromDesign, toDesign } from '../src/editor/model';
 import { docForLevel } from '../src/level/progress';
 
+/** 教学门积木 → 画布库条目（与 App 注入 doc.library 的方式一致） */
+const stored = TEACHING_MODULES.map((m) => ({
+  hash: m.hash,
+  name: m.name,
+  version: m.version,
+  stage: m.stage,
+  costHalf: m.costHalf,
+  isSequential: m.isSequential,
+  ports: m.ports,
+  template: m,
+  sources: [],
+  createdAt: 0,
+}));
+
 describe('fromDesign 还原器（一键出答案）', () => {
   it('每个有关卡参考解的关：还原 → 再导出 → 判定通关且满分', () => {
-    const library = new InMemoryModuleLibrary();
+    // 教学库是超集：模块化参考解（如 s3-display2 = 2×七段译码器模块）引用教学积木哈希，
+    // 需要教学库才能编译；纯元件参考解不受影响（多余条目不产生画布符号）。
+    const library = new InMemoryModuleLibrary([...TEACHING_MODULES]);
     let checked = 0;
     for (const level of ALL_LEVELS) {
       const ref = level.referenceSolution;
       if (!ref) continue;
       checked++;
-      const base = docForLevel(level, []);
+      // 模块化参考解需要教学积木才能布模块引脚；纯元件参考解用空库即可
+      const base = docForLevel(level, ref.instances.some((i) => i.kind === 'module') ? stored : []);
       const doc = fromDesign(ref, base);
       // 端口保留：位宽与锁定继承自关卡预置
       expect(doc.syms.filter((s) => s.kind === 'input' || s.kind === 'output').length).toBe(
@@ -67,21 +84,7 @@ describe('fromDesign 还原器（一键出答案）', () => {
 });
 
 describe('逻辑门版参考解（简洁版一键出答案）', () => {
-  /** 教学门积木 → 画布库条目（与 App 注入 doc.library 的方式一致） */
-  const stored = TEACHING_MODULES.map((m) => ({
-    hash: m.hash,
-    name: m.name,
-    version: m.version,
-    stage: m.stage,
-    costHalf: m.costHalf,
-    isSequential: m.isSequential,
-    ports: m.ports,
-    template: m,
-    sources: [],
-    createdAt: 0,
-  }));
-
-  it('12 关都有门版；直接判定通关且满分，成本不高于元件版', () => {
+  it('24 关都有门版；直接判定通关且满分，成本不高于元件版', () => {
     const library = new InMemoryModuleLibrary([...TEACHING_MODULES]);
     let checked = 0;
     for (const level of ALL_LEVELS) {
@@ -95,9 +98,9 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.score, `${level.id} 门版应满分`).toBe(100);
       expect(r.costHalf, `${level.id} 门版成本应 ≤ 元件版`).toBeLessThanOrEqual(level.optimalHalf);
     }
-    // 23 关有门版：第 1 章 5（与非/或非/异或/同或/异或·复古版）+ 第 2 章 6（SR/D锁存/按钮锁存/DFF×3）+ 第 3 章 12（算术+计算器链+数码管显示）；
+    // 24 关有门版：第 1 章 5（与非/或非/异或/同或/异或·复古版）+ 第 2 章 6（SR/D锁存/按钮锁存/DFF×3）+ 第 3 章 13（算术+计算器链+七段译码器+数码管显示）；
     // 非门/与门/或门 moduleAccess: 'none'（禁用模块）→ 不出门版
-    expect(checked).toBe(23);
+    expect(checked).toBe(24);
   });
 
   it('门版答案顶层盒数 ≤ 15（关卡设计规范：画布顶层可见盒子数上限）', () => {
@@ -139,7 +142,7 @@ describe('逻辑门版参考解（简洁版一键出答案）', () => {
       expect(r.pass, `${level.id} 门版还原后应通关：${r.errors.join('；')}`).toBe(true);
       expect(r.score, `${level.id} 门版还原后应满分`).toBe(100);
     }
-    expect(checked).toBe(23);
+    expect(checked).toBe(24);
   });
 });
 
