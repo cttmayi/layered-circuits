@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { type RouteObstacle, routeSegments, segHitsRect, signalText } from '../src/editor/render';
+import {
+  netRootsOf,
+  type RouteObstacle,
+  routeSegments,
+  segHitsRect,
+  signalText,
+} from '../src/editor/render';
 
 /** 走线路线是否与障碍相交（逐段判定） */
 function hitsAny(
@@ -181,5 +187,56 @@ describe('signalText（端口强度标注）', () => {
   it('电路节点默认仍标强度', () => {
     expect(signalText(9)).toBe('1·强');
     expect(signalText(5)).toBe('1·弱');
+  });
+});
+
+describe('netRootsOf（整网并查集）', () => {
+  const wire = (id: string, a: [string, string, number?], b: [string, string, number?]) => ({
+    id,
+    a: { inst: a[0], pin: a[1], bit: a[2] ?? 0 },
+    b: { inst: b[0], pin: b[1], bit: b[2] ?? 0 },
+  });
+  /** 断言两条线是否在同一张网里 */
+  const sameNet = (wires: ReturnType<typeof wire>[], x: string, y: string): boolean =>
+    netRootsOf(wires).get(x) === netRootsOf(wires).get(y);
+
+  it('同一位引脚扇出 → 同一整网（悬停任一根整网一起亮）', () => {
+    const ws = [
+      wire('w1', ['u1', 'y', 0], ['p1', 'bcd', 2]),
+      wire('w2', ['p1', 'bcd', 2], ['u2', 'a', 0]),
+      wire('w3', ['p1', 'bcd', 2], ['u3', 'a', 0]),
+    ];
+    expect(sameNet(ws, 'w1', 'w2')).toBe(true);
+    expect(sameNet(ws, 'w2', 'w3')).toBe(true);
+    expect(sameNet(ws, 'w1', 'w3')).toBe(true);
+  });
+
+  it('多 bit 端口不同 bit 是独立引脚 → 各自成网（bin/bcd 不得误并）', () => {
+    const ws = [
+      wire('w0', ['p1', 'bcd', 0], ['u0', 'a', 0]),
+      wire('w1', ['p1', 'bcd', 1], ['u1', 'a', 0]),
+      wire('w2', ['p1', 'bcd', 2], ['u2', 'a', 0]),
+      wire('w3', ['p1', 'bcd', 3], ['u3', 'a', 0]),
+    ];
+    // 4 根线两两不同网
+    for (const a of ws) {
+      for (const b of ws) {
+        if (a === b) continue;
+        expect(sameNet(ws, a.id, b.id), `${a.id} 与 ${b.id} 应各自成网`).toBe(false);
+      }
+    }
+  });
+
+  it('跨元件串联（共享中间引脚）→ 同一整网', () => {
+    const ws = [
+      wire('w1', ['u1', 'y', 0], ['u2', 'a', 0]),
+      wire('w2', ['u2', 'a', 0], ['u3', 'a', 0]),
+    ];
+    expect(sameNet(ws, 'w1', 'w2')).toBe(true);
+  });
+
+  it('bit 缺省与 0 等价（同一物理引脚）', () => {
+    const ws = [wire('w1', ['p1', 'bcd', 0], ['u1', 'a']), wire('w2', ['p1', 'bcd'], ['u2', 'a'])];
+    expect(sameNet(ws, 'w1', 'w2')).toBe(true);
   });
 });

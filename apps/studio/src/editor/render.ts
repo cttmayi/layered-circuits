@@ -8,6 +8,7 @@
  * 玩家因此能「看见」强度：上拉电阻给出的是弱 1，三极管拉低给出的是强 0。
  */
 
+import type { PinRef } from '@lc/schema';
 import { logicValueOf, S_STRONG, SIG_Z, strengthOf } from '@lc/sim-core';
 import {
   type Doc,
@@ -582,18 +583,14 @@ function distanceToSegment(
   return Math.hypot(px - (a.x + t * dx), py - (a.y + t * dy));
 }
 
-export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
-  const { doc, camera, width, height } = scene;
-  ctx.save();
-  ctx.fillStyle = PALETTE.bg;
-  ctx.fillRect(0, 0, width, height);
-
-  if (scene.grid) drawGrid(ctx, scene);
-
-  // 导线：先按「线段去重」画一遍底色（公共段只画一次，不再叠成重影），
-  // 再单独高亮 hover / 选中的线。
-  // 整网高亮：把共享引脚（inst:pin）的线归到同一个网，hover/选中时整网点亮、其余压暗
-  const wires = doc.wires;
+/**
+ * 整网并查集：共享同一引脚端点（inst:pin:bit）的线归为同一网，返回 线id → 网根。
+ * bit 必须进端点键：多 bit 端口（bin/bcd 等）每个 bit 是独立引脚、独立信号，
+ * 只按 inst:pin 合并会把 bcd[3:0] 的 4 根线误并成一张网（悬停 bcd0 会连带点亮 bcd1..3）。
+ */
+export function netRootsOf(
+  wires: Array<{ id: string; a: PinRef; b: PinRef }>,
+): Map<string, string> {
   const parent = new Map<string, string>();
   for (const wire of wires) parent.set(wire.id, wire.id);
   const find = (id: string): string => {
@@ -605,7 +602,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
   const endpointOwner = new Map<string, string>();
   for (const wire of wires) {
     for (const end of [wire.a, wire.b]) {
-      const key = `${end.inst}:${end.pin}`;
+      const key = `${end.inst}:${end.pin}:${end.bit ?? 0}`;
       const owner = endpointOwner.get(key);
       if (owner === undefined) endpointOwner.set(key, wire.id);
       else parent.set(find(wire.id), find(owner));
@@ -613,6 +610,22 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
   }
   const netOf = new Map<string, string>();
   for (const wire of wires) netOf.set(wire.id, find(wire.id));
+  return netOf;
+}
+
+export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
+  const { doc, camera, width, height } = scene;
+  ctx.save();
+  ctx.fillStyle = PALETTE.bg;
+  ctx.fillRect(0, 0, width, height);
+
+  if (scene.grid) drawGrid(ctx, scene);
+
+  // 导线：先按「线段去重」画一遍底色（公共段只画一次，不再叠成重影），
+  // 再单独高亮 hover / 选中的线。
+  // 整网高亮：把共享引脚（inst:pin:bit）的线归到同一个网，hover/选中时整网点亮、其余压暗
+  const wires = doc.wires;
+  const netOf = netRootsOf(wires);
   const activeWireIds = new Set<string>([...scene.selectedWires]);
   if (scene.hover?.kind === 'wire') activeWireIds.add(scene.hover.id);
   const activeNets = new Set<string>();
