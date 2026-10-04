@@ -50,6 +50,13 @@ export interface SimOptions {
    *  经 resolveExcluding 读到上电旧贡献，会把恢复态「毒化」—— 状态电路在输入变化时
    *  被错误翻转或卡死。两者都来自上一次仿真的终态快照，天然一致。 */
   initialContribs?: Record<string, number[]>;
+  /** 上一次仿真的**全节点**电平（按节点序号，长度 = net.nodeCount，含模块内部节点）。
+   *  有了它就用它恢复初始态：initialSignals/initialContribs 只按「顶层网 id」恢复，
+   *  而模块内部的节点没有名字、恢复不到 —— 于是恢复后顶层是上次的终态、模块内部却停在
+   *  上电态，内部节点的贡献不变 → 事件不再往下游传，输出会**冻住**
+   *  （例：两级三极管串联做的模块，挂在 seq 关卡里点击输入毫无反应）。
+   *  恢复完整节点态后从自洽的初值重新收敛一次，贡献缓存随之重建，状态电路不丢保持态。 */
+  initialNodeSignals?: readonly number[];
 }
 
 export type DiagnosticKind =
@@ -178,6 +185,13 @@ export class Simulator {
     this.drainUntil(0, Number.POSITIVE_INFINITY, false);
   }
 
+  /** 从当前（完整恢复的）节点态重新收敛一次：所有元素重算一遍，贡献缓存与节点态重新
+   *  对齐。恢复态本身是自洽的稳定态（锁存器的保持态不会被推翻），所以重收敛不会丢状态。 */
+  private resettle(): void {
+    for (let e = 0; e < this.net.elemCount; e++) this.schedule(e, 0);
+    this.settle(false);
+  }
+
   reset(): void {
     this.nodeSig.fill(SIG_Z);
     this.contrib.fill(SIG_Z);
@@ -216,6 +230,18 @@ export class Simulator {
     // 陈旧贡献，把恢复态「毒化」（状态电路在输入变化时卡死/误翻转）。只给信号不给
     // 贡献的调用方视为「不要状态保持」：跳过恢复，维持上电默认（宁可丢状态也不产出
     // 错误结果）。
+    // 优先用「全节点快照」恢复：模块内部节点也在内，恢复后从自洽初值重新收敛一次
+    // （见 initialNodeSignals 注释）。没有全节点快照才退回按顶层网 id 的旧路径。
+    // 只用于逻辑模式：时序模式的收敛靠事件队列推进，重建贡献缓存需要推进时间，
+    // 会扰动恢复的时间语义，所以那边保持按网恢复的旧行为不变。
+    const nodeState = this.mode === 'logic' ? this.options.initialNodeSignals : undefined;
+    if (nodeState && nodeState.length === this.net.nodeCount) {
+      for (let node = 0; node < this.net.nodeCount; node++) {
+        this.nodeSig[node] = (nodeState[node] ?? SIG_Z) & 0x0f;
+      }
+      this.resettle();
+      return;
+    }
     if (this.options.initialSignals && this.options.initialContribs) {
       const sig = this.options.initialSignals;
       for (let node = 0; node < this.net.nodeCount; node++) {

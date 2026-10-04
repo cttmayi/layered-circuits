@@ -110,6 +110,8 @@ export function App(): React.JSX.Element {
     key: string;
     signals: Record<string, number>;
     contribs: Record<string, number[]>;
+    /** 全节点电平（含模块内部节点）：恢复用的完整状态 */
+    nodes: number[];
   } | null>(null);
   /** 「重新计算」触发计数：+1 强制全量重算（丢弃上次终态） */
   const [recomputeNonce, setRecomputeNonce] = useState(0);
@@ -246,6 +248,9 @@ export function App(): React.JSX.Element {
       const reuseState = shouldReuseSimState(currentLevel, gameMode);
       const prevSignals = prev && prev.key === designKey && reuseState ? prev.signals : undefined;
       const prevContribs = prev && prev.key === designKey && reuseState ? prev.contribs : undefined;
+      // 全节点状态（含模块内部节点）：只恢复顶层网会让模块内部停在「上电态」，
+      // 内部节点贡献不变、事件不再往下传，输出冻住（两级串联模块在 seq 关卡里点不动）
+      const prevNodeSignals = prev && prev.key === designKey && reuseState ? prev.nodes : undefined;
       runner
         .send({
           type: 'simulate',
@@ -257,6 +262,7 @@ export function App(): React.JSX.Element {
           buttonPorts: doc.syms.filter((s) => s.kind === 'input' && s.button).map((s) => s.label),
           prevSignals,
           prevContribs,
+          prevNodeSignals,
           withTiming: showTiming,
         })
         .then((response: StudioResponse) => {
@@ -273,6 +279,7 @@ export function App(): React.JSX.Element {
               key: designKey,
               signals: Object.fromEntries(response.snapshot.netSignals),
               contribs: Object.fromEntries(response.snapshot.contrib),
+              nodes: response.snapshot.nodeSignals,
             };
           }
         })

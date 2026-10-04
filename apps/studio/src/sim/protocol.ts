@@ -24,6 +24,8 @@ export interface SimSnapshot {
   contrib: Array<[string, number[]]>;
   nodeCount: number;
   elemCount: number;
+  /** 全节点电平（按节点序号，含模块内部节点）：跨仿真恢复用的完整状态 */
+  nodeSignals: number[];
   evaluations: number;
   timePs: number;
   simDiagnostics: Array<{ kind: string; severity: string; message: string }>;
@@ -67,6 +69,11 @@ export type StudioRequest =
       /** 与 prevSignals 配套的贡献缓存（顶层网 id → 各驱动槽位贡献值，按 driveStart 顺序）：
        *  恢复信号必须一并恢复贡献，否则元素求值读到上电旧贡献会把状态电路毒化 */
       prevContribs?: Record<string, number[]>;
+      /** 上次仿真的**全节点**电平（按节点序号，含模块内部节点）。有它就优先用它恢复：
+       *  prevSignals 只按顶层网 id 恢复，模块内部节点没有名字、恢复不到 ——
+       *  「顶层终态 + 内部上电态」混在一起时，内部节点的贡献不变、事件不再往下游传，
+       *  输出会冻住（两级串联模块在 seq 关卡里点输入毫无反应）。 */
+      prevNodeSignals?: number[];
       withTiming?: boolean;
     }
   | { id: number; type: 'wrap'; design: Design; library: unknown[]; name: string; stage: number }

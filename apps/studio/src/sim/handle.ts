@@ -106,6 +106,7 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       maxEvents: 2_000_000,
       initialSignals: req.prevSignals,
       initialContribs: req.prevContribs,
+      initialNodeSignals: req.prevNodeSignals,
     });
     const values: Record<string, DriveValue> = {};
     // 瞬时按钮端口：
@@ -141,7 +142,10 @@ export function handleRequest(req: StudioRequest): StudioResponse {
 
     const netSignals: Array<[string, number]> = [];
     const contrib: Array<[string, number[]]> = [];
+    // 全节点电平（含模块内部节点）：跨仿真恢复的完整状态，见 prevNodeSignals
+    const nodeSignals: number[] = [];
     for (let node = 0; node < net.nodeCount; node++) {
+      nodeSignals.push(sim.signalOf(node));
       const netId = netIds[node];
       if (!netId) continue;
       netSignals.push([netId, sim.signalOf(node)]);
@@ -174,6 +178,7 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       portValues: sim.readAllOutputs(),
       netSignals,
       contrib,
+      nodeSignals,
       nodeCount: net.nodeCount,
       elemCount: net.elemCount,
       evaluations: sim.stats.evaluations,
