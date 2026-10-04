@@ -26,12 +26,16 @@ const stored = FAMILY_MODULES.map((m) => ({
 }));
 const templates = [...FAMILY_MODULES];
 
-function simulate(doc: Doc, inputs: Record<string, DriveValue>): StudioResponse {
+function simulate(
+  doc: Doc,
+  inputs: Record<string, DriveValue>,
+  library: unknown[] = templates,
+): StudioResponse {
   return handleRequest({
     id: 1,
     type: 'simulate',
     design: toDesign(doc),
-    library: templates,
+    library,
     mode: 'logic',
     inputs,
     buttonPorts: [],
@@ -85,6 +89,61 @@ describe('输出端口没有被驱动', () => {
     const design = toDesign(good);
     const qNet = design.nets.find((n) => n.pins.some((p) => p.inst === 'out-q'))!;
     expect(resp.snapshot?.netSignals.find(([id]) => id === qNet.id)?.[1]).not.toBe(0);
+  });
+
+  it('自制模块内部没给出电平 → 报「输出端口 q 是悬空的」', () => {
+    // 封一个「y 那根网里什么都没有」的坏模块（模拟玩家把输入/输出接错时的自制模块）
+    const badDesign = {
+      schemaVersion: 1 as const,
+      id: 'bad-not',
+      name: '坏非门',
+      instances: [{ kind: 'unit' as const, id: 'r1', unit: 'res' as const }],
+      nets: [
+        { id: 'n1', pins: [{ inst: 'r1', pin: 'a', bit: 0 }] },
+        { id: 'n2', pins: [] },
+      ],
+      ports: [
+        { id: 'a', name: 'a', dir: 'in' as const, width: 1, nets: ['n1'] },
+        { id: 'y', name: 'y', dir: 'out' as const, width: 1, nets: ['n2'] },
+      ],
+    };
+    const wrapped = handleRequest({
+      id: 1,
+      type: 'wrap',
+      design: badDesign,
+      library: [],
+      name: '坏非门',
+      stage: 1,
+    });
+    expect(wrapped.error).toBeUndefined();
+    const w = wrapped.wrapped!;
+    const badModule = {
+      hash: w.hash,
+      name: w.name,
+      version: (w.template as { version: string }).version,
+      stage: 1,
+      costHalf: w.costHalf,
+      isSequential: w.isSequential,
+      ports: w.ports,
+      template: w.template,
+      sources: [] as string[],
+      createdAt: 0,
+    };
+
+    const level = findLevel('s2-sr-latch')!;
+    let doc = docForLevel(level, [...stored, badModule]);
+    const u1 = createSym(doc, 'module', undefined, 300, 320, w.hash);
+    doc = {
+      ...doc,
+      syms: [...doc.syms, u1],
+      wires: [
+        { id: 'w1', a: { inst: 'in-sn', pin: 'p', bit: 0 }, b: { inst: u1.id, pin: 'a', bit: 0 } },
+        { id: 'w2', a: { inst: u1.id, pin: 'y', bit: 0 }, b: { inst: 'out-q', pin: 'p', bit: 0 } },
+      ],
+    };
+    // 仿真请求要带上这个自制模块的模板（游戏里就是 doc.library → templates）
+    const resp = simulate(doc, { sn: 1, rn: 1 }, [...templates, w.template as unknown]);
+    expect(undrivenOf(resp).join(' ')).toContain('输出端口 q 是悬空的');
   });
 
   it('所有关卡参考解的端口都有驱动：不该误报', () => {

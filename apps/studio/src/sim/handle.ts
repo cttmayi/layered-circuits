@@ -21,7 +21,7 @@ import {
   ModuleTemplateSchema,
   parseLevel,
 } from '@lc/schema';
-import { type Logic, Simulator } from '@lc/sim-core';
+import { type Logic, SIG_Z, Simulator } from '@lc/sim-core';
 import type {
   DriveValue,
   SimSnapshot,
@@ -203,8 +203,9 @@ export function handleRequest(req: StudioRequest): StudioResponse {
     }
 
     // 关卡输出端口没有任何驱动源 → 明确说一句。玩家最常见的迷惑就是「看着接上了，q 却一动不动」：
-    // 导线落在模块/元件的**输入脚**上（接反），或者压根没落到引脚上时，编译只关心「连没连」，
-    // 悬空端口在判定里也只表现为「结果不对」，界面上没有任何提示。
+    // 导线落在模块/元件的**输入脚**上（接反）、压根没落到引脚上、或者**自制模块内部压根没输出**
+    // （封装时输入没接进去、输出脚没接到东西上）—— 这三种情况编译只关心「连没连」，
+    // 端口悬空在判定里也只表现为「结果不对」，界面上原本一个字都不说。
     // 判断用结构而不是终态电平：二极管逻辑在输入全 0 时端口本来就是 Z（合法的），
     // 拿 Z 当「没驱动」会误报（s3-bin2bcd 的参考解就被误报过）。
     // 控制脚（三极管基极、MOS 栅极）只输入不驱动；模块只有输出端口算驱动源。
@@ -215,6 +216,12 @@ export function handleRequest(req: StudioRequest): StudioResponse {
     };
     const portById = new Map(design.ports.map((p) => [p.id, p]));
     const instById = new Map(design.instances.map((i) => [i.id, i]));
+    /** 模块输出端口虽然算驱动源，但它是不是真的给出电平取决于模块内部 —— 单独一类 */
+    const isModuleOut = (pin: { inst: string; pin: string }): boolean => {
+      const inst = instById.get(pin.inst);
+      if (!inst || inst.kind !== 'module') return false;
+      return library.get(inst.module)?.ports.find((p) => p.name === pin.pin)?.dir === 'out';
+    };
     const isDriver = (pin: { inst: string; pin: string }): boolean => {
       const port = portById.get(pin.inst);
       if (port) return port.dir === 'in';
@@ -227,22 +234,39 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       return tplPort ? tplPort.dir === 'out' : true;
     };
     const drivenNets = new Set<string>();
+    /** 「硬」驱动：元件、电源轨、输入端口。只有模块输出脚不算 —— 模块内部可以是死的 */
+    const hardDrivenNets = new Set<string>();
     // 输入端口挂着的整根网都算被驱动：参考解里 bin[0] 与 bcd[0] 直接共用一根网，
     // 那根网的 pins 是空的（靠端口 nets 相同表达连通），只看 pins 会误报。
     for (const port of design.ports) {
       if (port.dir !== 'in') continue;
-      for (const netId of port.nets) if (netId) drivenNets.add(netId);
+      for (const netId of port.nets) {
+        if (!netId) continue;
+        drivenNets.add(netId);
+        hardDrivenNets.add(netId);
+      }
     }
-    for (const net of design.nets) if (net.pins.some(isDriver)) drivenNets.add(net.id);
+    for (const net of design.nets) {
+      if (net.pins.some(isDriver)) drivenNets.add(net.id);
+      if (net.pins.some((pin) => isDriver(pin) && !isModuleOut(pin))) hardDrivenNets.add(net.id);
+    }
+    // 扁平端口按名字索引：拿到输出端口的终态电平（判断「模块输出脚在、但里面没驱动」）
+    const flatByPort = new Map(net.ports.map((p) => [p.name, p]));
     for (const port of design.ports) {
       if (port.dir !== 'out') continue;
       port.nets.forEach((netId, bit) => {
-        if (!netId || drivenNets.has(netId)) return;
         const label = port.width > 1 ? `${port.name}[${bit}]` : port.name;
+        const flat = flatByPort.get(label);
+        const floating = flat ? sim.signalOf(flat.node) === SIG_Z : false;
+        // 结构上有驱动源：只有「驱动源全是模块输出脚、且终态确实是 Z」才算模块内部是死的
+        const driven = netId !== undefined && netId !== '' && drivenNets.has(netId);
+        if (driven && (hardDrivenNets.has(netId as string) || !floating)) return;
         snapshot.simDiagnostics.push({
           kind: 'undriven-port',
           severity: 'warning',
-          message: `输出端口 ${label} 没有被任何东西驱动：检查导线是否真的接在 ${label} 上（接到元件的输入脚、或模块的输入脚都不算）`,
+          message: driven
+            ? `输出端口 ${label} 是悬空的：驱动它的模块内部没有给出电平（模块可能是坏的，双击它展开看看内部电路）`
+            : `输出端口 ${label} 没有被任何东西驱动：检查导线是否真的接在 ${label} 上（接到元件的输入脚、或模块的输入脚都不算）`,
         });
       });
     }
