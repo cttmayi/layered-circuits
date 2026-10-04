@@ -12,7 +12,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import type { StudioRequestInput, StudioResponse } from '../src/sim/protocol';
-import { seedTeachCleared } from './helpers';
+import { enableDebugUrl, seedTeachCleared } from './helpers';
 
 const requests = vi.hoisted(() => [] as Array<{ req: StudioRequestInput; resp: StudioResponse }>);
 vi.mock('../src/sim/handle', async (importOriginal) => {
@@ -30,6 +30,7 @@ vi.mock('../src/sim/handle', async (importOriginal) => {
 const level = ALL_LEVELS.find((l) => l.id === 's2-btn-latch')!;
 
 function enterBtnLatch(): void {
+  enableDebugUrl(); // 「调试模式」按钮只在 ?debug=1 时出现（挂载时判定，必须在 render 前）
   localStorage.clear();
   seedTeachCleared();
   const key = 'lc-studio-progress-v1';
@@ -62,8 +63,7 @@ describe('一键出答案 → 返回地图 → 重进', () => {
   it('重进后模块引脚模板仍在库中，仿真正常', { timeout: 40_000 }, async () => {
     enterBtnLatch();
     await waitFor(() => expect(screen.getByText('调试模式')).toBeTruthy(), { timeout: 4000 });
-    fireEvent.click(screen.getByText('调试模式'));
-    fireEvent.click(screen.getByText('一键出答案'));
+    fireEvent.click(screen.getByText('一键出答案')); // ?debug=1：进入即已开
     await new Promise((r) => setTimeout(r, 300));
     const modal = screen.queryByText('逻辑门版（简洁）');
     if (modal) fireEvent.click(modal);

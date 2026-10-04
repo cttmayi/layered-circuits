@@ -6,19 +6,39 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
-import { goToLevel, renderApp, startJob, teachCleared } from './helpers';
+import {
+  disableDebugUrl,
+  enableDebugUrl,
+  goToLevel,
+  renderApp,
+  startJob,
+  teachCleared,
+} from './helpers';
 
 describe('调试模式 · 一键出答案', () => {
   beforeEach(() => {
     localStorage.clear();
+    disableDebugUrl();
   });
 
-  it('默认隐藏；打开调试模式后出现「一键出答案」，点击搭出参考解', async () => {
+  it('不带 ?debug=1：连「调试模式」按钮都不显示（存档里开着也不显示）', () => {
+    localStorage.setItem('lc-ui-debug', '1'); // 上次开着调试：残留存档不得让按钮冒出来
     renderApp();
     startJob('非门');
+    expect(screen.queryByText('调试模式')).toBeNull();
     expect(screen.queryByText('一键出答案')).toBeNull();
+  });
 
-    fireEvent.click(screen.getByText('调试模式'));
+  it('带 ?debug=1：按钮出现且进入即开着；可手动关掉再打开，然后一键出答案', async () => {
+    enableDebugUrl(); // 调试入口：URL 带 ?debug=1
+    renderApp();
+    startJob('非门');
+    expect(screen.getByText('调试模式')).toBeTruthy();
+    expect(screen.getByText('一键出答案')).toBeTruthy(); // ?debug=1 = 进入即开
+
+    fireEvent.click(screen.getByText('调试模式')); // 手动关
+    expect(screen.queryByText('一键出答案')).toBeNull();
+    fireEvent.click(screen.getByText('调试模式')); // 再开
     expect(screen.getByText('一键出答案')).toBeTruthy();
 
     fireEvent.click(screen.getByText('一键出答案'));
@@ -28,9 +48,9 @@ describe('调试模式 · 一键出答案', () => {
   });
 
   it('一键出答案后交付验收：功能通过、最优成本满分', async () => {
+    enableDebugUrl(); // ?debug=1：按钮出现且进入即开着
     renderApp();
     startJob('非门');
-    fireEvent.click(screen.getByText('调试模式'));
     fireEvent.click(screen.getByText('一键出答案'));
     // 自动仿真跑完（材料费出现「三极管」行）后，仿真诊断里不得有「基极悬空」误报
     await waitFor(() => expect(screen.getByText('三极管')).toBeTruthy());
@@ -50,18 +70,20 @@ describe('调试模式 · 一键出答案', () => {
     expect(screen.queryByText(/基极悬空|未连接任何驱动/)).toBeNull();
   });
 
-  it('调试模式开关持久化：刷新后仍开着', () => {
+  it('可见性只认 URL：手动关掉后刷新（仍带 ?debug=1）又开着', () => {
+    enableDebugUrl();
     const first = renderApp();
     startJob('非门');
-    fireEvent.click(screen.getByText('调试模式'));
-    expect(screen.getByText('一键出答案')).toBeTruthy();
+    fireEvent.click(screen.getByText('调试模式')); // 手动关掉
+    expect(screen.queryByText('一键出答案')).toBeNull();
     first.unmount();
-    render(<App />); // 模拟刷新：调试开关与存档保留
+    render(<App />); // 模拟刷新（URL 上还带着 ?debug=1）
     goToLevel('非门');
     expect(screen.getByText('一键出答案')).toBeTruthy();
   });
 
   it('一键出答案：半加器直接出逻辑门版（元件版无优势不弹窗），验收满分', async () => {
+    enableDebugUrl();
     // 半加器是第三章关卡：预置前一关（s2-dff）通关，解锁第三章
     localStorage.setItem(
       'lc-studio-progress-v1',
@@ -76,7 +98,6 @@ describe('调试模式 · 一键出答案', () => {
     );
     render(<App />);
     startJob('半加器');
-    fireEvent.click(screen.getByText('调试模式'));
     fireEvent.click(screen.getByText('一键出答案'));
     // 半加器：门版成本 64 < 元件版 84，元件版无优势 → 直接出门版，不弹窗
     expect(screen.getByText(/逻辑门版已搭好/)).toBeTruthy();
@@ -96,15 +117,16 @@ describe('调试模式 · 一键出答案', () => {
   });
 
   it('无门版的关（非门）：一键出答案直接出元件版，不弹窗', () => {
+    enableDebugUrl();
     renderApp();
     startJob('非门');
-    fireEvent.click(screen.getByText('调试模式'));
     fireEvent.click(screen.getByText('一键出答案'));
     expect(screen.getByText(/参考解已搭好/)).toBeTruthy();
     expect(screen.queryByRole('dialog', { name: '一键出答案' })).toBeNull();
   });
 
   it('计算器（新关）：一键出答案直接出门版（元件版无优势，不弹窗）', async () => {
+    enableDebugUrl();
     // 预置第三章前半关已通关，解锁计算器（链：…→ s3-bin2bcd → s3-or-chain → s3-encoder → s3-digit-entry → s3-calc）
     const cleared = {
       ...teachCleared(),
@@ -126,7 +148,6 @@ describe('调试模式 · 一键出答案', () => {
     );
     render(<App />);
     startJob('简易计算器');
-    fireEvent.click(screen.getByText('调试模式'));
     fireEvent.click(screen.getByText('一键出答案'));
     // 优先逻辑门版（元件版无成本/延迟优势）→ 直接出门版，不弹窗
     expect(screen.getByText(/逻辑门版已搭好/)).toBeTruthy();

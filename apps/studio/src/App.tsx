@@ -169,6 +169,11 @@ export function App(): React.JSX.Element {
   /** 左右侧面板整体收起/展开（体验：布线时把侧栏收起来腾画布），选择记忆在 localStorage */
   const [leftOpen, setLeftOpen] = usePersistentBool('lc-ui-left-open', true);
   const [rightOpen, setRightOpen] = usePersistentBool('lc-ui-right-open', true);
+  /** 调试开关是否可见：只有 URL 带 ?debug=1 才显示「调试模式」按钮 —— 正式玩法里
+   *  连这个按钮都不该出现（存档里残留 lc-ui-debug=true 也不行）。挂载时判一次即可。 */
+  const [debugFlag] = useState(
+    () => new URLSearchParams(window.location.search).get('debug') === '1',
+  );
   /** 调试模式：解锁「一键出答案」等开发辅助（不参与正式玩法） */
   const [debugMode, setDebugMode] = usePersistentBool('lc-ui-debug', false);
   /** 一键出答案的版本选择（仅当元件版有造价/延迟优势时才弹；单一版本直接执行） */
@@ -177,8 +182,8 @@ export function App(): React.JSX.Element {
   >(null);
   // URL 带 ?debug=1：进入即强制开调试模式并记住（重启/刷新后保持），普通玩法不受影响
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('debug') === '1') setDebugMode(true);
-  }, [setDebugMode]);
+    if (debugFlag) setDebugMode(true);
+  }, [debugFlag, setDebugMode]);
   /** 低频面板弹窗：组件库 / 波形（点击启动，不用时不留侧栏） */
   const [panelOpen, setPanelOpen] = useState<null | 'library' | 'wave'>(null);
   const [showTiming, setShowTiming] = useState(false);
@@ -1220,42 +1225,44 @@ export function App(): React.JSX.Element {
             ← 主菜单
           </button>
         )}
-        <div className="group debug-group">
-          <button
-            type="button"
-            className={debugMode ? 'active' : ''}
-            onClick={() => setDebugMode(!debugMode)}
-            title="调试模式：解锁「一键出答案」等开发辅助，不影响正常玩法"
-          >
-            调试模式
-          </button>
-          {debugMode && (
-            <>
-              <button
-                type="button"
-                onClick={copyCircuit}
-                title="复制当前电路 JSON（贴给我检查布线）"
-              >
-                复制电路
-              </button>
-              <button
-                type="button"
-                className="primary"
-                onClick={solveOneKey}
-                title="把本关参考解直接搭到画布上（调试用）。优先逻辑门版；元件版仅在造价/延迟占优时才会弹窗让你选"
-              >
-                一键出答案
-              </button>
-              <button
-                type="button"
-                onClick={recompute}
-                title="丢弃上次仿真终态，从头重新计算全部门逻辑（组合电路每次本来就会全量算）"
-              >
-                重新计算
-              </button>
-            </>
-          )}
-        </div>
+        {debugFlag && (
+          <div className="group debug-group">
+            <button
+              type="button"
+              className={debugMode ? 'active' : ''}
+              onClick={() => setDebugMode(!debugMode)}
+              title="调试模式：解锁「一键出答案」等开发辅助，不影响正常玩法"
+            >
+              调试模式
+            </button>
+            {debugMode && (
+              <>
+                <button
+                  type="button"
+                  onClick={copyCircuit}
+                  title="复制当前电路 JSON（贴给我检查布线）"
+                >
+                  复制电路
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={solveOneKey}
+                  title="把本关参考解直接搭到画布上（调试用）。优先逻辑门版；元件版仅在造价/延迟占优时才会弹窗让你选"
+                >
+                  一键出答案
+                </button>
+                <button
+                  type="button"
+                  onClick={recompute}
+                  title="丢弃上次仿真终态，从头重新计算全部门逻辑（组合电路每次本来就会全量算）"
+                >
+                  重新计算
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {gameMode !== 'free' && (
           <div className="group">
             <button

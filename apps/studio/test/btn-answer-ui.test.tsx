@@ -15,7 +15,7 @@ import { App } from '../src/App';
 import { fromDesign, toDesign } from '../src/editor/model';
 import { docForLevel } from '../src/level/progress';
 import type { StudioRequestInput, StudioResponse } from '../src/sim/protocol';
-import { seedTeachCleared } from './helpers';
+import { enableDebugUrl, seedTeachCleared } from './helpers';
 
 /** 记录每个 simulate 请求与其（同步）响应 */
 const responses = vi.hoisted(() => [] as Array<{ req: StudioRequestInput; resp: StudioResponse }>);
@@ -77,6 +77,7 @@ function releaseWorld(): void {
 
 /** 进按钮锁存关：清存档 → 教学关通关 → 前置关全通关 → render → 点关 */
 function enterBtnLatch(): void {
+  enableDebugUrl(); // 「调试模式」按钮只在 ?debug=1 时出现（挂载时判定，必须在 render 前）
   localStorage.clear();
   seedTeachCleared();
   const key = 'lc-studio-progress-v1';
@@ -104,8 +105,7 @@ describe('一键出答案后点按钮（端到端）', () => {
   it('非门输出随按压 1→0、自动弹回 0→1，锁存器全程正确', { timeout: 40_000 }, async () => {
     enterBtnLatch();
     await waitFor(() => expect(screen.getByText('调试模式')).toBeTruthy(), { timeout: 4000 });
-    fireEvent.click(screen.getByText('调试模式'));
-    fireEvent.click(screen.getByText('一键出答案'));
+    fireEvent.click(screen.getByText('一键出答案')); // ?debug=1：进入即已开
     await new Promise((r) => setTimeout(r, 300));
     const modal = screen.queryByText('逻辑门版（简洁）');
     if (modal) fireEvent.click(modal);

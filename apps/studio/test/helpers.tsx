@@ -35,6 +35,19 @@ export function seedTeachCleared(): void {
   localStorage.setItem(key, JSON.stringify({ ...prev, cleared, started }));
 }
 
+/**
+ * 「调试模式」按钮只在 URL 带 ?debug=1 时出现（正式玩法里连按钮都不该有）。
+ * 需要点「一键出答案」的测试要在 render 之前调用它 —— 开关在挂载时判定。
+ */
+export function enableDebugUrl(): void {
+  window.history.replaceState({}, '', '/?debug=1');
+}
+
+/** 清掉 URL 上的调试参数（同一文件的多个用例互不影响） */
+export function disableDebugUrl(): void {
+  window.history.replaceState({}, '', '/');
+}
+
 /** 渲染整个 App：先清空存档、预置教学关已通关（正式关卡才在地图上可点） */
 export function renderApp(): RenderResult {
   localStorage.clear();
