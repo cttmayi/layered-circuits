@@ -86,6 +86,7 @@ import { SettlementPanel } from './panels/SettlementPanel';
 import { TeachPanel } from './panels/TeachPanel';
 import { WaveformPanel } from './panels/WaveformPanel';
 import { WorldMap } from './panels/WorldMap';
+import { probeModule } from './sim/probe';
 import type { SimSnapshot, StudioResponse } from './sim/protocol';
 import { createRunner } from './sim/runner';
 import { shouldReuseSimState } from './sim/sim-policy';
@@ -771,6 +772,18 @@ export function App(): React.JSX.Element {
       return;
     }
     const info = response.wrapped;
+    // 封装前先自测一遍：输出不随输入变，多半是接错了（上拉接到地、输入没接进去…）——
+    // 这种模块放回画布后编译合法、界面上毫无异常，只有"结果不对"。不硬拦（常量输出是合法的），
+    // 但让玩家明确知道自己在封什么。
+    const probe = probeModule(info.template as ModuleTemplate, doc.library);
+    if (probe.stuck.length > 0) {
+      const sample = probe.rows[0]?.outputs[probe.stuck[0] as string] ?? '';
+      const ok = window.confirm(
+        `这个模块的输出不随输入变化：${probe.stuck.join('、')} 一直是 ${sample}。\n` +
+          '它可能不是你想的那个功能（检查上拉是不是接到了地、输入有没有真的接到东西上）。\n\n还要封装吗？',
+      );
+      if (!ok) return;
+    }
     const stored = storeModule(
       progress.library,
       {
