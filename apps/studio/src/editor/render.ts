@@ -324,6 +324,36 @@ function segHitsPins(
  * 间距 < gap、且投影区间有超过 1 单位的长度的交集（仅端点相接不算重叠 —— 那是合法汇合点）。
  * 交叉（垂直相交一点）不算重叠，永远允许。
  */
+function segsOverlapLen(
+  p: { x: number; y: number },
+  q: { x: number; y: number },
+  r: { x: number; y: number },
+  s: { x: number; y: number },
+  gap: number,
+): number {
+  const ph = p.y === q.y;
+  const qh = r.y === s.y;
+  if (ph && qh) {
+    if (Math.abs(p.y - r.y) > gap) return 0;
+    const a0 = Math.min(p.x, q.x);
+    const a1 = Math.max(p.x, q.x);
+    const b0 = Math.min(r.x, s.x);
+    const b1 = Math.max(r.x, s.x);
+    return Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+  }
+  const pv = p.x === q.x;
+  const qv = r.x === s.x;
+  if (pv && qv) {
+    if (Math.abs(p.x - r.x) > gap) return 0;
+    const a0 = Math.min(p.y, q.y);
+    const a1 = Math.max(p.y, q.y);
+    const b0 = Math.min(r.y, s.y);
+    const b1 = Math.max(r.y, s.y);
+    return Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+  }
+  return 0;
+}
+
 function segsOverlap(
   p: { x: number; y: number },
   q: { x: number; y: number },
@@ -331,27 +361,7 @@ function segsOverlap(
   s: { x: number; y: number },
   gap: number,
 ): boolean {
-  const ph = p.y === q.y;
-  const qh = r.y === s.y;
-  if (ph && qh) {
-    if (Math.abs(p.y - r.y) > gap) return false;
-    const a0 = Math.min(p.x, q.x);
-    const a1 = Math.max(p.x, q.x);
-    const b0 = Math.min(r.x, s.x);
-    const b1 = Math.max(r.x, s.x);
-    return Math.min(a1, b1) - Math.max(a0, b0) > 1;
-  }
-  const pv = p.x === q.x;
-  const qv = r.x === s.x;
-  if (pv && qv) {
-    if (Math.abs(p.x - r.x) > gap) return false;
-    const a0 = Math.min(p.y, q.y);
-    const a1 = Math.max(p.y, q.y);
-    const b0 = Math.min(r.y, s.y);
-    const b1 = Math.max(r.y, s.y);
-    return Math.min(a1, b1) - Math.max(a0, b0) > 1;
-  }
-  return false;
+  return segsOverlapLen(p, q, r, s, gap) > 1;
 }
 
 /** 引脚邻域半径（世界单位）：走线不得压过未连接的引脚 */
@@ -427,7 +437,10 @@ function routeViolations(
       if (segsOverlap(p, q, r, s, 6)) overlaps++;
     }
   }
-  return rects * 1000 + pins * 100 + overlaps * 10 + len / 1000;
+  // 「穿盒」是硬违规：只要有一根线进了模块内部，评分就必须无条件输给任何不穿盒的
+  // 候选（哪怕那条候选与别的线贴得很紧）。否则密集区会为了少几段重叠而选择穿盒。
+  if (rects > 0) return 1_000_000 + rects * 1000 + pins * 100;
+  return pins * 100 + overlaps * 10 + len / 1000;
 }
 
 /**
@@ -450,6 +463,308 @@ function gapMids(lo: number, hi: number, ranges: Array<[number, number]>): numbe
   }
   if (cursor < hi) mids.push((cursor + hi) / 2);
   return mids;
+}
+
+/**
+ * 一维「车道」扫描：与 gapMids 同样是挖出空段，但每个空段按 pitch 铺多条车道。
+ * 通道网格用这个 —— 只取中点的话每条通道只能走一根线（平行贴近会被 routeClear
+ * 淘汰），8 位总线一下就把所有通道占满。
+ */
+function gapLanes(
+  lo: number,
+  hi: number,
+  ranges: Array<[number, number]>,
+  maxPer = 6,
+  pitch = 11,
+  edge = 9,
+): number[] {
+  const merged: Array<[number, number]> = [];
+  for (const r of [...ranges].sort((p, q) => p[0] - q[0])) {
+    const last = merged[merged.length - 1];
+    if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+    else merged.push([r[0], r[1]]);
+  }
+  const lanes: number[] = [];
+  let cursor = lo;
+  const pushGap = (g0: number, g1: number): void => {
+    const p0 = Math.max(lo, g0);
+    const p1 = Math.min(hi, g1);
+    if (p1 - p0 < edge * 2 + 2) return;
+    const usable = p1 - p0 - edge * 2;
+    const n = Math.min(maxPer, Math.max(1, Math.floor(usable / pitch) + 1));
+    for (let i = 0; i < n; i += 1) {
+      lanes.push(n === 1 ? (p0 + p1) / 2 : p0 + edge + (usable * i) / (n - 1));
+    }
+  };
+  for (const [r0, r1] of merged) {
+    if (r1 < lo || r0 > hi) continue;
+    if (r0 > cursor) pushGap(cursor, r0);
+    cursor = Math.max(cursor, r1);
+  }
+  if (cursor < hi) pushGap(cursor, hi);
+  return lanes;
+}
+
+/** 障碍是否与 a→b 的走廊重叠（只算真正会挡路的障碍） */
+function inCorridorX(o: RouteObstacle, a: { x: number }, b: { x: number }): boolean {
+  return o.x < Math.max(a.x, b.x) && o.x + o.w > Math.min(a.x, b.x);
+}
+function inCorridorY(o: RouteObstacle, a: { y: number }, b: { y: number }): boolean {
+  return o.y < Math.max(a.y, b.y) && o.y + o.h > Math.min(a.y, b.y);
+}
+
+/**
+ * 通道网格布线：把「元件之间的空隙」（空列 × 空带，每条空隙可铺多条车道）连成
+ * 网格，用 Dijkstra 找一条任意拐点数、**绝不穿元件盒、不压引脚**的折线。
+ * 固定形状候选（直连 / Z 形 / 5 段绕行）全被拒时兜底——大电路的长总线常需要
+ * 3 个以上拐点才能绕过一整列模块。
+ * 其他导线在这里是「软避让」：贴近要按长度罚分，但不直接否决。理由很直接——
+ * 与别的线挤在一起只是难看，穿进模块内部是错的。
+ */
+function channelRoute(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  obstacles: RouteObstacle[],
+  skipA: string,
+  skipB: string,
+  pinRadius: number,
+  /** 端点引脚方位：约束「第一段朝引脚外侧走、最后一段从外侧接近」。
+   *  放在搜索内部而不是事后否决 —— 否则搜到的好路线会因为方向不合被整条丢掉，
+   *  只能退回穿盒的坏路线（s3-calc 的 mod1.code→mod6.d）。 */
+  sideA: 'l' | 'r' | 'u' | 'd' | null = null,
+  sideB: 'l' | 'r' | 'u' | 'd' | null = null,
+  /** 其他导线：允许并行贴近，但按贴近长度计入代价 —— 通道被占满时优先走空闲车道，
+   *  只在实在没路时才与别的线挤在一起（而不是无视它们，也不是为了躲线去穿模块）。 */
+  softAvoid: Array<[{ x: number; y: number }, { x: number; y: number }]> = [],
+): WireRoute | null {
+  const SOFT_PENALTY = 1000;
+  const blockers = obstacles.filter((o) => o.id !== skipA && o.id !== skipB);
+  if (!blockers.length) return null;
+  const MARGIN = 300;
+  // 规模封顶用「均匀抽稀」而不是「取最近的」：绕开整片模块的高速通道（网格下方的
+  // 空带）离走廊中点很远，取最近会把它抽掉。
+  const spread = (arr: number[], keep: number): number[] => {
+    if (arr.length <= keep) return arr;
+    const step = Math.ceil(arr.length / keep);
+    return arr.filter((_, i) => i % step === 0);
+  };
+  const xs = [
+    ...new Set([
+      a.x,
+      b.x,
+      ...spread(
+        gapLanes(
+          Math.min(a.x, b.x) - MARGIN,
+          Math.max(a.x, b.x) + MARGIN,
+          blockers.filter((o) => inCorridorY(o, a, b)).map((o) => [o.x, o.x + o.w]),
+        ),
+        24,
+      ),
+    ]),
+  ].sort((p, q) => p - q);
+  const ys = [
+    ...new Set([
+      a.y,
+      b.y,
+      ...spread(
+        gapLanes(
+          Math.min(a.y, b.y) - MARGIN,
+          Math.max(a.y, b.y) + MARGIN,
+          blockers.filter((o) => inCorridorX(o, a, b)).map((o) => [o.y, o.y + o.h]),
+        ),
+        24,
+      ),
+    ]),
+  ].sort((p, q) => p - q);
+  const xi = xs.indexOf(a.x);
+  const yi = ys.indexOf(a.y);
+  const goalI = xs.indexOf(b.x);
+  const goalJ = ys.indexOf(b.y);
+  if (xi < 0 || yi < 0 || goalI < 0 || goalJ < 0) return null;
+  const nodeAt = (i: number, j: number): { x: number; y: number } => ({ x: xs[i]!, y: ys[j]! });
+  const start = yi * xs.length + xi;
+  const goal = goalJ * xs.length + goalI;
+  // 局部裁剪：路线必然落在网格范围内，范围之外的障碍/引脚/已布线段不可能被碰到。
+  // 不做这层裁剪的话每次搜索都要扫全画布（大电路上万个引脚），155 根线的计算器
+  // 会从 100ms 涨到 1.2s。
+  const bx0 = xs[0]! - 16;
+  const bx1 = xs[xs.length - 1]! + 16;
+  const by0 = ys[0]! - 16;
+  const by1 = ys[ys.length - 1]! + 16;
+  const inside = (x: number, y: number): boolean => x >= bx0 && x <= bx1 && y >= by0 && y <= by1;
+  const nearBox = (p: { x: number; y: number }, q: { x: number; y: number }): boolean =>
+    Math.min(p.x, q.x) <= bx1 &&
+    Math.max(p.x, q.x) >= bx0 &&
+    Math.min(p.y, q.y) <= by1 &&
+    Math.max(p.y, q.y) >= by0;
+  const local: RouteObstacle[] = [];
+  for (const ob of obstacles) {
+    if (ob.id !== skipA && ob.id !== skipB) {
+      if (ob.x + ob.w < bx0 || ob.x > bx1 || ob.y + ob.h < by0 || ob.y > by1) continue;
+    }
+    local.push({ ...ob, pins: (ob.pins ?? []).filter((pt) => inside(pt.x, pt.y)) });
+  }
+  const soft = softAvoid.filter(([p, q]) => nearBox(p, q));
+  // 每条网格线只可能被「横跨这条线」的矩形和「离这条线 < 引脚半径」的引脚挡住，
+  // 于是先按线把这些候选筛出来（每条约 300 个检查 × 48 条线），每条边就只需查
+  // 少数几个对象。不筛的话每次搜索要在上千条边上各扫全部障碍/引脚（实测占大头）。
+  const lineRelevant = new Map<number, RouteObstacle[]>();
+  const buildLine = (vertical: boolean, idx: number, coord: number): void => {
+    const out: RouteObstacle[] = [];
+    for (const ob of local) {
+      const spans = vertical
+        ? ob.x <= coord && coord <= ob.x + ob.w
+        : ob.y <= coord && coord <= ob.y + ob.h;
+      const pins = (ob.pins ?? []).filter((pt) =>
+        vertical ? Math.abs(pt.x - coord) <= pinRadius : Math.abs(pt.y - coord) <= pinRadius,
+      );
+      if (!spans && !pins.length) continue;
+      // 不横跨该线的矩形只需保留引脚（盒子本身碰不到这条线上的线段）
+      out.push(spans ? { ...ob, pins } : { id: ob.id, x: ob.x, y: ob.y, w: ob.w, h: ob.h, pins });
+    }
+    lineRelevant.set(vertical ? idx : xs.length + idx, out);
+  };
+  for (let i = 0; i < xs.length; i += 1) buildLine(true, i, xs[i]!);
+  for (let j = 0; j < ys.length; j += 1) buildLine(false, j, ys[j]!);
+  // 按网格线预索引软避让线段：竖直边只可能被「x 贴近这条网格线」的竖直线段并行贴近，
+  // 水平边同理（垂直相交是交叉，不算贴近）。预索引后每条边只查少数几根线，而不是
+  // 全画布上百根——否则代价循环占掉一半耗时（100+ 根线时每次搜索上千条边）。
+  const nearVert = new Map<number, typeof soft>();
+  const nearHorz = new Map<number, typeof soft>();
+  for (let i = 0; i < xs.length; i += 1) {
+    const lineX = xs[i]!;
+    nearVert.set(
+      i,
+      soft.filter(([p, q]) => p.x === q.x && Math.abs(p.x - lineX) <= 6),
+    );
+  }
+  for (let j = 0; j < ys.length; j += 1) {
+    const lineY = ys[j]!;
+    nearHorz.set(
+      j,
+      soft.filter(([p, q]) => p.y === q.y && Math.abs(p.y - lineY) <= 6),
+    );
+  }
+  /** 这条边是否「不穿盒、不压引脚」（与其他导线的贴近只按代价罚分，不直接否决） */
+  const clear = (p: { x: number; y: number }, q: { x: number; y: number }, key: number): boolean =>
+    routeClear([[p, q]], lineRelevant.get(key) ?? [], skipA, skipB, [], pinRadius, [a, b]);
+  const dist = new Map<number, number>();
+  const from = new Map<number, number>();
+  dist.set(start, 0);
+  // 二叉堆取最小（网格最多 24×24 个节点，线性扫描找最小是 O(n²)，实测占掉大半耗时）
+  const heap: number[] = [start];
+  const better = (x: number, y: number): boolean =>
+    (dist.get(x) ?? Infinity) < (dist.get(y) ?? Infinity);
+  const push = (id: number): void => {
+    heap.push(id);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const par = (i - 1) >> 1;
+      if (!better(heap[i]!, heap[par]!)) break;
+      const t = heap[par]!;
+      heap[par] = heap[i]!;
+      heap[i] = t;
+      i = par;
+    }
+  };
+  const pop = (): number => {
+    const top = heap[0]!;
+    const last = heap.pop()!;
+    if (heap.length) {
+      heap[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1;
+        const r = l + 1;
+        let m = i;
+        if (l < heap.length && better(heap[l]!, heap[m]!)) m = l;
+        if (r < heap.length && better(heap[r]!, heap[m]!)) m = r;
+        if (m === i) break;
+        const t = heap[m]!;
+        heap[m] = heap[i]!;
+        heap[i] = t;
+        i = m;
+      }
+    }
+    return top;
+  };
+  const settled = new Set<number>();
+  const neighbors = (id: number): number[] => {
+    const i = id % xs.length;
+    const j = Math.floor(id / xs.length);
+    const out: number[] = [];
+    if (i > 0) out.push(id - 1);
+    if (i < xs.length - 1) out.push(id + 1);
+    if (j > 0) out.push(id - xs.length);
+    if (j < ys.length - 1) out.push(id + xs.length);
+    return out;
+  };
+  while (heap.length) {
+    const cur = pop();
+    const bestD = dist.get(cur) ?? Infinity;
+    if (settled.has(cur)) continue;
+    settled.add(cur);
+    if (cur === goal) break;
+    for (const nb of neighbors(cur)) {
+      const ci = cur % xs.length;
+      const cj = Math.floor(cur / xs.length);
+      const ni = nb % xs.length;
+      const nj = Math.floor(nb / xs.length);
+      const p = nodeAt(ci, cj);
+      const q = nodeAt(ni, nj);
+      if (cur === start && sideA && !outwardTurn(q, p, sideA)) continue;
+      if (nb === goal && sideB && !outwardTurn(p, q, sideB)) continue;
+      // 软避让的车道允许「贴近但完全重叠」也走（此时 clear 仍会用 gap 拦下），
+      // 所以软避让线段从硬避让里排除
+      if (!clear(p, q, ni === ci ? ci : xs.length + cj)) continue;
+      let step = Math.abs(p.x - q.x) + Math.abs(p.y - q.y);
+      if (soft.length) {
+        // 竖直边只在「x 贴近本网格线」的线段里找并行贴近，水平边同理
+        const list = (ni === ci ? nearVert.get(ci) : nearHorz.get(cj)) ?? [];
+        let close = 0;
+        for (const [r, s] of list) close += segsOverlapLen(p, q, r, s, 6);
+        step += close * SOFT_PENALTY;
+      }
+      const nd = bestD + step;
+      if (nd < (dist.get(nb) ?? Infinity)) {
+        dist.set(nb, nd);
+        from.set(nb, cur);
+        push(nb);
+      }
+    }
+  }
+  if (!dist.has(goal)) return null;
+  const path: Array<{ x: number; y: number }> = [];
+  for (let id: number | undefined = goal; id !== undefined; id = from.get(id)) {
+    path.push(nodeAt(id % xs.length, Math.floor(id / xs.length)));
+    if (id === start) break;
+  }
+  path.reverse();
+  // 简化：丢掉重复点、合并共线点（网格路径有很多冗余拐点）
+  const dedup: Array<{ x: number; y: number }> = [];
+  for (const p of [a, ...path, b]) {
+    const last = dedup[dedup.length - 1];
+    if (last && last.x === p.x && last.y === p.y) continue;
+    dedup.push(p);
+  }
+  const out: Array<{ x: number; y: number }> = [];
+  for (const p of dedup) {
+    const last = out[out.length - 1];
+    const prev = out[out.length - 2];
+    if (
+      last &&
+      prev &&
+      ((prev.x === last.x && last.x === p.x) || (prev.y === last.y && last.y === p.y))
+    ) {
+      out[out.length - 1] = p;
+    } else {
+      out.push(p);
+    }
+  }
+  if (out.length < 2) return null;
+  const segs: WireRoute = [];
+  for (let i = 0; i + 1 < out.length; i++) segs.push([out[i]!, out[i + 1]!]);
+  return segs.length ? segs : null;
 }
 
 /**
@@ -608,7 +923,8 @@ export function routeSegments(
     if (routeClear(cand, obstacles, skipA, skipB, avoid, PIN_RADIUS, [a, b])) return cand;
   }
   // 单折点全被拒 → 多折点绕行（空带/空列扫描）。同样过方向约束与避障检查。
-  for (const cand of detourCandidates(a, b, obstacles, skipA, skipB)) {
+  const detours = detourCandidates(a, b, obstacles, skipA, skipB);
+  for (const cand of detours) {
     const sideA = pinSide(a, boxOf(skipA));
     const sideB = pinSide(b, boxOf(skipB));
     if (sideA && cand[0] && !outwardTurn(cand[0][1], cand[0][0], sideA)) continue;
@@ -620,11 +936,26 @@ export function routeSegments(
       continue;
     if (routeClear(cand, obstacles, skipA, skipB, avoid, PIN_RADIUS, [a, b])) return cand;
   }
+  const sideA = pinSide(a, boxOf(skipA));
+  const sideB = pinSide(b, boxOf(skipB));
+  // 走到这里说明固定形状候选没有一个「全清」的。用通道网格（任意拐点数）再搜一条：
+  // 它同时干两件事 —— ① 硬规则：绝不穿模块内部；② 借软避让代价挑空闲通道把导线散开。
+  // 硬避让（其他导线）在这里降级成「按贴近长度罚分」的软约束：挤在一起只是难看，
+  // 穿进模块里面是错的。
+  {
+    const grid = channelRoute(a, b, obstacles, skipA, skipB, PIN_RADIUS, sideA, sideB, avoid);
+    const head = grid?.[0];
+    const tail = grid?.[grid.length - 1];
+    const okA = !sideA || !head || outwardTurn(head[1], head[0], sideA);
+    const okB = !sideB || !tail || outwardTurn(tail[0], tail[1], sideB);
+    if (grid && okA && okB) return grid;
+  }
   // 兜底：没有候选全清时，挑「坏」得最少的（优先不穿元件、不压引脚、不贴线），
   // 而不是无脑取第一条直连——密集区也不会横穿引脚/元件。
-  let best = candidates[0] ?? [[a, b]];
+  const pool = candidates.length ? [...candidates, ...detours] : detours;
+  let best = pool[0] ?? [[a, b]];
   let bestScore = Infinity;
-  for (const cand of candidates) {
+  for (const cand of pool) {
     const score = routeViolations(cand, obstacles, skipA, skipB, avoid, PIN_RADIUS, [a, b]);
     if (score < bestScore) {
       bestScore = score;

@@ -201,11 +201,9 @@ describe('门版端口防遮挡', () => {
 
 describe('一键答案走线整洁（不穿盒子）', () => {
   it('门版答案的导线不穿过非端点元件盒子', () => {
-    // s3-calc（计算器，29 个模块 / 8 列 × 8 行）里 mod1.code→mod6.d 是跨整幅画布的
-    // 8 位总线，且 mod1 端 8 根线的引脚列外侧只有一条 ~60px 宽的通道（约 4 条车道）。
-    // 8 根线抢 4 条车道，最后 2 根在「躲开全部其他 90 根线」的约束下确实无正交解
-    // （已用通道网格布线的搜索验证：只在忽略其他导线时才找得到通路），只允许这 2 根。
-    const ALLOWED: Record<string, number> = { 's3-calc': 2 };
+    // 硬规则：导线绝不进模块内部。固定形状候选全被拒时，走线会用通道网格搜一条
+    // 任意拐点数的路线，并逐级放宽「不与其他导线并行贴近」——挤在一起只是难看，
+    // 穿进模块里面是错的。
     for (const level of ALL_LEVELS) {
       const teaching = teachingSolutionOf(level.id);
       if (!teaching) continue;
@@ -223,10 +221,9 @@ describe('一键答案走线整洁（不穿盒子）', () => {
           }
         }
       }
-      expect(
-        crossed.length,
-        `${level.id} 有 ${crossed.length} 处穿盒：${crossed.join(' ')}`,
-      ).toBeLessThanOrEqual(ALLOWED[level.id] ?? 0);
+      expect(crossed.length, `${level.id} 有 ${crossed.length} 处穿盒：${crossed.join(' ')}`).toBe(
+        0,
+      );
     }
   });
 

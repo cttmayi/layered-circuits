@@ -207,6 +207,28 @@ function distToPoint(
   return Math.hypot(pt.x - (p.x + t * dx), pt.y - (p.y + t * dy));
 }
 
+describe('硬规则：导线绝不进模块内部', () => {
+  it('固定形状候选全被拒时，用通道网格绕开所有元件盒', () => {
+    // 一根线被要求从左侧穿到右侧，中间一排模块把常见 Z 形拐点全堵住；返回的路线
+    // 必须一段都不碰任何非端点元件盒（通道网格搜索兜底）。
+    const wall: RouteObstacle[] = [
+      { id: 'm1', x: 100, y: -200, w: 120, h: 160, pins: [] },
+      { id: 'm2', x: 100, y: 20, w: 120, h: 160, pins: [] },
+      { id: 'm3', x: 100, y: 240, w: 120, h: 160, pins: [] },
+      { id: 'm4', x: 300, y: -200, w: 120, h: 160, pins: [] },
+      { id: 'm5', x: 300, y: 20, w: 120, h: 160, pins: [] },
+      { id: 'm6', x: 300, y: 240, w: 120, h: 160, pins: [] },
+    ];
+    const a = { x: 0, y: 60 };
+    const b = { x: 500, y: 300 };
+    const segs = routeSegments(a, b, 3, wall, 'src', 'dst');
+    expect(hitsAny(segs, wall)).toBe(false);
+    // 端点自己（不在 wall 里）不影响；路线起点/终点必须落在引脚上
+    expect(segs[0]![0]).toEqual(a);
+    expect(segs[segs.length - 1]![1]).toEqual(b);
+  });
+});
+
 describe('signalText（端口强度标注）', () => {
   it('输入端口只显示 0/1，不标强度', () => {
     // S_STRONG<<2|0 = 8（强0），S_STRONG<<2|1 = 9（强1）；弱1 = 5
