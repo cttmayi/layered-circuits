@@ -55,9 +55,9 @@ describe('关卡地图（选关界面）', () => {
     expect(canvas?.parentElement).toBe(stage);
   });
 
-  it('蛇形连续：同章相邻关卡节点水平或垂直相邻（拐角回行不脱节）', () => {
-    // 回行（奇数行）必须右对齐贴住上一行末尾——否则断行节点跑到最左，
-    // 相邻关卡被拉成横穿整幅地图的对角折线（如第 6 关连不到第 7 关）。
+  it('蛇形连续：任意相邻关卡（含跨章）节点水平或垂直相邻，不断线', () => {
+    // 全表一条蛇形：若某对相邻关卡既不同列也不同行（对角），连线会被拉成
+    // 横穿整幅地图的折线（如第 6 关连不到第 7 关、第二章末连不到第三章首）。
     const { container } = render(
       <WorldMap
         progress={emptyProgress()}
@@ -68,32 +68,22 @@ describe('关卡地图（选关界面）', () => {
       />,
     );
     const btns = [...container.querySelectorAll<HTMLButtonElement>('.map-node-btn')];
-    const posOf = new Map<string, { left: number; top: number }>();
-    ALL_LEVELS.forEach((l, i) => {
-      posOf.set(l.id, {
-        left: Number.parseFloat(btns[i]?.style.left ?? '0'),
-        top: Number.parseFloat(btns[i]?.style.top ?? '0'),
-      });
-    });
-    const byStage = new Map<number, typeof ALL_LEVELS>();
-    for (const l of ALL_LEVELS) {
-      const list = byStage.get(l.stage);
-      if (list) list.push(l);
-      else byStage.set(l.stage, [l]);
-    }
-    for (const levels of byStage.values()) {
-      for (let i = 0; i + 1 < levels.length; i++) {
-        const a = posOf.get(levels[i]!.id);
-        const b = posOf.get(levels[i + 1]!.id);
-        expect(a && b, `${levels[i]!.title} 位置缺失`).toBeTruthy();
-        if (!a || !b) continue;
-        const sameCol = Math.abs(a.left - b.left) < 0.01;
-        const sameRow = Math.abs(a.top - b.top) < 0.01;
-        expect(
-          sameCol || sameRow,
-          `同章相邻关 ${levels[i]!.title} → ${levels[i + 1]!.title} 应水平或垂直相邻，实际 ${a.left},${a.top} → ${b.left},${b.top}`,
-        ).toBe(true);
-      }
+    expect(btns).toHaveLength(ALL_LEVELS.length);
+    for (let i = 0; i + 1 < ALL_LEVELS.length; i++) {
+      const a = btns[i];
+      const b = btns[i + 1];
+      expect(a && b, `${ALL_LEVELS[i]!.id} 节点缺失`).toBeTruthy();
+      if (!a || !b) continue;
+      const ax = Number.parseFloat(a.style.left);
+      const ay = Number.parseFloat(a.style.top);
+      const bx = Number.parseFloat(b.style.left);
+      const by = Number.parseFloat(b.style.top);
+      const sameCol = Math.abs(ax - bx) < 0.01;
+      const sameRow = Math.abs(ay - by) < 0.01;
+      expect(
+        sameCol || sameRow,
+        `相邻关 ${ALL_LEVELS[i]!.title} → ${ALL_LEVELS[i + 1]!.title} 应水平或垂直相邻，实际 ${ax},${ay} → ${bx},${by}`,
+      ).toBe(true);
     }
   });
 });

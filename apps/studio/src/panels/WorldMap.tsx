@@ -1,10 +1,12 @@
 /**
- * 关卡地图（选关界面）：27 关按章节排成蛇形的「检修之路」。
+ * 关卡地图（选关界面）：27 关按章节排成一条连续蛇形的「检修之路」。
  *
  * 连线画在 SVG 里，每个关卡节点是叠在上面的 <button>（可点击、可键盘、可禁用）：
  * 状态 🔒 未解锁 / 📄 新单 / 🔧 进行中 / ★ 已通关。前一关真通关才点亮下一关；
  * 点节点进入工作台（新单弹委托，进行中/已通关直接继续）。
- * 每行最多 6 个节点；SVG 高度按总行数动态生成，超出屏幕时地图区上下滚动。
+ * 全表一条蛇形（每行最多 6 个节点），保证任意相邻关卡（含跨章）都水平或垂直
+ * 相邻 —— 不会出现横穿整幅地图的对角折线；章节标题浮动在各章首关上方。
+ * SVG 高度按总行数动态生成，超出屏幕时地图区上下滚动。
  */
 
 import { ALL_LEVELS } from '@lc/content';
@@ -26,63 +28,35 @@ const ROW_TOP = 120;
 const ROW_GAP = 140;
 const BOTTOM_PAD = 40;
 
-/** 按关卡总数算出总行数（各章行数之和） */
+/** 按关卡总数算出总行数（一条蛇形，每行最多 PER_ROW 个） */
 function totalRows(): number {
-  const byStage = new Map<number, Level[]>();
-  for (const level of ALL_LEVELS) {
-    const list = byStage.get(level.stage);
-    if (list) list.push(level);
-    else byStage.set(level.stage, [level]);
-  }
-  let rows = 0;
-  for (const levels of byStage.values()) rows += Math.ceil(levels.length / PER_ROW);
-  return rows;
+  return Math.ceil(ALL_LEVELS.length / PER_ROW);
 }
 
-/** 每章起始行号（stage → 该章第一行的行号） */
-function stageStartRow(): Map<number, number> {
-  const byStage = new Map<number, Level[]>();
-  for (const level of ALL_LEVELS) {
-    const list = byStage.get(level.stage);
-    if (list) list.push(level);
-    else byStage.set(level.stage, [level]);
-  }
-  const map = new Map<number, number>();
-  let row = 0;
-  for (const [stage, levels] of byStage) {
-    map.set(stage, row);
-    row += Math.ceil(levels.length / PER_ROW);
-  }
-  return map;
-}
-
-/** 蛇形坐标：每章内部从左上开始，偶数行从左到右、奇数行从右到左（右对齐，
- *  回行不满时也贴住上一行末尾 —— 否则断行会让拐角节点跑到最左，连线被拉成横穿） */
+/** 蛇形坐标：全部关卡一条连续蛇形，偶数行从左到右、奇数行从右到左。
+ *  相邻关卡（含跨章）必定水平或垂直相邻 —— 不断线。 */
 function nodePositions(): Array<{ x: number; y: number }> {
   const pos: Array<{ x: number; y: number }> = [];
-  const byStage = new Map<number, Level[]>();
-  for (const level of ALL_LEVELS) {
-    const list = byStage.get(level.stage);
-    if (list) list.push(level);
-    else byStage.set(level.stage, [level]);
-  }
-  let row = 0;
-  let idx = 0;
-  for (const levels of byStage.values()) {
-    const rows = Math.ceil(levels.length / PER_ROW);
-    for (let rr = 0; rr < rows; rr++) {
-      const count = Math.min(PER_ROW, levels.length - rr * PER_ROW);
-      const y = ROW_TOP + row * ROW_GAP;
-      for (let c = 0; c < count; c++) {
-        // 偶数行从左到右；奇数行（回行）从右到左，节点贴最右排（延续蛇形）
-        const i = rr % 2 === 0 ? c : PER_ROW - 1 - c;
-        pos[idx] = { x: 120 + i * 156, y };
-        idx++;
-      }
-      row++;
+  const rows = totalRows();
+  for (let rr = 0; rr < rows; rr++) {
+    const count = Math.min(PER_ROW, ALL_LEVELS.length - rr * PER_ROW);
+    const y = ROW_TOP + rr * ROW_GAP;
+    for (let c = 0; c < count; c++) {
+      const i = rr % 2 === 0 ? c : count - 1 - c; // 奇数行蛇形往回
+      pos[rr * PER_ROW + c] = { x: 120 + i * 156, y };
     }
   }
   return pos;
+}
+
+/** 章节标题位置：浮动到该章首关节点的左上方 */
+function stageTitlePos(
+  stage: number,
+  NODE_POS: Array<{ x: number; y: number }>,
+): { x: number; y: number } {
+  const idx = ALL_LEVELS.findIndex((l) => l.stage === stage);
+  const p = NODE_POS[idx];
+  return p ? { x: p.x - 40, y: p.y - 60 } : { x: 80, y: 60 };
 }
 
 function stateOf(progress: Progress, level: Level): 'locked' | 'new' | 'working' | 'cleared' {
@@ -116,12 +90,8 @@ export function WorldMap({
 }: WorldMapProps): React.JSX.Element {
   const NODE_POS = nodePositions();
   const VIEW_H = ROW_TOP + totalRows() * ROW_GAP + BOTTOM_PAD;
-  const startRow = stageStartRow();
   const rank = rankOf(progress);
   const cleared = ALL_LEVELS.filter((l) => isCleared(progress, l.id)).length;
-  // 章节标题放在该章第一行的上方
-  const stageTitleY = (stage: number): number =>
-    ROW_TOP + (startRow.get(stage) ?? 0) * ROW_GAP - 60;
   return (
     <div className="screen screen-map">
       <header className="map-head">
@@ -142,15 +112,18 @@ export function WorldMap({
             role="img"
             aria-label="关卡连线"
           >
-            <text x={80} y={stageTitleY(1)} className="stage-title">
-              第一章 · 元件入门与基础门电路
-            </text>
-            <text x={80} y={stageTitleY(2)} className="stage-title">
-              第二章 · 时序电路
-            </text>
-            <text x={80} y={stageTitleY(3)} className="stage-title">
-              第三章 · 算术与存储
-            </text>
+            {([1, 2, 3] as const).map((st) => {
+              const p = stageTitlePos(st, NODE_POS);
+              return (
+                <text key={st} x={p.x} y={p.y} className="stage-title">
+                  {st === 1
+                    ? '第一章 · 元件入门与基础门电路'
+                    : st === 2
+                      ? '第二章 · 时序电路'
+                      : '第三章 · 算术与存储'}
+                </text>
+              );
+            })}
             {ALL_LEVELS.slice(1).map((level, i) => {
               const from = NODE_POS[i];
               const to = NODE_POS[i + 1];
