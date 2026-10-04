@@ -1,3 +1,4 @@
+import { UNIT_COST } from '@lc/schema';
 import type { StoredModule, UnitKind } from '../editor/model';
 import type { SimSnapshot } from '../sim/protocol';
 
@@ -45,12 +46,9 @@ export function Inspector({
                 <tr key={unit}>
                   <td>{UNIT_NAME[unit]}</td>
                   <td className="num">{count}</td>
-                  <td className="num dim">
-                    {(
-                      count *
-                      ({ npn: 2, res: 1, dio: 1.5, cap: 3 } as Record<UnitKind, number>)[unit]
-                    ).toFixed(1)}
-                  </td>
+                  {/* 单价必须取自 schema 的价目表：写死在面板里会跟成本模型脱节
+                      （旧表 res 1 / dio 1.5 / cap 3，且没有 MOS，CMOS 契约下会显示 NaN） */}
+                  <td className="num dim">{(count * UNIT_COST[unit]).toFixed(1)}</td>
                 </tr>
               ))}
             <tr className="total">

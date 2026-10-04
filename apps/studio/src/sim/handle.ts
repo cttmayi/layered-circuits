@@ -201,6 +201,51 @@ export function handleRequest(req: StudioRequest): StudioResponse {
         message: '电路没有在仿真窗口内稳定下来（疑似组合环/振荡）',
       });
     }
+
+    // 关卡输出端口没有任何驱动源 → 明确说一句。玩家最常见的迷惑就是「看着接上了，q 却一动不动」：
+    // 导线落在模块/元件的**输入脚**上（接反），或者压根没落到引脚上时，编译只关心「连没连」，
+    // 悬空端口在判定里也只表现为「结果不对」，界面上没有任何提示。
+    // 判断用结构而不是终态电平：二极管逻辑在输入全 0 时端口本来就是 Z（合法的），
+    // 拿 Z 当「没驱动」会误报（s3-bin2bcd 的参考解就被误报过）。
+    // 控制脚（三极管基极、MOS 栅极）只输入不驱动；模块只有输出端口算驱动源。
+    const CONTROL_PINS: Record<string, readonly string[]> = {
+      npn: ['b'],
+      nmos: ['g'],
+      pmos: ['g'],
+    };
+    const portById = new Map(design.ports.map((p) => [p.id, p]));
+    const instById = new Map(design.instances.map((i) => [i.id, i]));
+    const isDriver = (pin: { inst: string; pin: string }): boolean => {
+      const port = portById.get(pin.inst);
+      if (port) return port.dir === 'in';
+      const inst = instById.get(pin.inst);
+      if (!inst) return true; // 认不出的引脚不判（模块缺失另有 unknown-module 诊断）
+      if (inst.kind === 'vcc' || inst.kind === 'gnd') return true;
+      if (inst.kind === 'unit') return !(CONTROL_PINS[inst.unit] ?? []).includes(pin.pin);
+      const tpl = library.get(inst.module);
+      const tplPort = tpl?.ports.find((p) => p.name === pin.pin);
+      return tplPort ? tplPort.dir === 'out' : true;
+    };
+    const drivenNets = new Set<string>();
+    // 输入端口挂着的整根网都算被驱动：参考解里 bin[0] 与 bcd[0] 直接共用一根网，
+    // 那根网的 pins 是空的（靠端口 nets 相同表达连通），只看 pins 会误报。
+    for (const port of design.ports) {
+      if (port.dir !== 'in') continue;
+      for (const netId of port.nets) if (netId) drivenNets.add(netId);
+    }
+    for (const net of design.nets) if (net.pins.some(isDriver)) drivenNets.add(net.id);
+    for (const port of design.ports) {
+      if (port.dir !== 'out') continue;
+      port.nets.forEach((netId, bit) => {
+        if (!netId || drivenNets.has(netId)) return;
+        const label = port.width > 1 ? `${port.name}[${bit}]` : port.name;
+        snapshot.simDiagnostics.push({
+          kind: 'undriven-port',
+          severity: 'warning',
+          message: `输出端口 ${label} 没有被任何东西驱动：检查导线是否真的接在 ${label} 上（接到元件的输入脚、或模块的输入脚都不算）`,
+        });
+      });
+    }
     return { id: req.id, snapshot };
   } catch (error) {
     return { id: req.id, error: error instanceof Error ? error.message : String(error) };
