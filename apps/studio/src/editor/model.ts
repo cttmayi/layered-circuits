@@ -742,23 +742,36 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
   // 端口有自己的视觉宽度——输入端口矩形 + 引线伸到 x+26、输出伸到 x-26——
   // 必须让引线端点也离开盒子边界（留 PORT_MARGIN），否则端口会戳进模块（简易ALU 的
   // op/a/b 此前就贴着异或门盒子）。只在端口会被盖住时移动，其余保留关卡原位置。
+  //
+  // 注意按「组整体平移」：输入组 / 输出组各自整体左移/右移相同的量，保持组内相对间距。
+  // 逐个端口各自挤到 need 会把大电路（简易计算器 6000+ 实例、元件带横跨几万像素）
+  // 的全部输入端口挤到同一个 x 上叠成一层，七段显示端口也被推到同一位置盖住。
   const portShift = new Map<string, number>(); // 端口 label -> 新 x
   if (balanced.length > 0) {
     const PORT_MARGIN = 24;
     const boxLeft = col0x - MODULE_HALF_WIDTH;
     const boxRight = col0x + (balanced.length - 1) * 130 + MODULE_HALF_WIDTH;
-    for (const p of design.ports) {
-      const sym = portByLabel.get(p.name);
-      if (!sym) continue;
-      let nx = sym.x;
-      if (sym.kind === 'input') {
-        const need = boxLeft - PORT_MARGIN - 26; // 输入端口视觉右端（引线端点 x+26）不碰盒子
-        if (sym.x > need) nx = need;
-      } else if (sym.kind === 'output') {
-        const need = boxRight + PORT_MARGIN + 26; // 输出端口视觉左端（引线端点 x-26）不碰盒子
-        if (sym.x < need) nx = need;
+    const inputSyms = design.ports
+      .map((p) => portByLabel.get(p.name))
+      .filter((s): s is Sym & { kind: 'input' } => s?.kind === 'input');
+    if (inputSyms.length > 0) {
+      const rightmost = Math.max(...inputSyms.map((s) => s.x + 26)); // 输入引线端点 x+26
+      const need = boxLeft - PORT_MARGIN;
+      if (rightmost > need) {
+        const shift = rightmost - need;
+        for (const s of inputSyms) portShift.set(s.label, s.x - shift);
       }
-      if (nx !== sym.x) portShift.set(p.name, nx);
+    }
+    const outputSyms = design.ports
+      .map((p) => portByLabel.get(p.name))
+      .filter((s): s is Sym & { kind: 'output' } => s?.kind === 'output');
+    if (outputSyms.length > 0) {
+      const leftmost = Math.min(...outputSyms.map((s) => s.x - 26)); // 输出引线端点 x-26
+      const need = boxRight + PORT_MARGIN;
+      if (leftmost < need) {
+        const shift = need - leftmost;
+        for (const s of outputSyms) portShift.set(s.label, s.x + shift);
+      }
     }
   }
   // 电源轨：VCC 顶行、GND 底行，横排；多了就分行（每行 MAX_RAIL 个）

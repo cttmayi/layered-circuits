@@ -58,6 +58,15 @@ describe('fromDesign 还原器（一键出答案）', () => {
         );
         expect(sym?.width, `${level.id} 端口 ${p.name} 位宽`).toBe(p.width);
       }
+      // 端口不重叠：防遮挡按「输入组/输出组整体平移」保持组内间距——逐个端口各自
+      // 挤到 need 会把大电路（简易计算器 6000+ 实例、元件带横跨几万像素）的按键
+      // 挤到同一 x 叠成一层、七段显示端口也被推到同一位置盖住（回归锁死）。
+      const seen = new Set<string>();
+      for (const s of doc.syms.filter((x) => x.kind === 'input' || x.kind === 'output')) {
+        const key = `${s.x},${s.y}`;
+        expect(seen.has(key), `${level.id} 端口重叠 @ ${key}`).toBe(false);
+        seen.add(key);
+      }
       // 往返：导出 → 判定（硬核）→ 通过 + 满分
       const design = toDesign(doc);
       const r = judgeDesign(design, level, { library, hardcore: true });
