@@ -360,7 +360,9 @@ const S3_DISPLAY: Level = parseLevel({
     '每条段线 = 一个布尔函数。先把 4 个输入取反（nA=¬bcd0…，与非门两脚接同一根线就是反相器：¬(x·x)=¬x），' +
     '再算 4 个共享项（t2=¬(nA·nC)、t5=¬(bcd0·bcd2)、t6=¬(nA·nB)、t7=¬(bcd0·bcd1)），' +
     '最后每条段线用「链式与非」合并：a=¬(t2·t5·nB·nD)、b=¬(t6·t7·bcd2)、c=¬(nA·bcd1·nC)。' +
-    '记住链的规律：2 项 1 门、3 项 3 门、4 项 5 门——每多合并一项要 +2 门（先反相再合并）。',
+    '记住链的规律：2 项 1 门、3 项 3 门、4 项 5 门——每多合并一项要 +2 门（先反相再合并）。' +
+    '注意：输入一变，各段线的路径长短不同，输出会先抖几下再停稳（竞争冒险，本关参考解最坏能看到 7 次跳变）——' +
+    '判定取的是停稳之后的值，抖动不算错。想看这个过程，点工具栏的「时序视图」。',
   hint:
     '反相 4 个：nA=¬(bcd0·bcd0)、nB=¬(bcd1·bcd1)、nC=¬(bcd2·bcd2)、nD=¬(bcd3·bcd3)。' +
     '项 4 个：t2=¬(nA·nC)、t5=¬(bcd0·bcd2)、t6=¬(nA·nB)、t7=¬(bcd0·bcd1)。' +
@@ -375,7 +377,9 @@ const S3_DISPLAY: Level = parseLevel({
     port('b', 'out'),
     port('c', 'out'),
   ],
-  mode: 'logic',
+  // 判定口径 = 真实时序（2026-01 试点）：组合链的真实竞争/冒险在这里看得见，
+  // 判定仍在停稳之后取值（窗口末端采样），所以抖动不影响正确性。
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(380, MAIN_OVERHEAD),

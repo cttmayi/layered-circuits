@@ -117,7 +117,8 @@ function clicksInSr(moduleHash: string, values: Array<0 | 1>, library: StoredMod
   const design = toDesign(doc);
   const designKey = JSON.stringify(design);
   const qNet = design.nets.find((n) => n.pins.some((p) => p.inst === 'out-q'))!;
-  const reuse = shouldReuseSimState(level, 'level'); // seq 关 → true
+  // 这次要测的是「复用路径下模块内部节点也得恢复」：用时序看法（= 会复用终态）
+  const reuse = shouldReuseSimState('level', 'timing');
   expect(reuse).toBe(true);
 
   let prev: { key: string; nodes: number[] } | null = null;

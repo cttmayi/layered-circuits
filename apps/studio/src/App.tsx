@@ -176,10 +176,10 @@ export function App(): React.JSX.Element {
     void levelId;
     setSettlement(null);
     setChipDrop(null);
-    // 视图也是"换单即清"：新关卡默认按关卡自己的口径看
-    setTimingView(false);
+    // 看法跟随新关卡的判定口径（判定走时序的关卡默认就是时序看法）
+    setTimingView(levelOf(gameMode, levelId)?.mode === 'timing');
     setLiveWave(null);
-  }, [levelId]);
+  }, [levelId, gameMode]);
 
   const [showWave, setShowWave] = useState(false);
   /** 左右侧面板整体收起/展开（体验：布线时把侧栏收起来腾画布），选择记忆在 localStorage */
@@ -206,7 +206,11 @@ export function App(): React.JSX.Element {
   /** 「时序视图」：用真实延迟跑一遍仿真并画波形 —— 把传播延迟/竞争/毛刺摆到玩家眼前。
    *  它只是**看法**：判定口径仍由关卡声明（level.mode）与硬核开关决定，视图不动成绩。
    *  没有时间轴的电路（纯组合）在时序视图下结论与稳定值一致，只是"看得见过程"。 */
-  const [timingView, setTimingView] = useState(false);
+  /** 默认看法跟随关卡**判定口径**：判定走真实时序的关卡，进来就该看到真实时序
+   *  （判的和看的必须是同一回事）。玩家仍可用「时序视图」按钮切回稳定值看法。 */
+  const [timingView, setTimingView] = useState(
+    () => levelOf(session.mode, session.levelId)?.mode === 'timing',
+  );
   /** 最近一次仿真的端口级波形（时序视图用）；逻辑模式没有时间轴，恒为 null */
   const [liveWave, setLiveWave] = useState<Waveform | null>(null);
   /** 这次仿真的跑法：硬核模式或「时序视图」都走真实时序；判定另算（见 judge 请求，
@@ -265,9 +269,10 @@ export function App(): React.JSX.Element {
       // 拓扑一变就回到上电默认，避免用旧网的信号污染新电路。
       const designKey = JSON.stringify(design);
       const prev = prevSimRef.current;
-      // 组合关卡（logic 模式、非时序）没有记忆：不复用终态，每次全量重算
-      // （部分恢复只覆盖顶层网，输入一变再收敛会得到错误状态 —— 数码管关的根因）。
-      const reuseState = shouldReuseSimState(currentLevel, gameMode);
+      // 复用属于**看法**这一轴（见 sim-policy）：时序看法必须复用才能保持状态；
+      // 稳定值看法每次从冷启动全量重算（点一下 = 一次独立求值，确定性最好）。
+      // 判定口径（关卡声明的 level.mode）不参与这里的决定。
+      const reuseState = shouldReuseSimState(gameMode, simMode);
       const prevSignals = prev && prev.key === designKey && reuseState ? prev.signals : undefined;
       const prevContribs = prev && prev.key === designKey && reuseState ? prev.contribs : undefined;
       // 全节点状态（含模块内部节点）：只恢复顶层网会让模块内部停在「上电态」，

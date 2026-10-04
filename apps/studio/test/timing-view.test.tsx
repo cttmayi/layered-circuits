@@ -32,6 +32,16 @@ const { App } = await import('../src/App');
 const { disableDebugUrl, enableDebugUrl, renderApp, startJob } = await import('./helpers');
 const { handleRequest } = await import('../src/sim/handle');
 
+/** 预置第一章全通关（含同或门）：不然第二章的关卡在地图上点不动 */
+function seedCleared(): void {
+  localStorage.clear();
+  const cleared: Record<string, unknown> = {};
+  for (const id of ['s1-not', 's1-and', 's1-or', 's1-nand', 's1-nor', 's1-xor', 's1-xnor']) {
+    cleared[id] = { score: 100, bestCostHalf: 6, clearedAt: 1 };
+  }
+  localStorage.setItem('lc-studio-progress-v1', JSON.stringify({ cleared }));
+}
+
 const simRequests = () => seen.filter((r) => r.type === 'simulate');
 const judgeRequests = () => seen.filter((r) => r.type === 'judge');
 
@@ -114,17 +124,31 @@ describe('界面层：时序视图只改仿真，不改判定', () => {
   }, 30_000);
 });
 
+describe('判定走真实时序的关卡：进来默认就是时序看法', () => {
+  it('s2-sr-latch：simulate 直接按真实时序跑并带回波形（判的和看的是同一回事）', async () => {
+    seedCleared();
+    render(<App />);
+    startJob('SR 锁存器');
+    // 先确认真的进了工作台：锁着的关卡点不动，否则后面的断言会"空过"
+    await waitFor(() => expect(screen.getAllByText('交付验收').length).toBeGreaterThan(0));
+    await waitFor(() => {
+      const last = simRequests().at(-1)!;
+      expect(last.type === 'simulate' && last.mode).toBe('timing');
+    });
+    const last = simRequests().at(-1)!;
+    expect(last.type === 'simulate' && last.withWaveform).toBe(true);
+    // 时序看法下波形面板直接可用
+    await waitFor(() => expect(document.querySelectorAll('.wlabel').length).toBeGreaterThan(0));
+  }, 30_000);
+});
+
 describe('视图不残留', () => {
   it('换关后回到关卡自己的口径（视图关掉）', async () => {
     // 预置前六关已通关：这样「同或门」在地图上是可点的
-    localStorage.clear();
-    const cleared: Record<string, unknown> = {};
-    for (const id of ['s1-not', 's1-and', 's1-or', 's1-nand', 's1-nor', 's1-xor']) {
-      cleared[id] = { score: 100, bestCostHalf: 6, clearedAt: 1 };
-    }
-    localStorage.setItem('lc-studio-progress-v1', JSON.stringify({ cleared }));
+    seedCleared();
     render(<App />);
     startJob('非门');
+    await waitFor(() => expect(screen.getAllByText('交付验收').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByText('时序视图'));
     await waitFor(() => {
       const last = simRequests().at(-1)!;
@@ -133,6 +157,7 @@ describe('视图不残留', () => {
     // 换关：视图应当回到该关自己的口径（默认稳定值视角）
     fireEvent.click(screen.getByText('← 返回地图'));
     fireEvent.click(screen.getByText('同或门'));
+    await waitFor(() => expect(screen.getAllByText('交付验收').length).toBeGreaterThan(0));
     await waitFor(() => {
       const last = simRequests().at(-1)!;
       expect(last.type === 'simulate' && last.mode).toBe('logic');

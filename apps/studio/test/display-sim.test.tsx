@@ -92,19 +92,15 @@ function enterDisplay(): void {
   fireEvent.click(screen.getByText(level.title));
 }
 
-describe('shouldReuseSimState：组合关不复用终态；时序/锁存器关与沙盒复用', () => {
+describe('shouldReuseSimState：跟着「看法」走，不跟关卡判定口径走', () => {
   it('策略矩阵', () => {
-    const byId = (id: string) => ALL_LEVELS.find((l) => l.id === id)!;
-    // 组合关：无记忆 → 全量重算（避免部分恢复污染）
-    expect(shouldReuseSimState(byId('s3-display'), 'level')).toBe(false);
-    expect(shouldReuseSimState(byId('s3-alu'), 'level')).toBe(false);
-    // 锁存器/寄存器/计算器：必须复用才能跨仿真保持状态
-    expect(shouldReuseSimState(byId('s2-btn-latch'), 'level')).toBe(true);
-    expect(shouldReuseSimState(byId('s3-reg-8'), 'level')).toBe(true);
-    expect(shouldReuseSimState(byId('s3-calc'), 'level')).toBe(true);
-    // 沙盒未知 → 按可能有锁存器处理
-    expect(shouldReuseSimState(null, 'free')).toBe(true);
-    expect(shouldReuseSimState(byId('s3-display'), 'free')).toBe(true);
+    // 稳定值看法：每次从冷启动全量重算（点一下 = 一次独立求值，结果确定）
+    expect(shouldReuseSimState('level', 'logic')).toBe(false);
+    // 时序看法：必须复用才能跨仿真保持状态（锁存器/寄存器点一下不丢位）
+    expect(shouldReuseSimState('level', 'timing')).toBe(true);
+    // 沙盒未知是否含锁存器 → 两种看法都复用（保住玩家搭的状态机）
+    expect(shouldReuseSimState('free', 'logic')).toBe(true);
+    expect(shouldReuseSimState('free', 'timing')).toBe(true);
   });
 });
 
@@ -114,7 +110,7 @@ describe('数码管关：点 bcd 输入 seg 跟随 + 组合关不复用终态 + 
     responses.length = 0;
   });
 
-  it('一键出答案后点 bcd 0→1→2，seg 段码跟随；组合关 simulate 全程不带 prevSignals', {
+  it('一键出答案后点 bcd 0→1→2，seg 段码跟随；稳定值看法下 simulate 不带 prevSignals', {
     timeout: 40_000,
   }, async () => {
     enterDisplay();
@@ -125,7 +121,7 @@ describe('数码管关：点 bcd 输入 seg 跟随 + 组合关不复用终态 + 
     if (modal) fireEvent.click(modal);
     await waitFor(() => expect(responses.length).toBeGreaterThan(0), { timeout: 4000 });
 
-    // 组合关：任何 simulate 请求都不应复用终态（否则部分恢复会污染结果）
+    // 稳定值看法（默认）：任何 simulate 请求都不复用终态 —— 点一下就是一次独立求值
     for (const r of responses) {
       expect(
         r.req.prevSignals,
