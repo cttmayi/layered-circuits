@@ -19,6 +19,7 @@ import {
   type Sym,
 } from '../editor/model';
 import { type Camera, drawScene } from '../editor/render';
+import { type ProbeResult, probeModule } from '../sim/probe';
 import { Modal } from './Modal';
 
 const KIND_LABEL: Record<string, string> = {
@@ -233,6 +234,10 @@ export function ModuleDetailModal({
     return keyedTree(buildCostTree(template.body, lib, template.name));
   }, [template, merged]);
   const instCount = template?.body?.instances.length ?? 0;
+  const probe: ProbeResult = useMemo(() => {
+    if (!template?.body) return { rows: [], stuck: [], skipped: '这个模块没有内部电路' };
+    return probeModule(template, merged);
+  }, [template, merged]);
 
   // 复制模块 JSON：模块内部电路出问题时（例如画布上放的是「我的模块」里早先封装的坏模块），
   // 玩家可以把这一整份贴出来离线复现 —— 画布导出（复制电路）只带模块哈希，不带模块本体。
@@ -315,6 +320,48 @@ export function ModuleDetailModal({
             <p className="dim small">
               这是封装那一刻的电路：模块可以随时拆开看它由什么拼成，成本与延迟也由此递归而来。
             </p>
+          </>
+        )}
+
+        <h4>自测（把它当电路跑一遍）</h4>
+        {probe.error ? (
+          <p className="small bad">自测没跑起来：{probe.error}</p>
+        ) : probe.skipped ? (
+          <p className="small dim">{probe.skipped}</p>
+        ) : (
+          <>
+            <table className="kv probe">
+              <thead>
+                <tr>
+                  <th>输入</th>
+                  <th>输出</th>
+                </tr>
+              </thead>
+              <tbody>
+                {probe.rows.map((row) => (
+                  <tr key={JSON.stringify(row.inputs)}>
+                    <td className="mono small">
+                      {Object.entries(row.inputs)
+                        .map(([k, v]) => `${k}=${v}`)
+                        .join(' · ')}
+                    </td>
+                    <td className="mono small">
+                      {Object.entries(row.outputs)
+                        .map(([k, v]) => `${k} → ${v}`)
+                        .join(' · ')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {probe.stuck.length > 0 ? (
+              <p className="small bad">
+                ⚠ {probe.stuck.join('、')} 在输入变化时一直没动 —— 这个模块现在不是你以为的那个功能
+                （展开下面的内部电路看哪根线接错了，或者重新封装一个）。
+              </p>
+            ) : (
+              <p className="small dim">输出会随输入变化，看起来是活的 ✓</p>
+            )}
           </>
         )}
 

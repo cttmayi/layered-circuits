@@ -2101,3 +2101,14 @@ body,
   font-size: 12px;
   color: var(--ok);
 }
+
+/* 模块详情里的自测表：只需紧凑的行，不需要表头很重 */
+.probe th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--dim);
+  padding: 2px 8px 2px 0;
+}
+.probe td {
+  padding: 2px 8px 2px 0;
+}
