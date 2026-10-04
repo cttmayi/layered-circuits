@@ -11,7 +11,7 @@ import { goToLevel, renderApp, startJob } from './helpers';
 describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
   beforeEach(() => localStorage.clear());
 
-  it('教学模式与关卡模式并列：关卡链第一关是非门；教学元件图鉴全开放（无解锁链）', () => {
+  it('知识卡片与关卡模式并列：关卡链第一关是非门；元件卡片全开放（无解锁链、不计进度）', () => {
     render(<App />); // 不 seed：验证全新存档
     // 关卡模式：教学关不在链上，非门是第一关（开放），与门锁定
     fireEvent.click(screen.getByText('关卡模式'));
@@ -19,20 +19,20 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     expect(screen.getByText('与门').closest('button')?.disabled).toBe(true);
     expect(screen.queryByText('认识三极管')).toBeNull(); // 教学关不进关卡地图
     fireEvent.click(screen.getByText('← 返回主菜单'));
-    // 教学模式：5 个元件图鉴卡全部开放（不评星、不锁链）
-    fireEvent.click(screen.getByText('教学模式'));
-    expect(screen.getByText(/教学模式 · 认识元件/)).toBeTruthy();
-    expect(screen.getByText(/已掌握 0\/5/)).toBeTruthy();
+    // 知识卡片：5 张元件卡全部开放（不评星、不锁链、不计进度）
+    fireEvent.click(screen.getByText('知识卡片'));
+    expect(screen.getByText(/知识卡片 · 认识元件/)).toBeTruthy();
+    expect(screen.getByText(/不算关卡、不计进度与成绩/)).toBeTruthy();
     const npnBtn = screen.getByText('认识三极管').closest('button') as HTMLButtonElement;
     const dioBtn = screen.getByText('认识二极管').closest('button') as HTMLButtonElement;
     expect(npnBtn.disabled).toBe(false); // 教学元件无解锁链
     expect(dioBtn.disabled).toBe(false);
-    expect(screen.getAllByText(/点开动手试试/).length).toBe(5); // 5 张元件卡都未掌握
+    expect(screen.getAllByText(/点开动手试试/).length).toBe(5); // 5 张卡都可点
   });
 
-  it('教学模式：点元件弹「元件课堂」概念卡，关闭后是半成品工作台 + 引导条', () => {
+  it('知识卡片：点元件弹「元件课堂」概念卡，关闭后是半成品工作台 + 引导条', () => {
     render(<App />);
-    fireEvent.click(screen.getByText('教学模式'));
+    fireEvent.click(screen.getByText('知识卡片'));
     fireEvent.click(screen.getByText('认识三极管'));
     // 先讲课：概念卡弹窗（生活类比 + 要点）
     const dialog = screen.getByRole('dialog', { name: '元件课堂' });
@@ -100,12 +100,12 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
   });
 
   it('主菜单「新游戏」：确认后先选工艺契约，选定后清空存档、回到全新主菜单', () => {
-    // 先有进度：renderApp 预置五个教学关已掌握 + 进关即开工
+    // 先有进度：进关即开工（知识卡片不再写进度，所以这里只有主线记录）
     const first = renderApp();
     goToLevel('非门');
     first.unmount();
     const before = JSON.parse(localStorage.getItem('lc-studio-progress-v1') ?? '{}');
-    expect(Object.keys(before.cleared ?? {}).length).toBe(5); // 五个教学关（教学模式）
+    expect(Object.keys(before.cleared ?? {}).length).toBe(0); // 还没通关任何关
     expect(before.cleared?.['s1-not'] ?? false).toBe(false); // 还没通关非门
     expect(before.started?.['s1-not']).toBe(true); // 进关即开工已持久化
     // 有存档 → 主菜单出现「继续上次」
@@ -117,7 +117,8 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     expect(window.confirm).toHaveBeenCalled();
     expect(screen.getByText('选择工艺契约')).toBeTruthy();
     const mid = JSON.parse(localStorage.getItem('lc-studio-progress-v1') ?? '{}');
-    expect(Object.keys(mid.cleared ?? {}).length).toBe(5); // 五个教学关记录仍在，契约选定后才动手清档
+    // 契约选定后才动手清档：这一步存档原样还在（开工记录还在，只是没通关）
+    expect(mid.started?.['s1-not']).toBe(true);
     // 选定契约（默认 CMOS）→ 清空存档、回到全新主菜单
     fireEvent.click(screen.getByRole('button', { name: /用 .* 开始/ }));
     expect(screen.queryByText(/继续上次/)).toBeNull();

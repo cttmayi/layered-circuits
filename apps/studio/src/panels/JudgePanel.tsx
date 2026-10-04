@@ -12,7 +12,8 @@ export interface JudgePanelProps {
 
 const CELL: Record<string, string> = { 0: 'lo', 1: 'hi', X: 'bad', Z: 'dim' };
 
-/** 右侧「验收台」：逐行对比、错误原因（「交付验收」按钮在顶栏）。验收通过即自动封装并弹出结算 */
+/** 右侧「验收台」：逐行对比、错误原因（「交付验收」按钮在顶栏）。验收通过即自动封装并弹出结算。
+ *  知识卡片（level.classroom）语气不同：不封装、不结算、不算成绩 —— 对上了只报「对上了」。 */
 export function JudgePanel({
   level,
   result,
@@ -23,14 +24,17 @@ export function JudgePanel({
   const widthOf = new Map(level.ports.map((p) => [p.name, p.width]));
   const outCols = outputNames.map((name) => ({ name, width: widthOf.get(name) ?? 1 }));
   const inCols = columnsFromKeys(result?.rows[0]?.inputs);
+  /** 知识卡片：只学元件，不接单 —— 没有客户、没有款项、没有成绩 */
+  const isCard = Boolean(level.classroom);
 
   return (
     <section className="panel judge">
-      {result?.pass && (
+      {result?.pass && !isCard && (
         <p className="dim small">
           验收通过，正在自动封装为【{level.unlock?.name ?? level.title}】并结算…
         </p>
       )}
+      {isCard && <p className="dim small">知识卡片：随便玩、随时翻看，不计进度与成绩</p>}
       {record && record.clearedAt > 0 && (
         <p className="dim small">
           历史最好：{record.score} 分 · 最低材料费 {record.bestCostHalf / 2} · 已尝试 {attempts} 次
@@ -41,10 +45,14 @@ export function JudgePanel({
         <>
           <p className={result.pass ? 'verdict pass' : 'verdict fail'}>
             {result.pass
-              ? `客户验收通过！${result.score} 分`
-              : result.errors.length > 0
-                ? '客户打回了，看下面的问题清单'
-                : '还没验收'}
+              ? isCard
+                ? '对上了！跟真值表一致'
+                : `客户验收通过！${result.score} 分`
+              : isCard
+                ? '还没对上：看下面的问题清单'
+                : result.errors.length > 0
+                  ? '客户打回了，看下面的问题清单'
+                  : '还没验收'}
           </p>
           <table className="kv">
             <tbody>
@@ -61,8 +69,10 @@ export function JudgePanel({
               <tr>
                 <td>材料费</td>
                 <td className="num">
-                  {result.costHalf / 2} / 款项 {result.budgetHalf / 2}
-                  {result.overBudget && <span className="bad"> 超支</span>}
+                  {isCard
+                    ? `${result.costHalf / 2} 元`
+                    : `${result.costHalf / 2} / 款项 ${result.budgetHalf / 2}`}
+                  {!isCard && result.overBudget && <span className="bad"> 超支</span>}
                 </td>
               </tr>
               {!level.classroom && (

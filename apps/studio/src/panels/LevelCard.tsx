@@ -175,10 +175,15 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
         </div>
         <div className="budget-text">
           <span>
-            材料费 <strong className={over ? 'bad' : 'hi'}>{costHalf / 2}</strong> / 款项{' '}
+            材料费 <strong className={over ? 'bad' : 'hi'}>{costHalf / 2}</strong>
+            {/* 知识卡片不接单：说「上限」而不是订单话术的「款项」 */}
+            {level.classroom ? '，上限 ' : ' / 款项 '}
             {budget / 2}
           </span>
-          <span className="dim">对标 {level.optimalHalf / 2}</span>
+          <span className="dim">
+            {level.classroom ? '参考解 ' : '对标 '}
+            {level.optimalHalf / 2}
+          </span>
         </div>
       </div>
     </section>

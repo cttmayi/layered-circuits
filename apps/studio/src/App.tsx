@@ -1017,7 +1017,9 @@ export function App(): React.JSX.Element {
   const runJudge = async (): Promise<void> => {
     if (!judgedLevel) return;
     setJudging(true);
-    setProgress((prev) => recordAttempt(prev, judgedLevel.id));
+    // 知识卡片（原教学关）不算成绩：不记尝试次数，也不记通关
+    const isKnowledgeCard = Boolean(judgedLevel.classroom);
+    if (!isKnowledgeCard) setProgress((prev) => recordAttempt(prev, judgedLevel.id));
     try {
       const design = toDesign(doc, { id: `level-${judgedLevel.id}`, name: judgedLevel.title });
       // 判定规则（用户定稿）：功能正确即可过关——成本/时序超预算只降评分/星级，
@@ -1052,59 +1054,61 @@ export function App(): React.JSX.Element {
    *  教学关例外：它是「学元件」，通过只记「已学会」，不封装模块、不往组件库塞东西。 */
   const wrapAndSettle = async (judge: JudgeResult): Promise<void> => {
     if (!currentLevel) return;
+    // 知识卡片（原教学关）：对上了就给一句反馈，**不记成绩、不弹结算、不产出积木** ——
+    // 它是随时可以翻看的知识卡，不是订单。对照表本身就在工作台下方，那就是学习反馈。
+    if (currentLevel.classroom) {
+      setToast(`对上了【${currentLevel.title}】：知识卡片不计进度与成绩，随时可以回来翻看`);
+      return;
+    }
     // 同一关已结算过（结算对话框还开着）就不再重复封装
     if (settlement && judgeResult === judge && levelRecord) return;
     const name = currentLevel.unlock?.name ?? currentLevel.title;
     const design = toDesign(doc, { id: `wrap-${currentLevel.id}`, name });
-    /** 教学关不产出积木：这一单没有「交付物」进组件库 */
-    const teachOnly = Boolean(currentLevel.classroom);
-    /** 本单要写进组件库的模块（教学关是空数组） */
+    /** 本单要写进组件库的模块：本关产出的模块 + 它身体引用到的教学积木（见下） */
     let toAdd: StoredModule[] = [];
-    if (!teachOnly) {
-      const response = await runner.send({
-        type: 'wrap',
-        design,
-        library: doc.library.map((m) => m.template),
-        name,
-        stage: currentLevel.stage,
-      });
-      if (response.error || !response.wrapped) {
-        setToast(`封装失败：${response.error ?? '未知错误'}`);
-        return;
-      }
-      const info = response.wrapped;
-      const stored = storeModule(
-        progress.library,
-        {
-          hash: info.hash,
-          name: info.name,
-          costHalf: info.costHalf,
-          isSequential: info.isSequential,
-          ports: info.ports,
-          template: info.template,
-          stage: currentLevel.stage,
-          levelId: currentLevel.id,
-          sources: design.instances
-            .filter((inst) => inst.kind === 'module')
-            .map((inst) => (inst.kind === 'module' ? inst.module : '')),
-        },
-        Date.now(),
-      );
-      // 封装出的复合模块身体会引用子积木哈希（玩家自己的模块 + 教学积木）。教学积木不在
-      // 玩家库里 → 跨关复用会 unknown-module：把身体传递引用到的教学积木一并持久化进玩家库
-      // （teaching 标记，仍不出现在「我的模块」，但库里有 → 编译可解析）。幂等：重复无害。
-      const deps = teachingDepsOf(
-        (info.template as ModuleTemplate).body,
-        doc.library,
-        progress.family,
-      );
-      toAdd = [stored, ...deps];
-      let library = doc.library;
-      for (const m of toAdd) library = addModule(library, m);
-      commit({ ...doc, library });
+    const response = await runner.send({
+      type: 'wrap',
+      design,
+      library: doc.library.map((m) => m.template),
+      name,
+      stage: currentLevel.stage,
+    });
+    if (response.error || !response.wrapped) {
+      setToast(`封装失败：${response.error ?? '未知错误'}`);
+      return;
     }
-    // 星级：元件成本与传播延迟各按基准线四档（0.5/0.75/1 倍），取较差；教学关无标准不评星
-    const stars = teachOnly ? 0 : starsOf(judge);
+    const info = response.wrapped;
+    const stored = storeModule(
+      progress.library,
+      {
+        hash: info.hash,
+        name: info.name,
+        costHalf: info.costHalf,
+        isSequential: info.isSequential,
+        ports: info.ports,
+        template: info.template,
+        stage: currentLevel.stage,
+        levelId: currentLevel.id,
+        sources: design.instances
+          .filter((inst) => inst.kind === 'module')
+          .map((inst) => (inst.kind === 'module' ? inst.module : '')),
+      },
+      Date.now(),
+    );
+    // 封装出的复合模块身体会引用子积木哈希（玩家自己的模块 + 教学积木）。教学积木不在
+    // 玩家库里 → 跨关复用会 unknown-module：把身体传递引用到的教学积木一并持久化进玩家库
+    // （teaching 标记，仍不出现在「我的模块」，但库里有 → 编译可解析）。幂等：重复无害。
+    const deps = teachingDepsOf(
+      (info.template as ModuleTemplate).body,
+      doc.library,
+      progress.family,
+    );
+    toAdd = [stored, ...deps];
+    let library = doc.library;
+    for (const m of toAdd) library = addModule(library, m);
+    commit({ ...doc, library });
+    // 星级：元件成本与传播延迟各按基准线四档（0.5/0.75/1 倍），取较差
+    const stars = starsOf(judge);
     setProgress((prev) => {
       let next = prev.library;
       for (const m of toAdd) next = addModule(next, m);
@@ -1117,19 +1121,14 @@ export function App(): React.JSX.Element {
       );
     });
     const index = ALL_LEVELS.findIndex((l) => l.id === currentLevel.id);
-    // 教学关不在关卡链上：没有「下一关」（index = -1 时不能取到 ALL_LEVELS[0]）
     const next = index >= 0 ? ALL_LEVELS[index + 1] : undefined;
-    if (!teachOnly) {
-      // 过场：芯片落进组件库 → 结算页（客户验收报告 + 钱 + 评级）
-      setChipDrop(name);
-      window.setTimeout(() => setChipDrop(null), 1400);
-    }
+    // 过场：芯片落进组件库 → 结算页（客户验收报告 + 钱 + 评级）
+    setChipDrop(name);
+    window.setTimeout(() => setChipDrop(null), 1400);
     setSettlement(judge);
     setSettlementStars(stars);
     setToast(
-      teachOnly
-        ? `已学会【${name}】：教学关只记「已掌握」，不产出积木模块`
-        : `已交付【${name}】：材料费 ${judge.costHalf / 2} 元${next ? `，已解锁下一单「${next.title}」` : '，主线全部完成'}`,
+      `已交付【${name}】：材料费 ${judge.costHalf / 2} 元${next ? `，已解锁下一单「${next.title}」` : '，主线全部完成'}`,
     );
   };
 
@@ -1245,7 +1244,6 @@ export function App(): React.JSX.Element {
   if (screen === 'teach') {
     return (
       <TeachPanel
-        progress={progress}
         family={progress.family}
         currentLevelId={levelId}
         onPick={enterLevel}
@@ -1275,9 +1273,9 @@ export function App(): React.JSX.Element {
             type="button"
             className="back-btn"
             onClick={goToTeach}
-            title="回到教学模式（草图已自动保存）"
+            title="回到知识卡片列表（草图已自动保存）"
           >
-            ← 返回教学模式
+            ← 返回知识卡片
           </button>
         ) : (
           <button
@@ -1335,7 +1333,13 @@ export function App(): React.JSX.Element {
               onClick={() => void runJudge()}
               disabled={judging}
             >
-              {judging ? '验收中…' : '交付验收'}
+              {currentLevel?.classroom
+                ? judging
+                  ? '对照中…'
+                  : '对照答案'
+                : judging
+                  ? '验收中…'
+                  : '交付验收'}
             </button>
             <span className="cleared-count">
               已通关 {ALL_LEVELS.filter((item) => isCleared(progress, item.id)).length}/

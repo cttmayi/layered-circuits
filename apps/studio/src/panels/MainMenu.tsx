@@ -1,7 +1,7 @@
 /**
  * 主菜单（开场）：启动先进这里，而不是直接掉进工作台。
  *
- * 四条路：继续上次（有进行中的单子）/ 关卡模式（进关卡地图）/ 教学模式（认识元件图鉴）/
+ * 四条路：继续上次（有进行中的单子）/ 关卡模式（进关卡地图）/ 知识卡片（认识元件图鉴，
  * 自由搭建（直接进沙盒）。模式在开场选定后不再在工作台里切换 —— 换模式必须回到这里。
  */
 
@@ -56,9 +56,9 @@ export function MainMenu({
             </span>
           </button>
           <button type="button" className="menu-btn" onClick={onTeachMode}>
-            教学模式
+            知识卡片
             <span className="menu-btn-note">
-              认识 {TEACH_LEVELS.length} 种元件（三极管/二极管/MOS…），引导搭建不评星
+              {TEACH_LEVELS.length} 张元件卡片（三极管/二极管/MOS…），随时翻看、不计进度
             </span>
           </button>
           <button type="button" className="menu-btn" onClick={onFreeMode}>

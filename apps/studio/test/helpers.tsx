@@ -3,7 +3,7 @@
 import { fireEvent, type RenderResult, render, screen } from '@testing-library/react';
 import { App } from '../src/App';
 
-/** 教学关 id（独立教学模式：认识元件，不在关卡链上） */
+/** 知识卡片 id（原教学关：认识元件，不算关卡与成绩） */
 export const TEACH_LEVEL_IDS = [
   's1-npn',
   's1-dio',
@@ -12,7 +12,7 @@ export const TEACH_LEVEL_IDS = [
   's1-cmos-nand',
 ] as const;
 
-/** 教学关通关记录片段：预置存档时与其它字段合并用（放在 cleared 里） */
+/** 知识卡片的"通关"记录片段：**只为兼容老测试**——现在装载时会被清理（卡片不计进度） */
 export function teachCleared(): Record<
   string,
   { score: number; bestCostHalf: number; clearedAt: number }
@@ -23,8 +23,8 @@ export function teachCleared(): Record<
 }
 
 /**
- * 预置教学关「已掌握」：教学模式里显示已掌握标记（教学关不在关卡链上，
- * 不参与解锁）。绝大多数 UI 测试测的是正式关卡流程，不用逐关搭教学关。
+ * 预置知识卡片的"已掌握"记录（兼容用）：卡片已改成不计进度，装载时会被清理掉，
+ * 所以正确用法的测试不该依赖它 —— 留在这里只是免得旧测试 import 报错。
  */
 export function seedTeachCleared(): void {
   const key = 'lc-studio-progress-v1';
@@ -51,7 +51,6 @@ export function disableDebugUrl(): void {
 /** 渲染整个 App：先清空存档、预置教学关已通关（正式关卡才在地图上可点） */
 export function renderApp(): RenderResult {
   localStorage.clear();
-  seedTeachCleared();
   return render(<App />);
 }
 

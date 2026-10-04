@@ -5,7 +5,7 @@
  * 进度与组件库都存 localStorage，后续可以整体导出成存档 / 交给服务端校验。
  */
 
-import { ALL_LEVELS, requiredPortsOf } from '@lc/content';
+import { ALL_LEVELS, isTeachLevel, requiredPortsOf } from '@lc/content';
 import type { Level, LogicFamily } from '@lc/schema';
 import type { Doc, StoredModule, Sym } from '../editor/model';
 
@@ -167,6 +167,21 @@ export function emptyProgress(family: LogicFamily = 'rtl'): Progress {
   };
 }
 
+/**
+ * 旧存档迁移：教学关已改成「知识卡片」——随时翻看、不算关卡与成绩。
+ * 老存档里可能留着 `cleared['s1-npn']` 这类记录（还会显示成「已掌握」），装载时清掉；
+ * 卡片本身的画布存档（lc-studio-teach-*）是玩家的动手成果，保留不动。
+ */
+function dropTeachingRecords<T extends Record<string, unknown>>(
+  record: T | undefined,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [id, value] of Object.entries(record ?? {})) {
+    if (!isTeachLevel(id)) out[id] = value;
+  }
+  return out;
+}
+
 export function loadProgress(): Progress {
   try {
     const raw = localStorage.getItem(PROGRESS_KEY);
@@ -174,14 +189,14 @@ export function loadProgress(): Progress {
     const parsed = JSON.parse(raw) as Partial<Progress>;
     return {
       family: parsed.family ?? 'rtl',
-      cleared: parsed.cleared && typeof parsed.cleared === 'object' ? parsed.cleared : {},
-      attempts: parsed.attempts && typeof parsed.attempts === 'object' ? parsed.attempts : {},
+      cleared: dropTeachingRecords(parsed.cleared) as Progress['cleared'],
+      attempts: dropTeachingRecords(parsed.attempts) as Progress['attempts'],
       library: Array.isArray(parsed.library) ? (parsed.library as StoredModule[]) : [],
       walletHalf: typeof parsed.walletHalf === 'number' ? parsed.walletHalf : 0,
       recon: (parsed.recon as Record<string, ReconState>) ?? {},
       sideJobs: (parsed.sideJobs as Record<string, number>) ?? {},
       spentHalf: typeof parsed.spentHalf === 'number' ? parsed.spentHalf : 0,
-      started: (parsed.started as Record<string, boolean>) ?? {},
+      started: dropTeachingRecords(parsed.started) as Record<string, boolean>,
     };
   } catch {
     return emptyProgress();
