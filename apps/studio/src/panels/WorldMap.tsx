@@ -56,7 +56,8 @@ function stageStartRow(): Map<number, number> {
   return map;
 }
 
-/** 蛇形坐标：每章内部从左上开始，偶数行从左到右、奇数行从右到左 */
+/** 蛇形坐标：每章内部从左上开始，偶数行从左到右、奇数行从右到左（右对齐，
+ *  回行不满时也贴住上一行末尾 —— 否则断行会让拐角节点跑到最左，连线被拉成横穿） */
 function nodePositions(): Array<{ x: number; y: number }> {
   const pos: Array<{ x: number; y: number }> = [];
   const byStage = new Map<number, Level[]>();
@@ -73,7 +74,8 @@ function nodePositions(): Array<{ x: number; y: number }> {
       const count = Math.min(PER_ROW, levels.length - rr * PER_ROW);
       const y = ROW_TOP + row * ROW_GAP;
       for (let c = 0; c < count; c++) {
-        const i = rr % 2 === 0 ? c : count - 1 - c; // 奇数行蛇形往回
+        // 偶数行从左到右；奇数行（回行）从右到左，节点贴最右排（延续蛇形）
+        const i = rr % 2 === 0 ? c : PER_ROW - 1 - c;
         pos[idx] = { x: 120 + i * 156, y };
         idx++;
       }
