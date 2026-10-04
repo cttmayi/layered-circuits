@@ -216,6 +216,37 @@ describe('seq 关卡里复用状态不能冻住模块（两级串联反相器）
     expect(qs.map((t) => (t === 'Z' ? 'Z' : t[0]))).toEqual(['1', '1', '0', '0']);
   });
 
+  it('复用不比冷启动多算：每次仿真的求值次数同量级（维持状态不等于加倍运算）', () => {
+    const level = findLevel('s2-sr-latch')!;
+    const design = level.referenceSolution!;
+    const lib = [...teachingModulesFor('rtl')];
+    const run = (reuse: boolean): number => {
+      let prev: number[] | null = null;
+      let last = 0;
+      for (const [sn, rn] of [
+        [0, 1],
+        [1, 1],
+      ] as Array<[0 | 1, 0 | 1]>) {
+        const response = handleRequest({
+          id: 1,
+          type: 'simulate',
+          design,
+          library: lib,
+          mode: 'logic',
+          inputs: { sn, rn },
+          buttonPorts: [],
+          prevNodeSignals: reuse && prev ? prev : undefined,
+        });
+        last = response.snapshot?.evaluations ?? 0;
+        prev = response.snapshot?.nodeSignals ?? null;
+      }
+      return last;
+    };
+    // 复用一次 = 恢复节点态后收敛一次，与冷启动（上电收敛一次）同价；
+    // 若哪天又变成"先上电收敛、再恢复收敛"，这里会翻倍报警。
+    expect(run(true)).toBeLessThanOrEqual(run(false) * 1.05);
+  });
+
   it('单管反相器（无内部中间节点）行为不变：教科书非门照旧反相', () => {
     const notGate = stored.find((m) => m.name === '非门')!;
     expect(clicksInSr(notGate.hash, [1, 0, 1], library)).toEqual(['0·强', '1·弱', '0·强']);

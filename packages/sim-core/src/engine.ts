@@ -216,6 +216,17 @@ export class Simulator {
       this.trace.signals.length = 0;
     }
 
+    // 有「全节点快照」时直奔恢复：把节点态写回去再收敛一次就够，不必先白跑一遍上电
+    // 收敛（复用一次 = 一次全集收敛，与冷启动同价）。见下面 initialNodeSignals 的说明。
+    const snapshot = this.mode === 'logic' ? this.options.initialNodeSignals : undefined;
+    if (snapshot && snapshot.length === this.net.nodeCount) {
+      for (let node = 0; node < this.net.nodeCount; node++) {
+        this.nodeSig[node] = (snapshot[node] ?? SIG_Z) & 0x0f;
+      }
+      this.resettle();
+      return;
+    }
+
     // 上电：
     // - 逻辑模式：所有元素在 t = 0 迭代到收敛（无延迟可言）；
     // - 时序模式：只有电源/输入引脚这类「源」在 t = 0 立刻建立，其余元件靠自身的
@@ -230,18 +241,8 @@ export class Simulator {
     // 陈旧贡献，把恢复态「毒化」（状态电路在输入变化时卡死/误翻转）。只给信号不给
     // 贡献的调用方视为「不要状态保持」：跳过恢复，维持上电默认（宁可丢状态也不产出
     // 错误结果）。
-    // 优先用「全节点快照」恢复：模块内部节点也在内，恢复后从自洽初值重新收敛一次
-    // （见 initialNodeSignals 注释）。没有全节点快照才退回按顶层网 id 的旧路径。
-    // 只用于逻辑模式：时序模式的收敛靠事件队列推进，重建贡献缓存需要推进时间，
-    // 会扰动恢复的时间语义，所以那边保持按网恢复的旧行为不变。
-    const nodeState = this.mode === 'logic' ? this.options.initialNodeSignals : undefined;
-    if (nodeState && nodeState.length === this.net.nodeCount) {
-      for (let node = 0; node < this.net.nodeCount; node++) {
-        this.nodeSig[node] = (nodeState[node] ?? SIG_Z) & 0x0f;
-      }
-      this.resettle();
-      return;
-    }
+    // 没有全节点快照时退回按顶层网 id 的旧路径（只用于时序模式与老调用方：
+    // 那边收敛靠事件队列推进，重建贡献缓存需要推进时间，会扰动恢复的时间语义）。
     if (this.options.initialSignals && this.options.initialContribs) {
       const sig = this.options.initialSignals;
       for (let node = 0; node < this.net.nodeCount; node++) {
