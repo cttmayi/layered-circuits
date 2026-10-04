@@ -125,6 +125,35 @@ describe('避障布线', () => {
     ]);
   });
 
+  it('从引脚出发的线不压过同一元件的兄弟引脚（端点豁免不含兄弟）', () => {
+    // 用户报的真实场景：异或门答案里 a 网的线从 G1.a(0,0) 出发，旧逻辑把端点
+    // 元件整体豁免（含引脚点），绕行垂直段 x=0 恰好擦过 G1.b(0,24) —— 视觉上
+    // 像 a 也连到了 b。修复：端点元件只豁免盒子与端点引脚，兄弟引脚仍要避开。
+    const MOD: RouteObstacle = {
+      id: 'mod1',
+      x: -22,
+      y: -12,
+      w: 44,
+      h: 48,
+      pins: [
+        { x: 0, y: 0 }, // a（端点）
+        { x: 0, y: 24 }, // b（兄弟，在 a 正下方）
+        { x: 44, y: 0 }, // y 输出
+      ],
+    };
+    // 从左侧引脚 a 出发，同 y 到远端 —— 直连朝右穿元件被方向约束剔除，
+    // 绕行候选不得压过兄弟引脚 b
+    const segs = routeSegments({ x: 0, y: 0 }, { x: 200, y: 0 }, 0, [MOD], 'mod1', 'far');
+    let crossedBrother = false;
+    for (const [p, q] of segs) {
+      for (const pt of MOD.pins ?? []) {
+        if (pt.x === 0 && pt.y === 0) continue; // 端点引脚自己豁免
+        if (distToPoint(p, q, pt) <= 8) crossedBrother = true;
+      }
+    }
+    expect(crossedBrother).toBe(false);
+  });
+
   it('新线不与已布导线平行重叠（避让 placed），垂直交叉仍允许', () => {
     // 已布好一条 y=20 的水平线
     const placed: Array<[{ x: number; y: number }, { x: number; y: number }]> = [

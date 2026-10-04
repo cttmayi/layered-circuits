@@ -384,10 +384,21 @@ function routeClear(
   /** 已布好的其他导线线段：候选线不得与它们平行重叠/贴近（交叉仍允许） */
   avoid: Array<[{ x: number; y: number }, { x: number; y: number }]> = [],
   pinRadius = PIN_RADIUS,
+  /** 端点引脚点：从这些点出发的线豁免它们自己，但同一元件的其他引脚仍要避开 */
+  exemptPins: Array<{ x: number; y: number }> = [],
 ): boolean {
   for (const [p, q] of segs) {
     for (const ob of obstacles) {
-      if (ob.id === skipA || ob.id === skipB) continue;
+      if (ob.id === skipA || ob.id === skipB) {
+        // 端点元件：盒子跳过（导线必须能从引脚出发），但**其他引脚点仍要避开**——
+        // 否则从 a 引脚出发的线会垂直擦过同一元件的 b 引脚点（视觉像连到了它）。
+        // 只豁免端点引脚自己（线从它出发，本来就在邻域内）。
+        const others = (ob.pins ?? []).filter(
+          (pt) => !exemptPins.some((e) => Math.abs(e.x - pt.x) < 0.5 && Math.abs(e.y - pt.y) < 0.5),
+        );
+        if (segHitsPins(p, q, others, pinRadius)) return false;
+        continue;
+      }
       if (segHitsRect(p, q, ob)) return false;
       if (segHitsPins(p, q, ob.pins, pinRadius)) return false;
     }
@@ -409,6 +420,8 @@ function routeViolations(
   skipB: string,
   avoid: Array<[{ x: number; y: number }, { x: number; y: number }]>,
   pinRadius = PIN_RADIUS,
+  /** 端点引脚点：与 routeClear 一致，端点元件只豁免这些点，其他引脚仍计违规 */
+  exemptPins: Array<{ x: number; y: number }> = [],
 ): number {
   let rects = 0;
   let pins = 0;
@@ -417,7 +430,13 @@ function routeViolations(
   for (const [p, q] of segs) {
     len += Math.abs(p.x - q.x) + Math.abs(p.y - q.y);
     for (const ob of obstacles) {
-      if (ob.id === skipA || ob.id === skipB) continue;
+      if (ob.id === skipA || ob.id === skipB) {
+        const others = (ob.pins ?? []).filter(
+          (pt) => !exemptPins.some((e) => Math.abs(e.x - pt.x) < 0.5 && Math.abs(e.y - pt.y) < 0.5),
+        );
+        if (segHitsPins(p, q, others, pinRadius)) pins++;
+        continue;
+      }
       if (segHitsRect(p, q, ob)) rects++;
       else if (segHitsPins(p, q, ob.pins, pinRadius)) pins++;
     }
@@ -510,14 +529,14 @@ export function routeSegments(
     )
       continue;
     if (!obstacles.length && !avoid.length) return cand;
-    if (routeClear(cand, obstacles, skipA, skipB, avoid)) return cand;
+    if (routeClear(cand, obstacles, skipA, skipB, avoid, PIN_RADIUS, [a, b])) return cand;
   }
   // 兜底：没有候选全清时，挑「坏」得最少的（优先不穿元件、不压引脚、不贴线），
   // 而不是无脑取第一条直连——密集区也不会横穿引脚/元件。
   let best = candidates[0] ?? [[a, b]];
   let bestScore = Infinity;
   for (const cand of candidates) {
-    const score = routeViolations(cand, obstacles, skipA, skipB, avoid);
+    const score = routeViolations(cand, obstacles, skipA, skipB, avoid, PIN_RADIUS, [a, b]);
     if (score < bestScore) {
       bestScore = score;
       best = cand;
