@@ -48,8 +48,17 @@ export function SettlementPanel({
       title={`验收报告 · ${level.title}`}
       onClose={onDismiss}
       footer={
-        <button type="button" className="primary" onClick={onNextLevel} disabled={!nextLevelTitle}>
-          {nextLevelTitle ? `接着做下一单：${nextLevelTitle}` : '主线全部完成'}
+        <button
+          type="button"
+          className="primary"
+          onClick={onNextLevel}
+          disabled={!nextLevelTitle && !level.classroom}
+        >
+          {level.classroom
+            ? '回到教学模式'
+            : nextLevelTitle
+              ? `接着做下一单：${nextLevelTitle}`
+              : '主线全部完成'}
         </button>
       }
     >
@@ -122,7 +131,7 @@ export function SettlementPanel({
 
         {level.classroom ? (
           <p className="teaching-done">
-            ✓ 教学关完成 —— 元件已学会，本单不评星、不设元件成本与传播延迟要求
+            ✓ 教学关完成 —— 元件已学会，本单不评星、不设元件成本与传播延迟要求，也不封装模块
           </p>
         ) : (
           <>
@@ -148,7 +157,9 @@ export function SettlementPanel({
         )}
 
         <p className="panel-note">
-          委托 {level.id} · 交付物【{levelName}】已进组件库
+          {level.classroom
+            ? `教学关 ${level.id} · 元件已学会（教学关不产出积木模块，不占组件库）`
+            : `委托 ${level.id} · 交付物【${levelName}】已进组件库`}
           {level.kind === 'cost' ? ' · 元件成本挑战关：不限元件成本，按满分线结算' : ''}
         </p>
       </section>

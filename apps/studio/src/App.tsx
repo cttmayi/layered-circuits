@@ -999,58 +999,66 @@ export function App(): React.JSX.Element {
   };
 
   /** 封装 + 结算：验收通过后自动执行 —— 把当前电路封装成关卡产出的模块，
-   *  永久加入个人组件库、记录成绩，并弹出「验收报告」对话框（含「接着做下一单」）。 */
+   *  永久加入个人组件库、记录成绩，并弹出「验收报告」对话框（含「接着做下一单」）。
+   *  教学关例外：它是「学元件」，通过只记「已学会」，不封装模块、不往组件库塞东西。 */
   const wrapAndSettle = async (judge: JudgeResult): Promise<void> => {
     if (!currentLevel) return;
     // 同一关已结算过（结算对话框还开着）就不再重复封装
     if (settlement && judgeResult === judge && levelRecord) return;
     const name = currentLevel.unlock?.name ?? currentLevel.title;
     const design = toDesign(doc, { id: `wrap-${currentLevel.id}`, name });
-    const response = await runner.send({
-      type: 'wrap',
-      design,
-      library: doc.library.map((m) => m.template),
-      name,
-      stage: currentLevel.stage,
-    });
-    if (response.error || !response.wrapped) {
-      setToast(`封装失败：${response.error ?? '未知错误'}`);
-      return;
-    }
-    const info = response.wrapped;
-    const stored = storeModule(
-      progress.library,
-      {
-        hash: info.hash,
-        name: info.name,
-        costHalf: info.costHalf,
-        isSequential: info.isSequential,
-        ports: info.ports,
-        template: info.template,
+    /** 教学关不产出积木：这一单没有「交付物」进组件库 */
+    const teachOnly = Boolean(currentLevel.classroom);
+    /** 本单要写进组件库的模块（教学关是空数组） */
+    let toAdd: StoredModule[] = [];
+    if (!teachOnly) {
+      const response = await runner.send({
+        type: 'wrap',
+        design,
+        library: doc.library.map((m) => m.template),
+        name,
         stage: currentLevel.stage,
-        levelId: currentLevel.id,
-        sources: design.instances
-          .filter((inst) => inst.kind === 'module')
-          .map((inst) => (inst.kind === 'module' ? inst.module : '')),
-      },
-      Date.now(),
-    );
-    // 封装出的复合模块身体会引用子积木哈希（玩家自己的模块 + 教学积木）。教学积木不在
-    // 玩家库里 → 跨关复用会 unknown-module：把身体传递引用到的教学积木一并持久化进玩家库
-    // （teaching 标记，仍不出现在「我的模块」，但库里有 → 编译可解析）。幂等：重复无害。
-    const deps = teachingDepsOf(
-      (info.template as ModuleTemplate).body,
-      doc.library,
-      progress.family,
-    );
-    let library = addModule(doc.library, stored);
-    for (const d of deps) library = addModule(library, d);
-    commit({ ...doc, library });
+      });
+      if (response.error || !response.wrapped) {
+        setToast(`封装失败：${response.error ?? '未知错误'}`);
+        return;
+      }
+      const info = response.wrapped;
+      const stored = storeModule(
+        progress.library,
+        {
+          hash: info.hash,
+          name: info.name,
+          costHalf: info.costHalf,
+          isSequential: info.isSequential,
+          ports: info.ports,
+          template: info.template,
+          stage: currentLevel.stage,
+          levelId: currentLevel.id,
+          sources: design.instances
+            .filter((inst) => inst.kind === 'module')
+            .map((inst) => (inst.kind === 'module' ? inst.module : '')),
+        },
+        Date.now(),
+      );
+      // 封装出的复合模块身体会引用子积木哈希（玩家自己的模块 + 教学积木）。教学积木不在
+      // 玩家库里 → 跨关复用会 unknown-module：把身体传递引用到的教学积木一并持久化进玩家库
+      // （teaching 标记，仍不出现在「我的模块」，但库里有 → 编译可解析）。幂等：重复无害。
+      const deps = teachingDepsOf(
+        (info.template as ModuleTemplate).body,
+        doc.library,
+        progress.family,
+      );
+      toAdd = [stored, ...deps];
+      let library = doc.library;
+      for (const m of toAdd) library = addModule(library, m);
+      commit({ ...doc, library });
+    }
     // 星级：元件成本与传播延迟各按基准线四档（0.5/0.75/1 倍），取较差；教学关无标准不评星
-    const stars = currentLevel.classroom ? 0 : starsOf(judge);
+    const stars = teachOnly ? 0 : starsOf(judge);
     setProgress((prev) => {
-      let next = addModule(prev.library, stored);
-      for (const d of deps) next = addModule(next, d);
+      let next = prev.library;
+      for (const m of toAdd) next = addModule(next, m);
       return recordClear(
         { ...prev, library: next },
         currentLevel.id,
@@ -1062,13 +1070,17 @@ export function App(): React.JSX.Element {
     const index = ALL_LEVELS.findIndex((l) => l.id === currentLevel.id);
     // 教学关不在关卡链上：没有「下一关」（index = -1 时不能取到 ALL_LEVELS[0]）
     const next = index >= 0 ? ALL_LEVELS[index + 1] : undefined;
-    // 过场：芯片落进组件库 → 结算页（客户验收报告 + 钱 + 评级）
-    setChipDrop(name);
-    window.setTimeout(() => setChipDrop(null), 1400);
+    if (!teachOnly) {
+      // 过场：芯片落进组件库 → 结算页（客户验收报告 + 钱 + 评级）
+      setChipDrop(name);
+      window.setTimeout(() => setChipDrop(null), 1400);
+    }
     setSettlement(judge);
     setSettlementStars(stars);
     setToast(
-      `已交付【${name}】：材料费 ${info.costHalf / 2} 元${next ? `，已解锁下一单「${next.title}」` : '，主线全部完成'}`,
+      teachOnly
+        ? `已学会【${name}】：教学关只记「已掌握」，不产出积木模块`
+        : `已交付【${name}】：材料费 ${judge.costHalf / 2} 元${next ? `，已解锁下一单「${next.title}」` : '，主线全部完成'}`,
     );
   };
 
@@ -1513,6 +1525,11 @@ export function App(): React.JSX.Element {
                     : undefined // 教学关：没有下一关
                 }
                 onNextLevel={() => {
+                  // 教学关不在关卡链上：结算页的按钮是「回到教学模式」
+                  if (currentLevel.classroom) {
+                    goToTeach();
+                    return;
+                  }
                   const next =
                     ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) >= 0
                       ? ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]
