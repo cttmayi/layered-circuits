@@ -82,11 +82,17 @@ export const STAGE2_LEVELS: Level[] = [
     kind: 'main',
     title: 'SR 锁存器',
     brief:
-      'sn / rn 是低有效的置位与复位端：置位/复位过后，电路要「记住」最后一次操作 —— 两个输入都为高时，输出不该跟着输入跑。',
+      'sn / rn 是低有效的置位与复位端：sn 拉低就把输出置位（q=1、qn=0），rn 拉低就复位（q=0、qn=1）；' +
+      '两个都回到高时输出保持不动 —— 记住上一次的结果，就是这一关的全部要求。要交的端口是 sn、rn（输入）和 q、qn（输出，互补）。',
     teaching:
-      '交叉耦合是记忆的源头：每个门的输出都去喂另一个门的输入，于是存在两个自洽的稳定状态（q=1 或 q=0）。' +
-      '输入只是「把电路推倒某一侧」，推完松手它自己会稳住。',
-    hint: '与非门的输出 q 通过电阻接到另一个与非门的一个输入，另一路同理接成 q → 与门 2、qn → 与门 1。低成本做法：直接手搭两个与非门（成本 14）。',
+      '记忆来自交叉耦合：把两个门的输出各自接回另一个门的输入，电路就有了两个自洽的稳定状态（q=1 或 q=0）——' +
+      '输入只负责把电路推到其中一侧，推完松手它自己停在那儿，这就是「锁存」。' +
+      '用与非门交叉耦合时，有效动作天生是低电平（任一输入为 0 就把它顶成 1），所以端口是低有效的 sn / rn。' +
+      '注意 sn、rn 同时被拉低时两边都想置位、输出不确定：这个状态既不要求也不测，别依赖它。',
+    hint:
+      '照着参考解搭两个与非门交叉耦合：G1 = NAND(sn, qn) 输出 q，G2 = NAND(rn, q) 输出 qn（qn 直接取自 G2，不用再加非门）。' +
+      'RTL 与非门：两个三极管串联下拉（Q1 集电极接输出、发射极接 Q2 集电极，Q2 发射极接 GND），两个基极各经一个电阻接输入，输出再上拉到 VCC。' +
+      '成本 4 个三极管 + 6 个电阻 = 20 元（40 半单位），正好是本关最省做法。',
     mode: 'logic',
     allowedUnits: [...STAGE2_UNITS],
     moduleAccess: 'all',
@@ -96,10 +102,10 @@ export const STAGE2_LEVELS: Level[] = [
     clock: { freqHz: 100_000 },
     checks: {},
     vectors: [
-      { inputs: { sn: 0, rn: 1 }, expect: { q: 1, qn: 0 }, note: '置位（低有效）' },
-      { inputs: { sn: 1, rn: 1 }, expect: { q: 1, qn: 0 }, note: '松手保持' },
-      { inputs: { sn: 1, rn: 0 }, expect: { q: 0, qn: 1 }, note: '复位（低有效）' },
-      { inputs: { sn: 1, rn: 1 }, expect: { q: 0, qn: 1 }, note: '松手保持' },
+      { inputs: { sn: 0, rn: 1 }, expect: { q: 1, qn: 0 }, note: '置位：sn 拉低 → q=1' },
+      { inputs: { sn: 1, rn: 1 }, expect: { q: 1, qn: 0 }, note: '保持：沿用上一次的 q=1' },
+      { inputs: { sn: 1, rn: 0 }, expect: { q: 0, qn: 1 }, note: '复位：rn 拉低 → q=0' },
+      { inputs: { sn: 1, rn: 1 }, expect: { q: 0, qn: 1 }, note: '保持：沿用上一次的 q=0' },
     ] satisfies LevelVector[],
     unlock: {
       name: 'SR锁存器',

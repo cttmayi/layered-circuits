@@ -190,6 +190,7 @@ export function JudgePanel({
                       跳变
                     </th>
                   )}
+                  {result.rows.some((row) => row.note) && <th className="sep">说明</th>}
                 </tr>
               </thead>
               <tbody>
@@ -223,6 +224,9 @@ export function JudgePanel({
                         >
                           {row.index === 0 ? '上电' : row.glitches}
                         </td>
+                      )}
+                      {result.rows.some((r) => r.note) && (
+                        <td className="sep note-col">{row.note ?? ''}</td>
                       )}
                     </tr>
                   );

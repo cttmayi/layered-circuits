@@ -26,6 +26,9 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
   const showPort = (n: string): string =>
     (widthOf.get(n) ?? 1) > 1 ? `${n}[${(widthOf.get(n) ?? 1) - 1}:0]` : n;
 
+  // 时序关的向量表会出现「同一组输入、输出却不同」的行（保持上一次），
+  // 没有说明列就是自相矛盾的表 —— 所以只要有一条向量写了说明就补上这一列。
+  const hasNotes = level.vectors.some((v) => v.note);
   const truthTable = (
     <table className="truth">
       <thead>
@@ -38,12 +41,14 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
               {showPort(n)}
             </th>
           ))}
+          {hasNotes && <th className="note-col">说明</th>}
         </tr>
       </thead>
       <tbody>
-        {level.vectors.map((v) => (
+        {level.vectors.map((v, i) => (
           <tr
-            key={`${inputNames.map((n) => String(v.inputs[n])).join('')}-${outputNames.map((n) => String(v.expect?.[n])).join('')}`}
+            // biome-ignore lint/suspicious/noArrayIndexKey: 静态只读向量表，时序关会出现完全相同的行，行号是唯一稳定标识
+            key={i}
           >
             {inputNames.map((n) => (
               <td key={n} className={CELL[String(v.inputs[n])] ?? ''}>
@@ -55,6 +60,7 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
                 {String(v.expect?.[n])}
               </td>
             ))}
+            {hasNotes && <td className="note-col">{v.note ?? ''}</td>}
           </tr>
         ))}
       </tbody>

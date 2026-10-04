@@ -57,6 +57,8 @@ export interface JudgeRow {
   glitches: number;
   /** 本行采样的时间窗口（ps） */
   window: { fromPs: number; toPs: number };
+  /** 关卡给这一行的说明（时序关常有「保持上一次」这种同输入不同输出的行） */
+  note?: string;
 }
 
 export interface JudgeTiming {
@@ -330,7 +332,8 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
   let waveform: ReturnType<typeof runVectors>['waveform'];
   const outputNodes = net.ports.filter((p) => p.dir === 'out').map((p) => p.node);
   if (missingInputs.length === 0 && missingOutputs.length === 0 && !widthBad) {
-    const run = runVectors(net, expandVectors(level.vectors, widthOf), {
+    const vectors = expandVectors(level.vectors, widthOf);
+    const run = runVectors(net, vectors, {
       mode,
       defaultSettlePs: defaultSettle(level),
       trace: true,
@@ -357,6 +360,9 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
         mismatches: row.mismatches,
         glitches,
         window: row.window,
+        // 关卡给这一行的说明一起带上：时序关「同一组输入、输出不同」的行（保持上一次）
+        // 在判定表里没有说明就会看起来自相矛盾
+        note: vectors[row.index]?.note,
       };
     });
     failedRows = rows.filter((r) => !r.ok).length;
@@ -377,7 +383,7 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
         if (p.dir === 'out' && p.bit === 0 && !outNodes.has(p.name)) outNodes.set(p.name, p.node);
       }
       if (outNodes.size > 0) {
-        for (const vector of expandVectors(level.vectors, widthOf)) {
+        for (const vector of vectors) {
           for (const [name, value] of Object.entries(vector.inputs)) sim.setInput(name, value);
           sim.settle();
           for (const [name, node] of outNodes) {

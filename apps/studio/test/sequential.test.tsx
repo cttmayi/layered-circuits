@@ -12,6 +12,7 @@ import { InMemoryModuleLibrary } from '@lc/schema';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { JudgePanel } from '../src/panels/JudgePanel';
+import { LevelCard } from '../src/panels/LevelCard';
 import { WaveformPanel } from '../src/panels/WaveformPanel';
 
 const dffLevel = ALL_LEVELS.find((l) => l.id === 's2-dff');
@@ -27,6 +28,48 @@ function judgeDff(): JudgeResult {
 }
 
 const PORT_NAMES = ['d', 'clk', 'q', 'qn'];
+
+describe('时序关卡的向量说明列', () => {
+  // 时序关的向量表会出现「同一组输入、输出却不同」的行（保持上一次）。没有说明列
+  // 这张表就是自相矛盾的：sn=rn=1 出现两次，一次 q=1 一次 q=0。
+  const srLevel = ALL_LEVELS.find((l) => l.id === 's2-sr-latch');
+  if (!srLevel) throw new Error('缺少 SR 锁存器关卡');
+
+  it('任务卡上直接说清「低有效」和「两个都为高就保持」，不用翻详情', () => {
+    const html = renderToStaticMarkup(<LevelCard level={srLevel} costHalf={0} />);
+    expect(html).toContain('低有效');
+    expect(html).toContain('保持不动');
+    expect(html).toContain('q、qn（输出，互补）');
+  });
+
+  it('判定结果每一行带上关卡说明（判定表里也能看懂「保持」）', () => {
+    const design = srLevel.referenceSolution;
+    if (!design) throw new Error('缺少参考解');
+    const result = judgeDesign(design, srLevel, {
+      library: new InMemoryModuleLibrary(),
+      hardcore: true,
+    });
+    expect(result.pass).toBe(true);
+    expect(result.rows.map((r) => r.note)).toEqual([
+      '置位：sn 拉低 → q=1',
+      '保持：沿用上一次的 q=1',
+      '复位：rn 拉低 → q=0',
+      '保持：沿用上一次的 q=0',
+    ]);
+    const html = renderToStaticMarkup(
+      <JudgePanel level={srLevel} result={result} record={undefined} attempts={1} />,
+    );
+    expect(html).toContain('说明');
+    expect(html).toContain('保持：沿用上一次的 q=1');
+  });
+
+  it('没有写说明的关卡不出现多余的列（非门真值表仍是两列）', () => {
+    const notLevel = ALL_LEVELS.find((l) => l.id === 's1-not');
+    if (!notLevel) throw new Error('缺少非门关卡');
+    const html = renderToStaticMarkup(<LevelCard level={notLevel} costHalf={0} />);
+    expect(html).not.toContain('说明');
+  });
+});
 
 describe('波形面板', () => {
   it('把 D 触发器的端口波形画成阶梯线，并标出每个向量的施加时刻', () => {

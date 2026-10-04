@@ -21,6 +21,7 @@ import {
   recordClear,
 } from '../src/level/index';
 import { docFor } from '../src/level/session';
+import { LevelCard } from '../src/panels/LevelCard';
 import { handleRequest } from '../src/sim/handle';
 import { goToLevel, renderApp, startJob, teachCleared } from './helpers';
 
@@ -47,6 +48,32 @@ describe('关卡内容与进度', () => {
         .syms.filter((s) => s.kind === 'input')
         .map((s) => s.label),
     ).toEqual(['a', 'b']);
+  });
+
+  it('SR 锁存器：真值表带「说明」列，sn=rn=1 出现两次也能看懂哪次是保持', () => {
+    const srLevel = findLevel('s2-sr-latch')!;
+    render(<LevelCard level={srLevel} costHalf={0} />);
+    // 任务卡正面直接给需求：低有效 + 两个都为高就保持
+    expect(document.querySelector('.level-card .task-brief')?.textContent).toContain('低有效');
+    fireEvent.click(screen.getByText(/任务详情/));
+    const table = document.querySelector('.task-full .truth') as HTMLTableElement;
+    expect([...table.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
+      'sn',
+      'rn',
+      'q',
+      'qn',
+      '说明',
+    ]);
+    expect(
+      [...table.querySelectorAll('tbody tr')].map((tr) =>
+        [...tr.querySelectorAll('td')].map((td) => td.textContent),
+      ),
+    ).toEqual([
+      ['0', '1', '1', '0', '置位：sn 拉低 → q=1'],
+      ['1', '1', '1', '0', '保持：沿用上一次的 q=1'],
+      ['1', '0', '0', '1', '复位：rn 拉低 → q=0'],
+      ['1', '1', '0', '1', '保持：沿用上一次的 q=0'],
+    ]);
   });
 
   it('解锁顺序：第一关开放，之后必须前一关真的通关（失败尝试不解锁）', () => {

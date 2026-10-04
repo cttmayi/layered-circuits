@@ -554,6 +554,15 @@ body,
   border-left: 1px solid var(--line);
 }
 
+/* 向量说明列（「保持：沿用上一次的 q=1」这种）：窄表里也要能读，所以左对齐 */
+.truth .note-col {
+  border-left: 1px solid var(--line);
+  text-align: left;
+  color: var(--dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .truth .hi {
   color: var(--ok);
 }
