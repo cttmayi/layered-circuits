@@ -53,10 +53,11 @@ describe('关卡内容与进度', () => {
   it('SR 锁存器：真值表带「说明」列，sn=rn=1 出现两次也能看懂哪次是保持', () => {
     const srLevel = findLevel('s2-sr-latch')!;
     render(<LevelCard level={srLevel} costHalf={0} />);
-    // 任务卡正面是大白话（高中生读得懂）：平时都是 1 → 谁变 0 听谁的 → 都为 1 就保持
+    // 任务卡正面是大白话（高中生读得懂）：先说清这是什么功能，再说规则
     const brief = document.querySelector('.level-card .task-brief')?.textContent ?? '';
-    expect(brief).toContain('两个输入平时都是 1');
-    expect(brief).toContain('两个都是 1 时 q 停住不动');
+    expect(brief).toContain('一个会记忆的开关');
+    expect(brief).toContain('平时两个输入都是 1');
+    expect(brief).toContain('都为 1 时 q 保持不动');
     expect(brief).not.toContain('低有效');
     fireEvent.click(screen.getByText(/任务详情/));
     const table = document.querySelector('.task-full .truth') as HTMLTableElement;
