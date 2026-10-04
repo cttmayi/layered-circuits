@@ -14,6 +14,7 @@ import {
   type Doc,
   MODULE_HALF_WIDTH,
   moduleBox,
+  partBoxSize,
   pinKey,
   pinNames,
   pinOffsets,
@@ -154,25 +155,7 @@ function footprintOf(
   library: StoredModule[],
 ): { x: number; y: number; w: number; h: number } {
   const key = symKindKey(sym);
-  if (key === 'module') {
-    const box = moduleBox(sym, library);
-    return { x: sym.x - box.w / 2, y: sym.y - box.h / 2, w: box.w, h: box.h };
-  }
-  const sizes: Record<string, { w: number; h: number }> = {
-    npn: { w: 44, h: 44 },
-    nmos: { w: 44, h: 44 },
-    pmos: { w: 44, h: 44 },
-    res: { w: 20, h: 40 },
-    // 二极管/电容的引脚（±22 / ±14）必须露在足迹外，否则连线从引脚出发
-    // 朝内拐时会整段穿过"器件矩形"，看着就像电线穿进元件里。
-    dio: { w: 34, h: 24 },
-    cap: { w: 22, h: 26 },
-    vcc: { w: 28, h: 22 },
-    gnd: { w: 34, h: 22 },
-    input: { w: 44, h: 26 },
-    output: { w: 44, h: 26 },
-  };
-  let size = sizes[key] ?? { w: 30, h: 30 };
+  let size = partBoxSize(key, sym.unit, sym.module, library);
   if (key === 'input' || key === 'output') {
     const width = sym.width ?? 1;
     if (width > 1) size = { w: 44, h: Math.max(26, (width - 1) * 14 + 26) };
@@ -448,6 +431,99 @@ function routeViolations(
 }
 
 /**
+ * 一维「空隙中点」扫描：把 [lo,hi] 内被若干区间覆盖的部分挖掉，返回每个空段的中点。
+ * 元件之间的空带/空列就是导线可以走的通道，多折点绕行靠它找拐点。
+ */
+function gapMids(lo: number, hi: number, ranges: Array<[number, number]>): number[] {
+  const merged: Array<[number, number]> = [];
+  for (const r of [...ranges].sort((p, q) => p[0] - q[0])) {
+    const last = merged[merged.length - 1];
+    if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+    else merged.push([r[0], r[1]]);
+  }
+  const mids: number[] = [];
+  let cursor = lo;
+  for (const [r0, r1] of merged) {
+    if (r1 < lo || r0 > hi) continue;
+    if (r0 > cursor) mids.push((cursor + r0) / 2);
+    cursor = Math.max(cursor, r1);
+  }
+  if (cursor < hi) mids.push((cursor + hi) / 2);
+  return mids;
+}
+
+/**
+ * 多折点绕行候选：单折点 Z 形被障碍全拒（共享信号跨多列且中间全堵）时，
+ * 沿「障碍之间的空带/空列」扫出 5 段绕行。空带 = 不被任何非端点元件矩形覆盖的
+ * 水平带（垂直同理），取带中心做拐点；竖先/横先各生成一份，交给 routeClear 验证
+ * （贴矩形边缘的窄缝仍算候选，靠引脚半径检查兜底，避免「宁可穿盒」的坏路线）。
+ */
+function detourCandidates(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  obstacles: RouteObstacle[],
+  skipA: string,
+  skipB: string,
+): Array<Array<[{ x: number; y: number }, { x: number; y: number }]>> {
+  const blockers = obstacles.filter((o) => o.id !== skipA && o.id !== skipB);
+  if (!blockers.length) return [];
+  const yLo = Math.min(a.y, b.y) - 240;
+  const yHi = Math.max(a.y, b.y) + 240;
+  const xLo = Math.min(a.x, b.x) - 240;
+  const xHi = Math.max(a.x, b.x) + 240;
+  // 空带只看「x 与走廊重叠」的障碍（水平段只会在 a.x..b.x 之间走）；空列同理。
+  // 否则画布边缘的端口/电源会吞掉中间的有效 gap（如 out-q 覆盖 133..267 吃掉
+  // 219..237 的空带），多折点绕行直接无解。
+  const corridorX = (o: RouteObstacle): boolean =>
+    o.x < Math.max(a.x, b.x) && o.x + o.w > Math.min(a.x, b.x);
+  const corridorY = (o: RouteObstacle): boolean =>
+    o.y < Math.max(a.y, b.y) && o.y + o.h > Math.min(a.y, b.y);
+  const bands = gapMids(
+    yLo,
+    yHi,
+    blockers.filter(corridorX).map((o) => [o.y, o.y + o.h] as [number, number]),
+  );
+  const cols = gapMids(
+    xLo,
+    xHi,
+    blockers.filter(corridorY).map((o) => [o.x, o.x + o.w] as [number, number]),
+  );
+  const out: WireRoute[] = [];
+  for (const gy of bands) {
+    for (const gx of cols) {
+      // 竖先：先垂直到空带，再横到空列，再垂直接近 b
+      const vFirst: WireRoute = [
+        [a, { x: a.x, y: gy }],
+        [
+          { x: a.x, y: gy },
+          { x: gx, y: gy },
+        ],
+        [
+          { x: gx, y: gy },
+          { x: gx, y: b.y },
+        ],
+        [{ x: gx, y: b.y }, b],
+      ];
+      // 横先：先横到空列，再垂直到空带，再水平接近 b
+      const hFirst: WireRoute = [
+        [a, { x: gx, y: a.y }],
+        [
+          { x: gx, y: a.y },
+          { x: gx, y: gy },
+        ],
+        [
+          { x: gx, y: gy },
+          { x: b.x, y: gy },
+        ],
+        [{ x: b.x, y: gy }, b],
+      ];
+      out.push(vFirst, hFirst);
+    }
+  }
+  return out;
+}
+
+/**
  * 避障布线：优先走「不穿过任何元件、不压未连接引脚、不与已有导线重叠」的折线。
  * 候选依次尝试 —— 直连 / 横先 Z / 竖先 Z / 各自向两侧挪 48/96/144，
  * 第一个不撞元件矩形（两端点所属元件除外）与未连接引脚、且不与已布线段平行贴近的
@@ -529,6 +605,19 @@ export function routeSegments(
     )
       continue;
     if (!obstacles.length && !avoid.length) return cand;
+    if (routeClear(cand, obstacles, skipA, skipB, avoid, PIN_RADIUS, [a, b])) return cand;
+  }
+  // 单折点全被拒 → 多折点绕行（空带/空列扫描）。同样过方向约束与避障检查。
+  for (const cand of detourCandidates(a, b, obstacles, skipA, skipB)) {
+    const sideA = pinSide(a, boxOf(skipA));
+    const sideB = pinSide(b, boxOf(skipB));
+    if (sideA && cand[0] && !outwardTurn(cand[0][1], cand[0][0], sideA)) continue;
+    if (
+      sideB &&
+      cand[cand.length - 1] &&
+      !outwardTurn(cand[cand.length - 1][0], cand[cand.length - 1][1], sideB)
+    )
+      continue;
     if (routeClear(cand, obstacles, skipA, skipB, avoid, PIN_RADIUS, [a, b])) return cand;
   }
   // 兜底：没有候选全清时，挑「坏」得最少的（优先不穿元件、不压引脚、不贴线），

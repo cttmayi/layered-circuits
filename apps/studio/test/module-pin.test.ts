@@ -81,6 +81,59 @@ describe('模块引脚外引', () => {
     expect(moduleBox(sym(0), lib).w).toBe(MODULE_HALF_WIDTH * 2);
   });
 
+  it('多 bit 端口按占位高度排布：8 位口不会压到下一个端口上', () => {
+    // 回归：旧实现按「端口序号 × 24」排 y，而 8 位端口自身占 7×14=98px，
+    // 于是 acc/alu 两排引脚互相交错，mod7 的 er.bit7 与 plus 只差 1px —— 布线时
+    // 该引脚四个方向全被邻脚（半径 8）挡死，只能穿盒。
+    const wide = [
+      {
+        hash: 'w',
+        name: '计算器 ALU',
+        version: 1,
+        stage: 3,
+        costHalf: 9,
+        isSequential: false,
+        ports: [
+          { name: 'acc', dir: 'in', width: 8 },
+          { name: 'alu', dir: 'in', width: 8 },
+          { name: 'plus', dir: 'in', width: 1 },
+          { name: 'minus', dir: 'in', width: 1 },
+          { name: 'aSrc', dir: 'out', width: 8 },
+          { name: 'accClk', dir: 'out', width: 1 },
+        ],
+        template: {},
+        sources: [],
+        createdAt: 0,
+      },
+    ] as never[];
+    const s = { id: 'm', kind: 'module', x: 0, y: 0, module: 'w', label: 'M1', rot: 0 } as never;
+    const pins = pinOffsets(s, wide);
+    const box = moduleBox(s, wide);
+    // 1) 任意两个不同引脚（含同端口不同 bit）至少隔一个 lane 间距
+    for (let i = 0; i < pins.length; i += 1) {
+      for (let j = i + 1; j < pins.length; j += 1) {
+        const p = pins[i]!;
+        const q = pins[j]!;
+        const d = Math.hypot(p.x - q.x, p.y - q.y);
+        expect(
+          d,
+          `${p.name}[${p.bit}] 与 ${q.name}[${q.bit}] 只隔 ${d.toFixed(1)}px`,
+        ).toBeGreaterThanOrEqual(14);
+      }
+    }
+    // 2) 引脚全在方框内（方框高度由端口占位算出来，两边必须一致）
+    for (const p of pins) {
+      expect(Math.abs(p.y), `${p.name}[${p.bit}] 露在方框外`).toBeLessThanOrEqual(box.h / 2);
+    }
+    // 3) 同一个 8 位端口内部按 14px 排
+    const acc = pins
+      .filter((p) => p.name === 'acc')
+      .map((p) => p.y)
+      .sort((a, b) => a - b);
+    expect(acc).toHaveLength(8);
+    for (let i = 1; i < acc.length; i += 1) expect(acc[i]! - acc[i - 1]!).toBe(14);
+  });
+
   it('绘制：引线从框边画到外端，不抛错', () => {
     const ops: string[] = [];
     const ctx = {

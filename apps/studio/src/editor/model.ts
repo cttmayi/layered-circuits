@@ -254,8 +254,8 @@ export function pinOffsets(
   if (!stored) return [];
   const ins = stored.ports.filter((p) => p.dir === 'in');
   const outs = stored.ports.filter((p) => p.dir === 'out');
-  const rows = Math.max(ins.length, outs.length, 1);
-  const height = (rows - 1) * MODULE_PORT_SPACING;
+  const inSide = sideLayout(ins);
+  const outSide = sideLayout(outs);
   const lane = (port: {
     name: string;
     width: number;
@@ -278,14 +278,14 @@ export function pinOffsets(
     lane(port).map((p) => ({
       ...p,
       x: -(MODULE_HALF_WIDTH + MODULE_PIN_LEAD),
-      y: p.y + i * MODULE_PORT_SPACING - height / 2,
+      y: p.y + (inSide.centers[i] ?? 0) - inSide.span / 2,
     })),
   );
   const outPins = outs.flatMap((port, i) =>
     lane(port).map((p) => ({
       ...p,
       x: MODULE_HALF_WIDTH + MODULE_PIN_LEAD,
-      y: p.y + i * MODULE_PORT_SPACING - height / 2,
+      y: p.y + (outSide.centers[i] ?? 0) - outSide.span / 2,
     })),
   );
   return [...inPins, ...outPins].map((p) => {
@@ -294,16 +294,67 @@ export function pinOffsets(
   });
 }
 
-export function moduleBox(sym: Sym, library: StoredModule[] = []): { w: number; h: number } {
+/**
+ * 一侧端口的垂直占位：每个端口占「(bits-1)*LANE_PITCH + MODULE_PORT_SPACING」，
+ * 返回各端口中心（相对该侧中点）与该侧总高。
+ * 旧实现按「端口序号 × 24」排，多 bit 端口（8 位跨度 98px）会压到下一个端口上——
+ * mod7（ALU，三个 8 位口）的 er.bit7 与 plus 引脚点只差 1px，布线时四个方向
+ * 全被邻脚挡死，只能穿盒（s3-calc 的 in-plus→mod7.plus 等 6 根线因此无解）。
+ */
+function sideLayout(ports: Array<{ width?: number }>): { centers: number[]; span: number } {
+  const slots = ports.map(
+    (p) => (Math.max(1, p.width ?? 1) - 1) * LANE_PITCH + MODULE_PORT_SPACING,
+  );
+  const span = slots.reduce((s, v) => s + v, 0);
+  const centers: number[] = [];
+  let cursor = 0;
+  for (const s of slots) {
+    centers.push(cursor + s / 2);
+    cursor += s;
+  }
+  return { centers, span };
+}
+
+export function moduleBox(
+  sym: Pick<Sym, 'module'>,
+  library: StoredModule[] = [],
+): { w: number; h: number } {
   const stored = library.find((m) => m.hash === sym.module);
-  const rows = stored
-    ? Math.max(
-        stored.ports.filter((p) => p.dir === 'in').length,
-        stored.ports.filter((p) => p.dir === 'out').length,
-        2,
-      )
-    : 2;
-  return { w: MODULE_HALF_WIDTH * 2, h: Math.max(56, (rows - 1) * MODULE_PORT_SPACING + 40) };
+  const ins = stored?.ports.filter((p) => p.dir === 'in') ?? [];
+  const outs = stored?.ports.filter((p) => p.dir === 'out') ?? [];
+  const span = Math.max(sideLayout(ins).span, sideLayout(outs).span);
+  return { w: MODULE_HALF_WIDTH * 2, h: Math.max(56, span + 16) };
+}
+
+/**
+ * 元件足迹尺寸表（布局算行距与避障取障碍共用同一张表，防止两边尺寸不一致——
+ * 布局用固定行距 92 时，引脚多的模块（足迹高 98）会压到下一行，行间没有横向
+ * 走线通道，s3-calc 的总线只能穿盒）。模块高度另行按引脚行数计算。
+ */
+export const PART_SIZES: Record<string, { w: number; h: number }> = {
+  npn: { w: 44, h: 44 },
+  nmos: { w: 44, h: 44 },
+  pmos: { w: 44, h: 44 },
+  res: { w: 20, h: 40 },
+  // 二极管/电容的引脚（±22 / ±14）必须露在足迹外，否则连线从引脚出发
+  // 朝内拐时会整段穿过"器件矩形"，看着就像电线穿进元件里。
+  dio: { w: 34, h: 24 },
+  cap: { w: 22, h: 26 },
+  vcc: { w: 28, h: 22 },
+  gnd: { w: 34, h: 22 },
+  input: { w: 44, h: 26 },
+  output: { w: 44, h: 26 },
+};
+
+/** 单个元件的足迹尺寸：模块按端口占位高度算、其余查表 */
+export function partBoxSize(
+  kind: string,
+  unit: string | undefined,
+  moduleHash: string | undefined,
+  library: StoredModule[] = [],
+): { w: number; h: number } {
+  if (kind === 'module') return moduleBox({ module: moduleHash }, library);
+  return PART_SIZES[unit ?? kind] ?? { w: 30, h: 30 };
 }
 
 export function pinPos(
@@ -581,7 +632,6 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
     if (s.kind === 'input' || s.kind === 'output') portByLabel.set(s.label, s);
   }
 
-  const netById = new Map(design.nets.map((n) => [n.id, n]));
   const instById = new Map(design.instances.map((i) => [i.id, i]));
 
   // 各实例的「输出侧引脚」：模块 out 端口；npn/nmos/pmos 的集电极/漏极；电源 p。
@@ -611,16 +661,18 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
     outPinsCache.set(inst.id, s);
     return s;
   };
-  /** 实例在网 N 上是否有输出侧引脚（即 N 是否由它驱动） */
-  const drivesNet = (
-    instId: string,
-    net: { pins: Array<{ inst: string; pin: string }> },
-  ): boolean => {
-    const inst = instById.get(instId);
-    if (!inst) return false;
-    const outs = outputPinsOf(inst);
-    return net.pins.some((p) => p.inst === instId && outs.has(p.pin));
-  };
+  // 每个网由哪些实例驱动（输出侧引脚所在实例）。预计算一次，深度松弛 O(1) 查表——
+  // 大扇出网（clk/共享信号线，几十个引脚）上逐轮扫描 O(pins²) 会把计算器这类
+  // 数千实例的电路拖慢几十倍。
+  const netDrivers = new Map<string, Set<string>>();
+  for (const net of design.nets) {
+    const drivers = new Set<string>();
+    for (const pin of net.pins) {
+      const inst = instById.get(pin.inst);
+      if (inst && outputPinsOf(inst).has(pin.pin)) drivers.add(pin.inst);
+    }
+    netDrivers.set(net.id, drivers);
+  }
 
   // 2) 信号流深度：端口与电源（depth 0）出发松弛；含反馈环的电路最多迭代 128 轮。
   //    关键约束：**深度必须封顶**（MAX_DEPTH）——carry 链这类共享网/回环会让"最长路径"
@@ -633,8 +685,12 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
     depthOf.set(inst.id, inst.kind === 'vcc' || inst.kind === 'gnd' ? 0 : 1);
   }
   const portFedNets = new Set<string>(design.ports.flatMap((p) => p.nets));
-  const inputNetsOf = (inst: Instance): string[] => {
-    const inputPins = new Set<string>(
+  // 预计算每个实例的输入引脚名与输入网（对象引用），深度松弛只查表——
+  // 否则每轮都要全量扫一遍网表，链长几十轮的电路（计算器 6000+ 实例）会慢几十倍。
+  const inputPinsOf = new Map<string, Set<string>>();
+  const instInputNets = new Map<string, Design['nets']>();
+  for (const inst of design.instances) {
+    const pins = new Set<string>(
       inst.kind === 'module'
         ? (baseDoc.library
             .find((m) => m.hash === inst.module)
@@ -642,35 +698,36 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
             .map((p) => p.name) ?? [])
         : (UNIT_INPUT_PINS[inst.kind === 'unit' ? inst.unit : ''] ?? []),
     );
-    const out: string[] = [];
-    for (const net of design.nets) {
-      if (net.pins.some((pin) => pin.inst === inst.id && inputPins.has(pin.pin))) out.push(net.id);
-    }
-    return out;
-  };
+    inputPinsOf.set(inst.id, pins);
+    instInputNets.set(
+      inst.id,
+      design.nets.filter((net) =>
+        net.pins.some((pin) => pin.inst === inst.id && pins.has(pin.pin)),
+      ),
+    );
+  }
   let prev = new Map(depthOf);
   for (let pass = 0; pass < 128; pass++) {
     let changed = false;
     for (const inst of design.instances) {
       if (inst.kind === 'vcc' || inst.kind === 'gnd') continue;
       let d = prev.get(inst.id) ?? 1;
-      for (const netId of inputNetsOf(inst)) {
-        if (portFedNets.has(netId)) {
+      for (const net of instInputNets.get(inst.id) ?? []) {
+        if (portFedNets.has(net.id)) {
           // 端口直连：深度至少 1；但输出端口网往往同时被元件驱动（如 y 网既有
           // out-y 端口又有上拉电阻），不能 continue 跳过，否则电阻的深度传不到
           // 三极管，一键答案会把 R/Q 排反（S 形绕线）。
           if (d < 1) d = 1;
         }
-        const net = netById.get(netId);
-        if (!net) continue;
         for (const pin of net.pins) {
           if (pin.inst === inst.id) continue;
-          // 端口直连网（如 ALU 的 op 共享网）上可能有多个「同吃一个输入」的消费方
-          // （模块输入脚、基极），它们不驱动这个网——跳过，否则共享输入会让整条链
-          // 虚涨到封顶深度（反馈假象），把没有反馈的电路也排成一列。
-          // 电阻等过流元件与真正的输出侧引脚（集电极/漏极/模块 out 端口）仍计入，
-          // 与上面的 R/Q 约定保持一致。
-          if (portFedNets.has(netId) && !drivesNet(pin.inst, net)) continue;
+          // 只从「真正驱动这个网」的实例传播深度。共享网（如异或门答案的
+          // n1 = ¬(ab)）常被多个消费方（模块输入脚、基极）同吃，消费方之间
+          // 不互相驱动——不跳过的话无环电路每轮虚涨、全部封顶 16，挤进同一列
+          // （异或门 4 个与非门叠成一列，走线被迫穿盒/贴边）。
+          // 电阻等过流元件两端都算可传播（drivesNet 含 a/b），不受影响；
+          // 反馈环靠「驱动者」传播（锁存器交叉耦合仍逐轮收敛）。
+          if (!netDrivers.get(net.id)?.has(pin.inst)) continue;
           const other = prev.get(pin.inst);
           if (other !== undefined) d = Math.max(d, Math.min(other + 1, MAX_DEPTH));
         }
@@ -727,15 +784,36 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
     .filter((s) => s.kind === 'input' || s.kind === 'output')
     .map((s) => s.x);
   const midX = portXs.length ? (Math.min(...portXs) + Math.max(...portXs)) / 2 : 320;
-  const bandW = (balanced.length - 1) * 130 + 92;
+  // 列间距 176：模块盒半宽 51 + 引脚伸出 58，相邻两列的引脚点相隔 176-116 = 60px，
+  // 扣掉两个引脚半径（8+8）还剩 ~44px 的垂直走线通道。旧值 130 时引脚只隔 14px
+  // （半径重叠），垂直绕行被两侧引脚点塞死，只能穿盒（实测 130 → 8 处穿盒，
+  // 160 → 2 处，取 176 留余量）。
+  const COL_STEP = 176;
+  const bandW = (balanced.length - 1) * COL_STEP + 92;
   const col0x = Math.round(midX - bandW / 2);
   const posOf = new Map<string, { x: number; y: number }>();
+  /** 布局行距用的元件盒高（模块按端口行数变化：4 位寄存器等会比固定 92 行距更高） */
+  const boxHOf = (inst: Instance): number =>
+    partBoxSize(
+      inst.kind,
+      inst.kind === 'unit' ? inst.unit : undefined,
+      inst.kind === 'module' ? inst.module : undefined,
+      baseDoc.library,
+    ).h;
+  // 行距按元件实际高度累加（盒高 + ROW_GAP），不再用固定 92：固定行距下高模块会
+  // 压到下一行，行间没有横向通道，总线只能穿盒（s3-calc 的 mod7.er→mod11.bcd）。
+  const ROW_GAP = 48;
   let bottomY = 0;
   balanced.forEach((col, ci) => {
+    let centerY = 90;
     col.forEach((inst, ri) => {
-      const y = 90 + ri * 92;
-      bottomY = Math.max(bottomY, y);
-      posOf.set(inst.id, { x: col0x + ci * 130, y });
+      const h = boxHOf(inst);
+      if (ri > 0) {
+        const prevH = boxHOf(col[ri - 1]!);
+        centerY = Math.round(centerY + prevH / 2 + ROW_GAP + h / 2);
+      }
+      bottomY = Math.max(bottomY, centerY + h / 2);
+      posOf.set(inst.id, { x: col0x + ci * COL_STEP, y: centerY });
     });
   });
   // 端口防遮挡：用模块盒子的实际边界（中心 ± MODULE_HALF_WIDTH）而不是中心线。
@@ -750,7 +828,7 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
   if (balanced.length > 0) {
     const PORT_MARGIN = 24;
     const boxLeft = col0x - MODULE_HALF_WIDTH;
-    const boxRight = col0x + (balanced.length - 1) * 130 + MODULE_HALF_WIDTH;
+    const boxRight = col0x + (balanced.length - 1) * COL_STEP + MODULE_HALF_WIDTH;
     const inputSyms = design.ports
       .map((p) => portByLabel.get(p.name))
       .filter((s): s is Sym & { kind: 'input' } => s?.kind === 'input');
@@ -784,7 +862,7 @@ export function fromDesign(design: Design, baseDoc: Doc): Doc {
     const row = Math.floor(idx / MAX_RAIL);
     const col = idx % MAX_RAIL;
     posOf.set(inst.id, {
-      x: col0x + col * 130,
+      x: col0x + col * COL_STEP,
       y: inst.kind === 'vcc' ? 30 + row * 60 : bottomY + 80 + row * 60,
     });
   }

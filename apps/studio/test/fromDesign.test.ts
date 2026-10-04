@@ -14,6 +14,7 @@ import {
 import { familySpecOf, InMemoryModuleLibrary } from '@lc/schema';
 import { describe, expect, it } from 'vitest';
 import { fromDesign, toDesign } from '../src/editor/model';
+import { routeObstacles, routeWires, segHitsRect } from '../src/editor/render';
 import { docForLevel } from '../src/level/progress';
 
 /** 教学门积木 → 画布库条目（与 App 注入 doc.library 的方式一致） */
@@ -198,12 +199,59 @@ describe('门版端口防遮挡', () => {
   });
 });
 
+describe('一键答案走线整洁（不穿盒子）', () => {
+  it('门版答案的导线不穿过非端点元件盒子', () => {
+    // s3-calc（计算器，29 个模块 / 8 列 × 8 行）里 mod1.code→mod6.d 是跨整幅画布的
+    // 8 位总线，且 mod1 端 8 根线的引脚列外侧只有一条 ~60px 宽的通道（约 4 条车道）。
+    // 8 根线抢 4 条车道，最后 2 根在「躲开全部其他 90 根线」的约束下确实无正交解
+    // （已用通道网格布线的搜索验证：只在忽略其他导线时才找得到通路），只允许这 2 根。
+    const ALLOWED: Record<string, number> = { 's3-calc': 2 };
+    for (const level of ALL_LEVELS) {
+      const teaching = teachingSolutionOf(level.id);
+      if (!teaching) continue;
+      const doc = fromDesign(teaching, docForLevel(level, stored));
+      const obstacles = routeObstacles(doc);
+      const routes = routeWires(doc);
+      const crossed: string[] = [];
+      for (const w of doc.wires) {
+        const segs = routes.get(w.id) ?? [];
+        for (const [p, q] of segs) {
+          for (const ob of obstacles) {
+            if (ob.id === w.a.inst || ob.id === w.b.inst) continue;
+            if (segHitsRect(p, q, ob))
+              crossed.push(`${w.id}(${w.a.inst}.${w.a.pin}→${w.b.inst}.${w.b.pin})×${ob.id}`);
+          }
+        }
+      }
+      expect(
+        crossed.length,
+        `${level.id} 有 ${crossed.length} 处穿盒：${crossed.join(' ')}`,
+      ).toBeLessThanOrEqual(ALLOWED[level.id] ?? 0);
+    }
+  });
+
+  it('异或门答案 4 门分布在 ≥3 列（深度不虚涨封顶成单列）', () => {
+    // 回归：深度松弛曾把共享网上的消费方（G2.b、G3.b 同吃 n1）也当驱动者互相
+    // +1，无环电路每轮虚涨到封顶 16，4 个与非门挤进同一列，走线被迫穿盒/贴边。
+    const level = ALL_LEVELS.find((l) => l.id === 's1-xor')!;
+    const doc = fromDesign(teachingSolutionOf('s1-xor')!, docForLevel(level, stored));
+    const mods = doc.syms.filter((s) => s.kind === 'module');
+    const cols = new Set(mods.map((m) => m.x));
+    expect(cols.size, `异或门 4 门应 ≥3 列（实际 ${cols.size} 列）`).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe('元件版布局：同深度同列（不许回退成单列长条）', () => {
   it('每列最多 10 个元件；同深度同列，超一屏的深度组拆多列并均分', () => {
     for (const level of ALL_LEVELS) {
       const ref = level.referenceSolution;
       if (!ref) continue;
-      const doc = fromDesign(ref, docForLevel(level, []));
+      // 模块化参考解需要教学库才能识别模块输出引脚（深度传播靠 drivesNet 过滤）——
+      // 空库会把模块当「无输出」，深度全 1 挤成单列，断言误报。
+      const doc = fromDesign(
+        ref,
+        docForLevel(level, ref.instances.some((i) => i.kind === 'module') ? stored : []),
+      );
       const units = doc.syms.filter((s) => s.kind === 'unit' || s.kind === 'module');
       if (units.length === 0) continue;
       const perCol = new Map<number, number>();
