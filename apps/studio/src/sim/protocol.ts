@@ -5,7 +5,7 @@
 
 import type { JudgeResult } from '@lc/compiler';
 import type { Design, Level, LogicFamily } from '@lc/schema';
-import type { Logic, SimMode } from '@lc/sim-core';
+import type { Logic, SimMode, Waveform } from '@lc/sim-core';
 import type { StoredPort } from '../editor/model';
 
 export type DriveValue = 0 | 1 | 2 | 3;
@@ -33,6 +33,8 @@ export interface SimSnapshot {
   cost: { counts: Record<string, number>; half: number; text: string };
   /** 内容哈希：只跟电路结构有关，挪动元件/改标签不会变 */
   hash: string;
+  /** 端口级实时波形（只有请求 withWaveform 且时序模式下才有；逻辑模式为空） */
+  waveform?: Waveform | null;
   timing: {
     portDelayPs: Record<string, number>;
     criticalPathPs: number;
@@ -75,6 +77,9 @@ export type StudioRequest =
        *  输出会冻住（两级串联模块在 seq 关卡里点输入毫无反应）。 */
       prevNodeSignals?: number[];
       withTiming?: boolean;
+      /** 要一份「实时时序波形」（端口级）：把这次仿真画成阶梯图，
+       *  「时序视图」用它展示真实延迟/竞争/毛刺 —— 与判定无关 */
+      withWaveform?: boolean;
     }
   | { id: number; type: 'wrap'; design: Design; library: unknown[]; name: string; stage: number }
   | {

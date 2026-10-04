@@ -79,7 +79,13 @@ describe('时序关卡的向量说明列', () => {
 describe('波形面板', () => {
   it('把 D 触发器的端口波形画成阶梯线，并标出每个向量的施加时刻', () => {
     const result = judgeDff();
-    const html = renderToStaticMarkup(<WaveformPanel result={result} portNames={PORT_NAMES} />);
+    const html = renderToStaticMarkup(
+      <WaveformPanel
+        waveform={result.waveform ?? null}
+        portNames={PORT_NAMES}
+        marks={result.rows.map((r) => ({ label: `#${r.index + 1}`, atPs: r.window.fromPs }))}
+      />,
+    );
     expect(html).toContain('<svg');
     expect(html).toContain('class="vline"');
     // 四个端口都有标签
@@ -106,8 +112,7 @@ describe('波形面板', () => {
   });
 
   it('没有波形时给出提示而不是空白', () => {
-    const empty = { ...judgeDff(), waveform: null };
-    const html = renderToStaticMarkup(<WaveformPanel result={empty} portNames={PORT_NAMES} />);
+    const html = renderToStaticMarkup(<WaveformPanel waveform={null} portNames={PORT_NAMES} />);
     expect(html).toContain('先运行一次校验');
   });
 
@@ -129,7 +134,11 @@ describe('波形面板', () => {
     const body = renderToStaticMarkup(
       <>
         <h1 style={{ font: '600 15px system-ui' }}>D 触发器：端口波形与判定读数</h1>
-        <WaveformPanel result={result} portNames={PORT_NAMES} />
+        <WaveformPanel
+          waveform={result.waveform ?? null}
+          portNames={PORT_NAMES}
+          marks={result.rows.map((r) => ({ label: `#${r.index + 1}`, atPs: r.window.fromPs }))}
+        />
         <JudgePanel level={dffLevel} result={result} record={undefined} attempts={3} />
       </>,
     );

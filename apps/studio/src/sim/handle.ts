@@ -21,7 +21,7 @@ import {
   ModuleTemplateSchema,
   parseLevel,
 } from '@lc/schema';
-import { type Logic, SIG_Z, Simulator } from '@lc/sim-core';
+import { type Logic, SIG_Z, Simulator, toWaveform } from '@lc/sim-core';
 import type {
   DriveValue,
   SimSnapshot,
@@ -102,7 +102,8 @@ export function handleRequest(req: StudioRequest): StudioResponse {
 
     const sim = new Simulator(net, {
       mode,
-      trace: false,
+      // 时序视图要看波形：只有这条路径需要记录 trace（逻辑模式没有时间轴，记了也没用）
+      trace: req.withWaveform === true,
       maxEvents: 2_000_000,
       initialSignals: req.prevSignals,
       initialContribs: req.prevContribs,
@@ -197,6 +198,11 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       ),
       cost: { counts: { ...counts }, half, text: formatCost(counts) },
       hash: hashDesign(design),
+      // 实时波形（端口级）：时序视图用它画阶梯图；逻辑模式没有时间轴，恒为空
+      waveform:
+        req.withWaveform === true && sim.trace
+          ? toWaveform(sim.trace, net, { portOnly: true })
+          : null,
       timing,
     };
     if (unstable) {
@@ -224,7 +230,7 @@ export function handleRequest(req: StudioRequest): StudioResponse {
     /** 模块输出端口虽然算驱动源，但它是不是真的给出电平取决于模块内部 —— 单独一类 */
     const isModuleOut = (pin: { inst: string; pin: string }): boolean => {
       const inst = instById.get(pin.inst);
-      if (!inst || inst.kind !== 'module') return false;
+      if (inst?.kind !== 'module') return false;
       return library.get(inst.module)?.ports.find((p) => p.name === pin.pin)?.dir === 'out';
     };
     const isDriver = (pin: { inst: string; pin: string }): boolean => {

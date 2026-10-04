@@ -15,6 +15,7 @@ import {
   levelViewOf,
   type ModuleTemplate,
 } from '@lc/schema';
+import type { Waveform } from '@lc/sim-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { notGateDemo } from './editor/demos';
 import {
@@ -140,6 +141,17 @@ export function App(): React.JSX.Element {
   const [screen, setScreen] = useState<'menu' | 'map' | 'teach' | 'bench'>('menu');
   const [pickingFamily, setPickingFamily] = useState(false);
   const [judgeResult, setJudgeResult] = useState<JudgeResult | null>(null);
+  /** 判定波形的画图参数（与「时序视图」的实时波形共用同一个面板组件） */
+  const judgeWaveform = judgeResult?.waveform ?? null;
+  const judgePortNames = judgeResult
+    ? [
+        ...Object.keys(judgeResult.rows[0]?.inputs ?? {}),
+        ...new Set(judgeResult.rows.flatMap((r) => Object.keys(r.expected))),
+      ]
+    : [];
+  const judgeMarks = judgeResult
+    ? judgeResult.rows.map((r) => ({ label: `#${r.index + 1}`, atPs: r.window.fromPs }))
+    : [];
   const [judging, setJudging] = useState(false);
   const [undoStack, setUndoStack] = useState<Doc[]>([]);
   const [redoStack, setRedoStack] = useState<Doc[]>([]);
@@ -164,6 +176,9 @@ export function App(): React.JSX.Element {
     void levelId;
     setSettlement(null);
     setChipDrop(null);
+    // 视图也是"换单即清"：新关卡默认按关卡自己的口径看
+    setTimingView(false);
+    setLiveWave(null);
   }, [levelId]);
 
   const [showWave, setShowWave] = useState(false);
@@ -188,6 +203,15 @@ export function App(): React.JSX.Element {
   /** 低频面板弹窗：组件库 / 波形（点击启动，不用时不留侧栏） */
   const [panelOpen, setPanelOpen] = useState<null | 'library' | 'wave'>(null);
   const [showTiming, setShowTiming] = useState(false);
+  /** 「时序视图」：用真实延迟跑一遍仿真并画波形 —— 把传播延迟/竞争/毛刺摆到玩家眼前。
+   *  它只是**看法**：判定口径仍由关卡声明（level.mode）与硬核开关决定，视图不动成绩。
+   *  没有时间轴的电路（纯组合）在时序视图下结论与稳定值一致，只是"看得见过程"。 */
+  const [timingView, setTimingView] = useState(false);
+  /** 最近一次仿真的端口级波形（时序视图用）；逻辑模式没有时间轴，恒为 null */
+  const [liveWave, setLiveWave] = useState<Waveform | null>(null);
+  /** 这次仿真的跑法：硬核模式或「时序视图」都走真实时序；判定另算（见 judge 请求，
+   *  它只用 mode/hardcore —— 视图绝不影响成绩）。 */
+  const simMode: 'logic' | 'timing' = mode === 'timing' || timingView ? 'timing' : 'logic';
   const [snapshot, setSnapshot] = useState<SimSnapshot | null>(null);
   const [resultDoc, setResultDoc] = useState<Doc | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -254,7 +278,7 @@ export function App(): React.JSX.Element {
           type: 'simulate',
           design,
           library: doc.library.map((m) => m.template),
-          mode,
+          mode: simMode,
           inputs: inputValues(doc),
           // 瞬时按钮端口：仿真先按 0 稳定、再置 1（上升沿锁存正确值）
           buttonPorts: doc.syms.filter((s) => s.kind === 'input' && s.button).map((s) => s.label),
@@ -262,6 +286,7 @@ export function App(): React.JSX.Element {
           prevContribs,
           prevNodeSignals,
           withTiming: showTiming,
+          withWaveform: simMode === 'timing',
         })
         .then((response: StudioResponse) => {
           if (response.error) {
@@ -270,6 +295,7 @@ export function App(): React.JSX.Element {
           }
           if (response.snapshot) {
             setSnapshot(response.snapshot);
+            setLiveWave(response.snapshot.waveform ?? null);
             setResultDoc(doc);
             // 记住这次的信号与电路指纹，供下一次仿真续用（信号与贡献出自同一终态，
             // 恢复时必须一起还原，否则元素求值读到上电旧贡献会把状态电路毒化）
@@ -284,7 +310,7 @@ export function App(): React.JSX.Element {
         .catch((error: unknown) => setToast(`仿真失败：${String(error)}`));
     }, 40);
     return () => clearTimeout(timer);
-  }, [doc, mode, showTiming, runner, recomputeNonce]);
+  }, [doc, mode, simMode, showTiming, runner, recomputeNonce]);
 
   // ---- 本地自动存档（按模式 + 关卡分开存） ----
   const storageKey = storageKeyFor(gameMode, levelId);
@@ -1331,6 +1357,16 @@ export function App(): React.JSX.Element {
           >
             硬核模式{forcedHardcore ? '（本关强制）' : ''}
           </button>
+          {mode === 'logic' && (
+            <button
+              type="button"
+              className={timingView ? 'active' : ''}
+              onClick={() => setTimingView(!timingView)}
+              title="用真实延迟跑一遍，把波形/竞争/毛刺摆出来看。只是看法：判定仍按稳定值，不影响成绩。"
+            >
+              时序视图
+            </button>
+          )}
         </div>
         <div className="group">
           <button type="button" onClick={undo} disabled={undoStack.length === 0}>
@@ -1581,13 +1617,18 @@ export function App(): React.JSX.Element {
                   : []
               }
             />
+            {timingView && mode === 'logic' && (
+              <WaveformPanel
+                waveform={liveWave}
+                portNames={Object.keys(snapshot?.portValues ?? {})}
+                emptyHint="点一下输入（或在画布上改电平），这里画真实延迟下每个端口的跳变。"
+              />
+            )}
             {(showWave || panelOpen === 'wave') && judgeResult && (
               <WaveformPanel
-                result={judgeResult}
-                portNames={[
-                  ...Object.keys(judgeResult.rows[0]?.inputs ?? {}),
-                  ...new Set(judgeResult.rows.flatMap((r) => Object.keys(r.expected))),
-                ]}
+                waveform={judgeWaveform}
+                portNames={judgePortNames}
+                marks={judgeMarks}
               />
             )}
           </div>
@@ -1610,13 +1651,7 @@ export function App(): React.JSX.Element {
         )}
         {panelOpen === 'wave' && judgeResult && (
           <Modal title="波形" onClose={() => setPanelOpen(null)}>
-            <WaveformPanel
-              result={judgeResult}
-              portNames={[
-                ...Object.keys(judgeResult.rows[0]?.inputs ?? {}),
-                ...new Set(judgeResult.rows.flatMap((r) => Object.keys(r.expected))),
-              ]}
-            />
+            <WaveformPanel waveform={judgeWaveform} portNames={judgePortNames} marks={judgeMarks} />
           </Modal>
         )}
         <div className={`edge-strip right${rightOpen ? '' : ' closed'}`}>

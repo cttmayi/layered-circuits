@@ -5,12 +5,16 @@
  * 竖向虚线是判定向量（激励）的时刻 —— 设备一个个打在窗口起点上（内核 setInputAt 保证）。
  */
 
-import type { JudgeResult } from '@lc/compiler';
-import { logicValueOf, strengthOf } from '@lc/sim-core';
+import { logicValueOf, strengthOf, type Waveform } from '@lc/sim-core';
 
 export interface WaveformPanelProps {
-  result: JudgeResult;
+  /** 要画的波形（端口级）。判定波形与「时序视图」的实时波形共用这一种输入 */
+  waveform: Waveform | null;
   portNames: string[];
+  /** 竖线标记：判定波形上是「向量施加时刻」；实时视图没有，留空 */
+  marks?: Array<{ label?: string; atPs: number }>;
+  /** 没有波形可画时的提示语 */
+  emptyHint?: string;
 }
 
 const ROW_H = 26;
@@ -27,13 +31,17 @@ function levelOf(signal: number): { high: boolean; weak: boolean; unknown: boole
   };
 }
 
-export function WaveformPanel({ result, portNames }: WaveformPanelProps): React.JSX.Element {
-  const wave = result.waveform;
+export function WaveformPanel({
+  waveform: wave,
+  portNames,
+  marks = [],
+  emptyHint = '先运行一次校验（硬核模式才有传播延迟与毛刺）。',
+}: WaveformPanelProps): React.JSX.Element {
   if (!wave || wave.nets.length === 0) {
     return (
       <section className="panel wave">
         <h3>波形</h3>
-        <p className="dim small">先运行一次校验（硬核模式才有传播延迟与毛刺）。</p>
+        <p className="dim small">{emptyHint}</p>
       </section>
     );
   }
@@ -54,7 +62,11 @@ export function WaveformPanel({ result, portNames }: WaveformPanelProps): React.
   return (
     <section className="panel wave">
       <h3>
-        波形 <span className="dim small">（每格 {fmtPs(endPs / 4)}，竖线 = 向量施加时刻）</span>
+        波形{' '}
+        <span className="dim small">
+          （每格 {fmtPs(endPs / 4)}
+          {marks.length > 0 ? '，竖线 = 向量施加时刻' : ''}）
+        </span>
       </h3>
       <svg
         className="wave-svg"
@@ -64,12 +76,12 @@ export function WaveformPanel({ result, portNames }: WaveformPanelProps): React.
         role="img"
         aria-label="端口波形"
       >
-        {result.rows.map((row) => (
+        {marks.map((mark) => (
           <line
-            key={`w${row.index}`}
-            x1={x(row.window.fromPs)}
+            key={`w-${mark.atPs}-${mark.label ?? ''}`}
+            x1={x(mark.atPs)}
             y1={8}
-            x2={x(row.window.fromPs)}
+            x2={x(mark.atPs)}
             y2={height - 12}
             className="vline"
           />
