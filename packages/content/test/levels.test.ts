@@ -301,6 +301,60 @@ describe('阶段 1 关卡内容', () => {
     expect(result.costHalf).toBe(80);
   });
 
+  it('不锁积木：同或门关可以用自己封装的【或非门】4 个拼出来（不在推荐清单里也放行）', () => {
+    // 用户定稿：任务关不限制玩家用哪个积木。这里用「和推荐解法完全无关」的路线验证——
+    // 同或门 = ((a NOR b) NOR a) NOR ((a NOR b) NOR b)，全是刚在上一关封装的【或非门】。
+    const norLevel = findLevel('s1-nor')!;
+    const xnorLevel = findLevel('s1-xnor')!;
+    const wrapped = wrapModule(
+      {
+        name: '或非门',
+        version: '1.0',
+        stage: 1,
+        kind: 'logic',
+        ports: norLevel.referenceSolution!.ports,
+        body: norLevel.referenceSolution!,
+      },
+      emptyLibrary,
+    );
+    const library = new InMemoryModuleLibrary();
+    library.add(wrapped.template);
+    const norInstances = [
+      { id: 'u1', a: 'a', b: 'b', y: 'n1' },
+      { id: 'u2', a: 'n1', b: 'a', y: 'n2' },
+      { id: 'u3', a: 'n1', b: 'b', y: 'n3' },
+      { id: 'u4', a: 'n2', b: 'n3', y: 'y' },
+    ];
+    const reused = structuredClone(xnorLevel.referenceSolution!);
+    reused.instances = norInstances.map((n) => ({
+      kind: 'module' as const,
+      id: n.id,
+      module: wrapped.template.hash,
+    }));
+    const nets = new Map<string, Array<{ inst: string; pin: string; bit: 0 }>>();
+    const push = (netId: string, inst: string, pin: string): void => {
+      const list = nets.get(netId) ?? [];
+      list.push({ inst, pin, bit: 0 });
+      nets.set(netId, list);
+    };
+    for (const n of norInstances) {
+      push(`net-${n.a}`, n.id, 'a');
+      push(`net-${n.b}`, n.id, 'b');
+      push(`net-${n.y}`, n.id, 'y');
+    }
+    reused.nets = [...nets].map(([id, pins]) => ({ id, pins }));
+    reused.ports = [
+      { id: 'a', name: 'a', dir: 'in', width: 1, nets: ['net-a'] },
+      { id: 'b', name: 'b', dir: 'in', width: 1, nets: ['net-b'] },
+      { id: 'y', name: 'y', dir: 'out', width: 1, nets: ['net-y'] },
+    ];
+    reused.instances.push({ kind: 'vcc', id: 'vcc1' }, { kind: 'gnd', id: 'gnd1' });
+
+    const result = judgeDesign(reused, xnorLevel, { library });
+    expect(result.errors.join('；')).not.toContain('本关只允许');
+    expect(result.pass).toBe(true);
+  });
+
   it('成本递归与封装：封装的成本口径与预算一致（模块成本 = 递归展开后的基础元件成本）', () => {
     for (const level of STAGE1_LEVELS) {
       const { counts } = computeCosts(level.referenceSolution!, emptyLibrary);

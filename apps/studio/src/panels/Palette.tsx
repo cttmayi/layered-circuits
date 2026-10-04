@@ -193,7 +193,8 @@ export function Palette({
     if (!level) return '不可用';
     if (level.bannedModules.includes(name)) return '复古复用关禁用了这个后期积木';
     if (level.allowedModules.length > 0) return `本关只允许：${level.allowedModules.join('、')}`;
-    return '本关不允许使用模块';
+    // 只剩「考点就是手搭元件」的关（入门关/教学关）会走到这里
+    return '本关考点是用元件手搭，不收积木模块';
   };
   const lockReason = (unit: UnitKind): string => {
     if (unit === 'cap') return '时钟专用元件，本阶段不开放';

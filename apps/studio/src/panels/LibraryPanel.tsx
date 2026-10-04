@@ -8,6 +8,7 @@
  *  - 存档：整包导出/导入，方便换机器或备份。
  */
 
+import { ALL_LEVELS, TEACH_LEVELS } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { FAMILY_CONTRACTS, type LogicFamily } from '@lc/schema';
 import { type ChangeEvent, useMemo, useRef, useState } from 'react';
@@ -19,6 +20,16 @@ import {
   traceOf,
   versionsOfName,
 } from '../level/library';
+
+/** 关卡 id → 关卡名：产出记录里存的是 id（s1-dio），玩家看不懂「s1-dio 是哪一关」 */
+const LEVEL_TITLES = new Map<string, string>(
+  [...ALL_LEVELS, ...TEACH_LEVELS].map((level) => [level.id, level.title]),
+);
+
+function levelLabel(id: string): string {
+  const title = LEVEL_TITLES.get(id);
+  return title ? `${title}（${id}）` : id;
+}
 
 function familyTag(family: LogicFamily): string {
   return FAMILY_CONTRACTS[family].name.split(' ')[0] as string;
@@ -41,7 +52,7 @@ function TraceTree({ node }: { node: TraceNode }): React.JSX.Element {
       <span className="trace-node">
         {node.name} v{node.version}
         <em>造价 {node.costHalf / 2}</em>
-        {node.levelId && <span className="trace-src">来自 {node.levelId}</span>}
+        {node.levelId && <span className="trace-src">来自 {levelLabel(node.levelId)}</span>}
         {node.cyclic && <span className="trace-src">（检测到循环引用）</span>}
       </span>
       {node.children.length > 0 && (
@@ -119,7 +130,9 @@ export function LibraryPanel({
                     <li key={mod.hash}>
                       v{mod.version}
                       <em>造价 {mod.costHalf / 2}</em>
-                      {mod.levelId && <span className="trace-src">产出关卡 {mod.levelId}</span>}
+                      {mod.levelId && (
+                        <span className="trace-src">产出关卡 {levelLabel(mod.levelId)}</span>
+                      )}
                       {mod.version !== newest.version &&
                         compareVersions(mod.version, newest.version) < 0 &&
                         mod.stage <= 1 && <span className="trace-src">（复古关可用）</span>}

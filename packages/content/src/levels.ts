@@ -576,8 +576,10 @@ export const STAGE1_LEVELS: Level[] = [
     bestKnownHalf: 44,
     timingBudgetPs: 13000,
     allowedUnits: ['npn', 'res'],
-    moduleAccess: 'listed',
-    allowedModules: ['非门', '与非门'],
+    // 不锁积木：玩家想用刚封装的【或非门】【与门】自己组，就让他组——「用什么搭」也是
+    // 解题的一部分。只有考点本身就是「手搭/指定元件」的关（s1-not/and/or、教学关）
+    // 才用 moduleAccess 'none' 收窄。
+    moduleAccess: 'all',
     reference: xorGateRef('ref-xor'),
     unlockName: '异或门',
     familyRefs: {
@@ -599,8 +601,7 @@ export const STAGE1_LEVELS: Level[] = [
     bestKnownHalf: 48,
     timingBudgetPs: 16000,
     allowedUnits: ['npn', 'res'],
-    moduleAccess: 'listed',
-    allowedModules: ['非门', '与非门', '异或门'],
+    moduleAccess: 'all', // 同 s1-xor：不锁积木，只给推荐解法
     reference: xnorGateRef('ref-xnor'),
     unlockName: '同或门',
     familyRefs: {
