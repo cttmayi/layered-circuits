@@ -38,9 +38,10 @@ describe('时序关卡的向量说明列', () => {
   it('任务卡正面用大白话讲清规则，不出现低有效/置位/复位这些行话（行话在教学说明里）', () => {
     const html = renderToStaticMarkup(<LevelCard level={srLevel} costHalf={0} />);
     expect(html).toContain('一个会记忆的开关');
-    expect(html).toContain('平时两个输入都是 1');
+    expect(html).toContain('sn 和 rn 地位一样');
     expect(html).toContain('都为 1 时 q 保持不动');
-    expect(html).toContain('qn 与 q 永远相反');
+    expect(html).toContain('都为 0 时没有正确答案');
+    expect(html).toContain('qn 是 q 的反相');
     for (const jargon of ['低有效', '置位', '复位', '互补', '拉低']) {
       expect(html).not.toContain(jargon);
     }

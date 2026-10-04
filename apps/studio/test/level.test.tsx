@@ -56,8 +56,9 @@ describe('关卡内容与进度', () => {
     // 任务卡正面是大白话（高中生读得懂）：先说清这是什么功能，再说规则
     const brief = document.querySelector('.level-card .task-brief')?.textContent ?? '';
     expect(brief).toContain('一个会记忆的开关');
-    expect(brief).toContain('平时两个输入都是 1');
+    expect(brief).toContain('sn 和 rn 地位一样');
     expect(brief).toContain('都为 1 时 q 保持不动');
+    expect(brief).toContain('都为 0 时没有正确答案');
     expect(brief).not.toContain('低有效');
     fireEvent.click(screen.getByText(/任务详情/));
     const table = document.querySelector('.task-full .truth') as HTMLTableElement;

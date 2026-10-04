@@ -843,7 +843,9 @@ body,
   line-height: 1.7;
   color: #cfe0f0;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  /* 卡面宽度 272px（.side 316 − 内边距）：4 行 ≈ 1088px 文字宽度。任务描述要能一次读完，
+     超过 4 行的 brief 请压缩（关卡里最长的 s3-digit-entry 目前 5.6 行，会被切尾巴） */
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
