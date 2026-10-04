@@ -70,6 +70,7 @@ import {
   type GameMode,
   initialSession,
   levelOf,
+  referencedModuleHashes,
   storageKeyFor,
 } from './level/session';
 import { ClassroomModal } from './panels/ClassroomModal';
@@ -130,12 +131,9 @@ export function App(): React.JSX.Element {
   // 会话（模式 / 当前关卡 / 存档）一次性装载
   const session = useMemo(() => initialSession(), []);
   const [doc, setDoc] = useState<Doc>(() => session.doc);
-  // 模块库瘦身：同名模块只留最新版本（旧版是展示用的版本历史，没有玩法用途，
-  // 删掉后存档变小；持久化 effect 会把它写回 localStorage，存档自动瘦身）
-  const [progress, setProgress] = useState<Progress>(() => ({
-    ...session.progress,
-    library: dedupeLibrary(session.progress.library),
-  }));
+  // 模块库瘦身已在 initialSession 里做过（同名只留最新版本，但被画布引用到的模块一律保留；
+  // 持久化 effect 会把瘦身结果写回 localStorage，存档自动变小）
+  const [progress, setProgress] = useState<Progress>(() => session.progress);
   const [gameMode, setGameMode] = useState<GameMode>(() => session.mode);
   const [levelId, setLevelId] = useState<string>(() => session.levelId);
   /** 画面：主菜单 / 关卡地图 / 教学模式列表 / 工作台 —— 模式只在主菜单里选，进关后不能改 */
@@ -1136,8 +1134,11 @@ export function App(): React.JSX.Element {
       setToast(`导入失败：${error}`);
       return;
     }
-    // 导入的存档同样瘦身：同名模块只留最新版本
-    const imported = { ...raw, library: dedupeLibrary(raw.library) };
+    // 导入的存档同样瘦身：同名只留最新版本，但存档画布（可能还留在本机）引用到的一律保留
+    const imported = {
+      ...raw,
+      library: dedupeLibrary(raw.library, referencedModuleHashes(raw.library)),
+    };
     saveProgress(imported);
     setProgress(imported);
     const level = levelOf(gameMode, levelId) ?? ALL_LEVELS[0];

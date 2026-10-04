@@ -132,13 +132,19 @@ export function versionsOfName(library: readonly StoredModule[], name: string): 
 }
 
 /**
- * 存档瘦身：同名模块只保留版本号最高的一个（其余旧版移除）。
+ * 存档瘦身：同名模块只保留版本号最高的一个（其余旧版移除），同一份内容（哈希）只留一条。
  *
- * 注意这会让「版本历史」展示变少，但当前玩法里旧版没有独立用途：
- * 复古复用关靠 bannedModules 按模块**名字**禁用，不依赖旧版本回退；
- * 库面板里的版本列表只是展示，没有「用回旧版」的入口。所以清理是安全的。
+ * **「同名」不等于「同一谱系」**：玩家可以把两个完全不同的电路都叫「非门」，而封装时的
+ * 版本号（nextVersion）只按名字递增，于是"最新的非门"完全可能是另一个电路。只看名字删
+ * 低版本会把仍在用的模块删掉 —— 画布上的实例随之解析不到、导线静默消失（编译器只会报
+ * 一句"模块不在组件库中"）。所以被存档画布引用到的模块必须保留：调用方用
+ * `referencedModuleHashes()` 算出引用哈希及其传递闭包，通过 `keep` 传进来；
+ * 教学积木（teaching）也不删（内容包随时能重新注入，留着省事）。
  */
-export function dedupeLibrary(library: readonly StoredModule[]): StoredModule[] {
+export function dedupeLibrary(
+  library: readonly StoredModule[],
+  keep: ReadonlySet<string> = new Set(),
+): StoredModule[] {
   const newestVersionBy = new Map<string, string>();
   for (const m of library) {
     const current = newestVersionBy.get(m.name);
@@ -146,7 +152,17 @@ export function dedupeLibrary(library: readonly StoredModule[]): StoredModule[] 
       newestVersionBy.set(m.name, m.version);
     }
   }
-  return library.filter((m) => newestVersionBy.get(m.name) === m.version);
+  // 同一份内容（哈希）只留一条：留版本号最高的那条记录
+  const byHash = new Map<string, StoredModule>();
+  for (const m of library) {
+    const current = byHash.get(m.hash);
+    if (!current || compareVersions(m.version, current.version) > 0) byHash.set(m.hash, m);
+  }
+  return [...byHash.values()].filter((m) => {
+    // 被画布引用到的（keep，含传递闭包）与教学积木一律保留
+    if (m.teaching || keep.has(m.hash)) return true;
+    return newestVersionBy.get(m.name) === m.version;
+  });
 }
 
 /** 溯源树里出现的所有模块数量（含自身） */
