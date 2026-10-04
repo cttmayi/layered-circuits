@@ -35,11 +35,14 @@ describe('时序关卡的向量说明列', () => {
   const srLevel = ALL_LEVELS.find((l) => l.id === 's2-sr-latch');
   if (!srLevel) throw new Error('缺少 SR 锁存器关卡');
 
-  it('任务卡上直接说清「低有效」和「两个都为高就保持」，不用翻详情', () => {
+  it('任务卡正面用大白话讲清规则，不出现低有效/置位/复位这些行话（行话在教学说明里）', () => {
     const html = renderToStaticMarkup(<LevelCard level={srLevel} costHalf={0} />);
-    expect(html).toContain('低有效');
-    expect(html).toContain('保持不动');
-    expect(html).toContain('q、qn（输出，互补）');
+    expect(html).toContain('两个输入平时都是 1');
+    expect(html).toContain('记住上一次的结果');
+    expect(html).toContain('qn 和 q 永远相反');
+    for (const jargon of ['低有效', '置位', '复位', '互补', '拉低']) {
+      expect(html).not.toContain(jargon);
+    }
   });
 
   it('判定结果每一行带上关卡说明（判定表里也能看懂「保持」）', () => {
