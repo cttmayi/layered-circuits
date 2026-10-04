@@ -9,7 +9,7 @@
 
 import { buildCostTree, type CostTree } from '@lc/compiler';
 import { formatCounts, InMemoryModuleLibrary, type ModuleTemplate } from '@lc/schema';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type Doc,
   fromDesign,
@@ -234,8 +234,35 @@ export function ModuleDetailModal({
   }, [template, merged]);
   const instCount = template?.body?.instances.length ?? 0;
 
+  // 复制模块 JSON：模块内部电路出问题时（例如画布上放的是「我的模块」里早先封装的坏模块），
+  // 玩家可以把这一整份贴出来离线复现 —— 画布导出（复制电路）只带模块哈希，不带模块本体。
+  const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
+  const copyModule = (): void => {
+    const text = JSON.stringify(module);
+    if (!navigator.clipboard?.writeText) {
+      setCopied('fail');
+      return;
+    }
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => setCopied('ok'))
+      .catch(() => setCopied('fail'));
+  };
+
   return (
-    <Modal title={`${module.name} · 模块详情`} onClose={onClose}>
+    <Modal
+      title={`${module.name} · 模块详情`}
+      onClose={onClose}
+      footer={
+        <button
+          type="button"
+          onClick={copyModule}
+          title="把这个模块的端口与内部电路整份复制出来（贴给开发者可直接离线复现）"
+        >
+          {copied === 'ok' ? '已复制 ✓' : copied === 'fail' ? '复制失败' : '复制模块 JSON'}
+        </button>
+      }
+    >
       <div className="module-detail">
         <table className="kv">
           <tbody>
