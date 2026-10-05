@@ -27,9 +27,48 @@ pnpm preview                     # http://localhost:4173 打开看看
 
 ## 1. Cloudflare Pages（推荐：免费、不用备案）
 
-### 连 Git 仓库（push 即自动部署）
+线上地址：<https://layered-circuits.pages.dev/> —— 用**本机直传**方式部署（没开平台的自动构建，
+理由见本节末尾）。
 
-控制台 → **Workers & Pages** → Create → Pages → **Connect to Git** → 选仓库，然后填：
+### 首次：登录一次
+
+```bash
+npx wrangler login     # 浏览器里点授权；以后过期了再跑一次
+```
+
+### 每次部署
+
+```bash
+pnpm deploy:cf         # = pnpm build + wrangler pages deploy（--branch=main 算生产部署）
+```
+
+不想用命令行：把 `pnpm build` 产出的 `apps/studio/dist` 整个文件夹**拖进**控制台项目页
+（Direct Upload 支持拖拽），效果一样。
+
+部署后打开线上地址确认，必要时 `Ctrl/Cmd+Shift+R` 强刷一次 —— `index.html` 是
+`max-age=0, must-revalidate`（基本不用清缓存），`assets/*` 带内容哈希且长期缓存（不会串版本）。
+
+### 绑定自定义域名
+
+Cloudflare 走全球节点，**自定义域名不需要工信部备案**。加完域名按提示改 DNS 即可，
+免费证书自动签发。
+
+> 国内可达性请自己实测一次：手机 4G、不挂梯子打开链接。Cloudflare 在大陆一般能直连，
+> 速度看当地网络（比国内节点慢，但不需要备案）。
+
+### （可选）让 `git push` 自动部署
+
+**现在没开**：改完东西手动跑一次 `pnpm deploy:cf` 就行。想开的话两条路：
+
+| 做法 | 得到什么 | 代价 |
+|---|---|---|
+| GitHub Actions 直传（推荐） | push 到 main → 先跑测试 → **过了才**发布；项目与域名都不变 | 要在仓库里加 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` 两个 Secret |
+| 新建一个 Git 集成项目 | push 自动构建，PR 有预览环境 | 直传项目**无法事后改成 Git 集成**，只能新建 → **会换域名** |
+
+第一种做法的完整配置（token 权限、密钥预检、排错清单）在 git 历史里：
+`git show ef1bd6e:.github/workflows/ci.yml` 就是当时那份带 deploy job 的 workflow。
+
+### 连 Git 仓库时该怎么填（备查）
 
 | 设置项 | 值 | 说明 |
 |---|---|---|
@@ -46,54 +85,11 @@ Settings → Environment variables 里加一条 `PNPM_VERSION=9.6.0` 即可。
 > 免费版额度：**500 次构建/月**、同一时间 1 个构建、单次构建 20 分钟超时；静态资源
 > 请求与带宽不额外计费。个人项目完全够用。
 
-### 或者本机直传（不连 Git）
-
-```bash
-pnpm build
-npx wrangler login                       # 首次：浏览器里授权
-npx wrangler pages deploy apps/studio/dist --project-name layered-circuits
-# 等价于仓库里现成的脚本：
-pnpm deploy:cf
-```
-
-### 绑定自定义域名
-
-Cloudflare 走全球节点，**自定义域名不需要工信部备案**。加完域名按提示改 DNS 即可，
-免费证书自动签发。
-
-> 国内可达性请自己实测一次：手机 4G、不挂梯子打开链接。Cloudflare 在大陆一般能直连，
-> 速度看当地网络（比国内节点慢，但不需要备案）。
-
-### 让 `git push` 自动部署（GitHub Actions 直传）
-
-仓库里的 `.github/workflows/ci.yml` 已经把这条流水线写好了：
-
-| 触发 | 做什么 |
-|---|---|
-| push / PR | `pnpm install --frozen-lockfile` + `pnpm check`（typecheck + lint + 298 个测试） |
-| **main 的 push**（或 Actions 页手动 Run workflow） | 先跑上面那套，**过了才** `pnpm build` + `wrangler pages deploy` |
-
-也就是：**测试不过就不会发布**；PR 只跑检查、不动线上。之后 `git push` 就会更新
-<https://layered-circuits.pages.dev/>。
-
-一次性配置（只有你本人能做）：
-
-1. **Cloudflare**：右上头像 → My Profile → API Tokens → **Create Custom Token**，权限加一条
-   **Account → Cloudflare Pages → Edit**、账号资源选你自己的账号，创建后复制 token；
-   Account ID 在 Workers & Pages 概览页的右侧栏。
-2. **GitHub**：仓库 Settings → Secrets and variables → Actions → New repository secret，
-   加两条，名字必须完全一致：`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。
-3. push 一次，或去 Actions 页点 **Run workflow**，看日志。
-
-> ⚠️ Cloudflare 官方限制：**直传项目无法事后改成 Git 集成**，要换成一个 Git 集成项目就得
-> 新建项目（会换域名）。所以这里的自动部署是用 Actions 直传实现的 —— 控制台里项目类型仍显示
-> Direct Upload，这不影响使用。想要 PR 预览环境的话才需要走 Git 集成项目。
-
 **排错**
 
-- `Authentication error` / 401 → Secrets 名字不对或 token 权限不足（要能编辑 Pages）；
-  现在 workflow 会先跑「检查部署密钥」这一步，缺哪个 secret 会直接在报错里点名
+- `Authentication error` / 401 → `npx wrangler login` 重新授权
 - 发布到了别的项目 → `--project-name` 必须与控制台里的项目名一致（现在是 `layered-circuits`）
+- 线上还是旧版 → 先 `Ctrl/Cmd+Shift+R`，再确认部署时间戳是刚才那一次
 - CI 里 `pnpm check` 失败但本地是绿的 → 先看 Node 版本（CI 固定 22）与 `--frozen-lockfile`
 
 ---
