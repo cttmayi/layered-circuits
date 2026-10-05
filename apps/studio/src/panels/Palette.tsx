@@ -1,4 +1,5 @@
 import type { Level } from '@lc/schema';
+import { UNIT_COST, UNIT_DELAY_PS } from '@lc/schema';
 import { type ReactNode, useState } from 'react';
 import type { PlaceKind, StoredModule, UnitKind } from '../editor/model';
 import { drawIcon } from '../editor/render';
@@ -58,13 +59,13 @@ export function dragImage(kind: string): HTMLImageElement | HTMLCanvasElement {
   return canvas;
 }
 
-const UNITS: Array<{ unit: UnitKind; name: string; cost: string; note: string }> = [
-  { unit: 'npn', name: '三极管 NPN', cost: '2', note: '基极高电平导通' },
-  { unit: 'res', name: '电阻', cost: '2', note: '弱驱动，最占面积' },
-  { unit: 'dio', name: '二极管', cost: '1', note: '单向导通' },
-  { unit: 'cap', name: '电容', cost: '4', note: '只计费，不参与仿真' },
-  { unit: 'nmos', name: 'N-MOS', cost: '1', note: '栅极高电平导通' },
-  { unit: 'pmos', name: 'P-MOS', cost: '1', note: '栅极低电平导通' },
+const UNITS: Array<{ unit: UnitKind; name: string; note: string }> = [
+  { unit: 'npn', name: '三极管 NPN', note: '基极高电平导通' },
+  { unit: 'res', name: '电阻', note: '弱驱动，最占面积' },
+  { unit: 'dio', name: '二极管', note: '单向导通' },
+  { unit: 'cap', name: '电容', note: '只计费，不参与仿真' },
+  { unit: 'nmos', name: 'N-MOS', note: '栅极高电平导通' },
+  { unit: 'pmos', name: 'P-MOS', note: '栅极低电平导通' },
 ];
 
 /** 分组折叠的持久化键：值为数组（当前展开的分组 key） */
@@ -288,9 +289,14 @@ export function Palette({
                 <span className="palette-name">
                   {item.name} {locked && <em className="locked">本关不可用</em>}
                 </span>
-                <span className="palette-cost">价格 {item.cost}</span>
+                <span className="palette-cost">价格 {UNIT_COST[item.unit]}</span>
               </span>
-              <span className="palette-note">{locked ? lockReason(item.unit) : item.note}</span>
+              <span className="palette-row">
+                <span className="palette-note">{locked ? lockReason(item.unit) : item.note}</span>
+                <span className="palette-delay" title="在时序仿真里的信号延迟">
+                  延迟 {((UNIT_DELAY_PS[item.unit] ?? 0) / 1000).toFixed(1)} ns
+                </span>
+              </span>
             </button>
           );
         })}
@@ -378,22 +384,25 @@ export function Palette({
                 </span>
                 <span className="palette-cost">成本 {mod.costHalf / 2}</span>
               </span>
-              {/* 延迟：封装时实测的关键路径（任一输入 → 输出口的最长路径），放在成本下面一行 */}
-              <span
-                className="palette-delay"
-                title={
-                  moduleCriticalPathPs(mod) > 0
-                    ? '封装时实测：任一输入到输出口的最长路径'
-                    : '封装时未记录时序（早期模块，重新封装即可得到）'
-                }
-              >
-                {moduleCriticalPathPs(mod) > 0
-                  ? `延迟 ${(moduleCriticalPathPs(mod) / 1000).toFixed(2)} ns`
-                  : '延迟 —'}
-              </span>
-              <span className="palette-note">
-                {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
-                {mod.ports.filter((p) => p.dir === 'out').length} 出
+              {/* 第二行：左边入/出，右边延迟（= 封装时实测的关键路径，任一输入 → 输出口最长路径）。
+                  延迟并进这一行、不自己占一行，卡片始终两行高、加延迟不会变高 */}
+              <span className="palette-row">
+                <span className="palette-note">
+                  {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
+                  {mod.ports.filter((p) => p.dir === 'out').length} 出
+                </span>
+                <span
+                  className="palette-delay"
+                  title={
+                    moduleCriticalPathPs(mod) > 0
+                      ? '封装时实测：任一输入到输出口的最长路径'
+                      : '封装时未记录时序（早期模块，重新封装即可得到）'
+                  }
+                >
+                  {moduleCriticalPathPs(mod) > 0
+                    ? `延迟 ${(moduleCriticalPathPs(mod) / 1000).toFixed(1)} ns`
+                    : '延迟 —'}
+                </span>
               </span>
               {locked && <span className="palette-lock">{moduleLockReason(mod.name)}</span>}
             </button>

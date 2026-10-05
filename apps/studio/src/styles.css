@@ -341,11 +341,11 @@ body,
   font-size: 11px;
 }
 
-/* 模块延迟：紧跟在成本下面一行（未记录时是「延迟 —」，同一行不跳动） */
+/* 卡片第二行右侧的延迟：与第一行右侧的价格/成本对齐（卡片始终两行，加延迟不变高） */
 .palette-delay {
-  display: block;
+  flex: none;
   font-size: 11px;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 /* 卡片第一行：名称靠左、价格靠右，省掉独立的价格行 */
@@ -365,6 +365,15 @@ body,
 
 .palette-row .palette-cost {
   flex: none;
+}
+
+/* 第二行左侧说明必须是单行：否则长说明（比如锁关原因）换行又把卡片撑高。
+   min-width: 0 是 flex 子项能收窄出现省略号的前提（title 里保留完整文案）。 */
+.palette-row .palette-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .palette-lock {

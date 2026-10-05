@@ -91,7 +91,7 @@ function fakeModule(criticalPathPs: number): StoredModule {
 }
 
 describe('模块卡片的延迟显示', () => {
-  it('延迟显示在成本下面一行（文档顺序在成本之后）', () => {
+  it('延迟显示在成本下面那一行，且卡片保持两行', () => {
     render(
       <Palette
         placing={null}
@@ -101,20 +101,31 @@ describe('模块卡片的延迟显示', () => {
       />,
     );
     const cost = screen.getByText('成本 60');
-    const delay = screen.getByText('延迟 6.50 ns');
+    const delay = screen.getByText('延迟 6.5 ns');
     expect(cost).toBeTruthy();
     expect(delay).toBeTruthy();
     expect(
       cost.compareDocumentPosition(delay) & Node.DOCUMENT_POSITION_FOLLOWING,
       '延迟必须排在成本后面',
     ).toBeTruthy();
+    // 卡片必须还是两行（第一行名称+成本、第二行入出+延迟）：加延迟不能把它撑成三行
+    const card = screen.getByText('半加器').closest('button');
+    expect(card?.children.length, '模块卡片应保持两行').toBe(2);
   });
 
-  it('未记录时序的早期模块显示「延迟 —」，不显示 0.00 ns', () => {
+  it('未记录时序的早期模块显示「延迟 —」，不显示 0.0 ns', () => {
     render(
       <Palette placing={null} onPick={() => {}} library={[fakeModule(0)]} level={moduleLevel()} />,
     );
     expect(screen.getByText('延迟 —')).toBeTruthy();
-    expect(screen.queryByText('延迟 0.00 ns')).toBeNull();
+    expect(screen.queryByText('延迟 0.0 ns')).toBeNull();
+  });
+
+  it('元件卡片同样在第二行右侧显示延迟（取自 schema 的 UNIT_DELAY_PS，一位小数）', () => {
+    renderPalette();
+    // 三极管 NPN = 1000 ps → 1.0 ns（其它元件是 0.5 / 0.8 / 0.7 / 0.0，所以这个文本唯一）
+    expect(screen.getByText('延迟 1.0 ns')).toBeTruthy();
+    const card = screen.getByText('三极管 NPN').closest('button');
+    expect(card?.children.length, '元件卡片也应保持两行').toBe(2);
   });
 });
