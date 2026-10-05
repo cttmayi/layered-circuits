@@ -30,12 +30,20 @@ import {
 } from './references-ari.js';
 import { bcd2binRef, bin2bcdRef, calcRef, reg8Ref, seg7x2Ref } from './references-calc.js';
 import { digitEntryRef, encoderOrRef } from './references-keypad.js';
+import { TIMING_JUDGE_NOTE } from './timing-note';
 
 /** 阶段 3 允许的元件：仍只用 npn/res/dio（电容留给时钟/存储章节） */
 const STAGE3_UNITS = ['npn', 'res', 'dio'] as const;
 
 /** 预算线 = 标准答案 × 2（评星契约：0.5×预算 = 标准答案 = 3 星档） */
 const MAIN_OVERHEAD = 1.0;
+
+/**
+ * 批次③（2026-01）：本文件里第 3 章的 12 关（半加器 … 键盘编码器）判定口径全部切到真实时序
+ * —— 进位链、译码器、编码器的竞争冒险在这里看得见。判定仍在停稳之后取值，所以抖动不影响
+ * 正确性；毛刺只记录、不设上限（正确电路本身就有真实竞争，实测最坏 s3-bin2bcd 单窗口 26 次）。
+ * 已经切过的 s3-display / s3-reg-8 / s3-digit-entry / s3-calc 不在本次范围内。
+ */
 
 function port(name: string, dir: 'in' | 'out', width = 1): ModulePort {
   return { id: name, name, dir, width };
@@ -56,7 +64,7 @@ const HALF_ADDER: Level = parseLevel({
     '本关输出端能认；但下一关它要喂进别的门，就非换强驱动不可了。',
   hint: 's = a⊕b（异或门），c = a∧b（与门）。拖一个【异或门】接 s，拖一个【与门】接 c。',
   ports: [port('a', 'in'), port('b', 'in'), port('s', 'out'), port('c', 'out')],
-  mode: 'logic',
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(120, MAIN_OVERHEAD),
@@ -101,7 +109,7 @@ const FULL_ADDER: Level = parseLevel({
     port('s', 'out'),
     port('cout', 'out'),
   ],
-  mode: 'logic',
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(180, MAIN_OVERHEAD),
@@ -149,7 +157,7 @@ const ADDER_4: Level = parseLevel({
     '拖 4 个【全加器】：最低位 cin 接地，逐级 cout→cin 串联；a[i]→FAi.a，b[i]→FAi.b，s→y[i]。' +
     '端口点一下会高亮这一位，别接错位。',
   ports: [port('a', 'in', 4), port('b', 'in', 4), port('y', 'out', 4), port('cout', 'out')],
-  mode: 'logic',
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(720, MAIN_OVERHEAD),
@@ -189,7 +197,7 @@ const ADDER_8: Level = parseLevel({
     '只改变要拖的模块个数。',
   hint: '拖 8 个【全加器】串起来。a[i]、b[i] 都从左边总线端口引出（端口上标了位号），进位链 cout→cin 一路串到 cout 端口。',
   ports: [port('a', 'in', 8), port('b', 'in', 8), port('y', 'out', 8), port('cout', 'out')],
-  mode: 'logic',
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(1440, MAIN_OVERHEAD),
@@ -230,7 +238,7 @@ const ALU: Level = parseLevel({
     '每个 b[i] 先过一个【异或门】（另一端接 op），输出 t[i]；然后 4 个【全加器】算 a + t，' +
     '最低位 cin 接 op（不是接地）。y 就是结果。',
   ports: [port('op', 'in'), port('a', 'in', 4), port('b', 'in', 4), port('y', 'out', 4)],
-  mode: 'logic',
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(1040, MAIN_OVERHEAD),
@@ -276,7 +284,7 @@ const BCD2BIN: Level = parseLevel({
     '十位 t 接两处：t 左移 1 位（bit1~4）和 t 左移 3 位（bit3~6）；先用 5 位加法器算 个位+2t，' +
     '再算 8t 相加（接在 bit3~6），结果就是 bin。',
   ports: [port('bcd', 'in', 8), port('bin', 'out', 7)],
-  mode: 'logic',
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(2160, MAIN_OVERHEAD),
@@ -321,7 +329,7 @@ const BIN2BCD: Level = parseLevel({
     '搭「加 3 单元」：a≥5 时输出 a+3，否则原样（门控进位：y0=a0⊕ge5，逐位异或进位链）。' +
     '然后把 7 个「左移 + 两路加 3」的台阶串起来，最后一位从 bin 最低位移入。',
   ports: [port('bin', 'in', 7), port('bcd', 'out', 8)],
-  mode: 'logic',
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(7872, MAIN_OVERHEAD),
@@ -440,7 +448,7 @@ const S3_SEG_DE: Level = parseLevel({
     port('d', 'out'),
     port('e', 'out'),
   ],
-  mode: 'logic',
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(360, MAIN_OVERHEAD),
@@ -501,7 +509,7 @@ const S3_SEG_FG: Level = parseLevel({
     port('f', 'out'),
     port('g', 'out'),
   ],
-  mode: 'logic',
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(380, MAIN_OVERHEAD),
@@ -557,7 +565,7 @@ const S3_DISPLAY2: Level = parseLevel({
     { id: 'seg1', name: 'seg1', dir: 'out', width: 7, display: 'segment' },
     { id: 'seg2', name: 'seg2', dir: 'out', width: 7, display: 'segment' },
   ],
-  mode: 'logic',
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(1720, MAIN_OVERHEAD),
@@ -671,7 +679,7 @@ const S3_OR_CHAIN: Level = parseLevel({
     { id: 'd', name: 'd', dir: 'in' },
     { id: 'y', name: 'y', dir: 'out' },
   ],
-  mode: 'logic',
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(12, MAIN_OVERHEAD),
@@ -728,7 +736,7 @@ const S3_ENCODER: Level = parseLevel({
     { id: 'any', name: 'any', dir: 'out' },
   ],
   inputGridCols: 3,
-  mode: 'logic',
+  mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(88, MAIN_OVERHEAD),
@@ -1057,8 +1065,7 @@ const CALC: Level = parseLevel({
   referenceSolution: calcRef('ref-s3-calc'),
 });
 
-/** 阶段 3 关卡，顺序即解锁顺序 */
-export const STAGE3_LEVELS: Level[] = [
+const STAGE3_RAW: Level[] = [
   HALF_ADDER,
   FULL_ADDER,
   ADDER_4,
@@ -1076,3 +1083,32 @@ export const STAGE3_LEVELS: Level[] = [
   S3_DIGIT_ENTRY,
   CALC,
 ];
+
+/**
+ * 给这些关的说明末尾补一句口径提示。
+ * = 批次③切的 12 关 + s3-calc（更早就切了时序，但没有时钟口、单窗口最多抖 61 次，
+ *   同样需要这句"抖动不算错"）。带时钟口的三关（s3-display/reg-8/digit-entry 之外的
+ *   s2-dff、s3-reg-8、s3-digit-entry）另有边沿/窗口语义，不在其中。
+ */
+const NEEDS_TIMING_NOTE = new Set([
+  's3-half-adder',
+  's3-full-adder',
+  's3-adder-4',
+  's3-adder-8',
+  's3-alu',
+  's3-bcd2bin',
+  's3-bin2bcd',
+  's3-seg-de',
+  's3-seg-fg',
+  's3-display2',
+  's3-or-chain',
+  's3-encoder',
+  's3-calc',
+]);
+
+/** 阶段 3 关卡，顺序即解锁顺序 */
+export const STAGE3_LEVELS: Level[] = STAGE3_RAW.map((level) =>
+  NEEDS_TIMING_NOTE.has(level.id)
+    ? { ...level, teaching: (level.teaching ?? '') + TIMING_JUDGE_NOTE }
+    : level,
+);

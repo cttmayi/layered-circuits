@@ -110,7 +110,7 @@ describe('数码管关：点 bcd 输入 seg 跟随 + 组合关不复用终态 + 
     responses.length = 0;
   });
 
-  it('一键出答案后点 bcd 0→1→2，seg 段码跟随；稳定值看法下 simulate 不带 prevSignals', {
+  it('一键出答案后点 bcd 0→1→2，seg 段码跟随；切回稳定值看法后 simulate 不带 prevSignals', {
     timeout: 40_000,
   }, async () => {
     enterDisplay();
@@ -121,7 +121,15 @@ describe('数码管关：点 bcd 输入 seg 跟随 + 组合关不复用终态 + 
     if (modal) fireEvent.click(modal);
     await waitFor(() => expect(responses.length).toBeGreaterThan(0), { timeout: 4000 });
 
-    // 稳定值看法（默认）：任何 simulate 请求都不复用终态 —— 点一下就是一次独立求值
+    // 数码管关已按真实时序判定（2026-01 批次③）→ 进来默认是时序看法。
+    // 这条测的是**稳定值看法**下的行为，所以先切回稳定值，并清掉切换前的请求记录。
+    if (level.mode === 'timing') {
+      fireEvent.click(screen.getByText('时序视图'));
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    responses.length = 0;
+
+    // 稳定值看法：任何 simulate 请求都不复用终态 —— 点一下就是一次独立求值
     for (const r of responses) {
       expect(
         r.req.prevSignals,

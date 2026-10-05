@@ -37,6 +37,22 @@ function judge(levelId: string, mode?: 'logic' | 'timing'): JudgeResult {
   });
 }
 
+/** 批次③的 12 关（登记表引用它，该批次的行为断言也直接用它） */
+const BATCH3_IDS = [
+  's3-half-adder',
+  's3-full-adder',
+  's3-adder-4',
+  's3-adder-8',
+  's3-alu',
+  's3-bcd2bin',
+  's3-bin2bcd',
+  's3-seg-de',
+  's3-seg-fg',
+  's3-display2',
+  's3-or-chain',
+  's3-encoder',
+];
+
 /** 已切到真实时序判定的关卡，按"什么时候切的"分组（新批次往上加一组） */
 const BATCHES: Record<string, string[]> = {
   // 更早的改动里就切过去的（时钟型：靠 clockPort 定窗口；计算器链路：靠自身时序约定）
@@ -44,6 +60,7 @@ const BATCHES: Record<string, string[]> = {
   试点: ['s2-sr-latch', 's3-display'],
   批次一_锁存器: ['s2-btn-latch', 's2-d-latch'],
   批次二_门级: ['s1-not', 's1-and', 's1-or', 's1-nand', 's1-nor', 's1-xor', 's1-xnor'],
+  批次三_第3章组合与算术: BATCH3_IDS,
 };
 
 const timingLevels = ALL_LEVELS.filter((l) => parseLevel(l).mode === 'timing');
@@ -139,4 +156,31 @@ describe('批次②：第一章门级关（判定看得见门延迟）', () => {
     // 防止这条测试空过：门级关确实存在 >1 次跳变（实测 1~3 次，见 timing-mode-parity 的实测记录）
     expect(sawGlitch).toBe(true);
   }, 120_000);
+});
+
+describe('批次③：第 3 章组合与算术（进位链与译码器）', () => {
+  const BATCH3 = BATCH3_IDS;
+
+  it('全部判定通过；有预算的关卡关键路径都在预算内', () => {
+    for (const id of BATCH3) {
+      const judged = judge(id);
+      expect(judged.pass, id).toBe(true);
+      expect(judged.timing.timingOk, id).toBe(true);
+      const budget = findLevel(id)!.timingBudgetPs;
+      if (budget !== undefined) {
+        expect(judged.timing.criticalPathPs ?? 0, id).toBeLessThanOrEqual(budget);
+        expect(judged.timing.criticalPathPs ?? 0, id).toBeGreaterThan(0); // 延迟统计真的算出来了
+      }
+    }
+  }, 300_000);
+
+  it('进位链/译码器的竞争看得见：最坏单窗口 >1 次跳变，但采样在停稳之后 → 仍答对', () => {
+    let worst = 0;
+    for (const id of BATCH3) {
+      const judged = judge(id);
+      expect(judged.pass, id).toBe(true);
+      worst = Math.max(worst, ...judged.rows.map((r) => r.glitches));
+    }
+    expect(worst).toBeGreaterThan(4); // 太长进位链/译码器必然有多级竞争（实测最坏 26 次）
+  }, 300_000);
 });
