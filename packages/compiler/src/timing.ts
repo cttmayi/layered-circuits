@@ -16,6 +16,7 @@
 
 import type { FlatNet, Logic } from '@lc/sim-core';
 import { Simulator } from '@lc/sim-core';
+import { sha256Hex } from './sha256.js';
 
 export interface TimingAnalysisOptions {
   /** 输入翻转后的观察窗口（ps），默认 1ms */
@@ -168,7 +169,59 @@ export function hasFeedbackLoop(net: FlatNet): boolean {
   return false;
 }
 
+/**
+ * analyzeTiming 的记忆化。
+ *
+ * 为什么需要：传播延迟实测是最贵的一步（每个输入端口 × 2 个方向各一次全电路收敛），而判定会
+ * 对同一份电路反复调用分析 —— 逐行比对、换口径对照、开关对照各一次，计算器整机一次 23s × 5 次。
+ * 分析是纯函数（输入只有网表与选项），缓存不改变结果。
+ *
+ * 键用**完整内容**而不是哈希：避免任何碰撞导致"张冠李戴"的分析结果。大电路（6000 元件）
+ * 一次拼键约 0.5ms，相对 23s 的实测可以忽略。返回时做一层浅拷贝，避免调用方互相污染。
+ */
+const analysisCache = new Map<string, TimingAnalysis>();
+/** 上限按"关卡数 × 变体"给足：太小会被后来者挤掉，导致同一份大电路反复冷跑（实测过一次
+ *  上限 8 时计算器被挤出去、23s 的实测又跑了一遍）。键是 sha256 指纹，一条不到 100 字节。 */
+const ANALYSIS_CACHE_LIMIT = 128;
+
+function analysisKey(net: FlatNet, options: TimingAnalysisOptions): string {
+  const content = [
+    options.windowPs ?? '',
+    options.steadyPs ?? '',
+    options.maxEvents ?? '',
+    options.eventBudget ?? '',
+    options.stateProbePairs ?? '',
+    options.skipDelay === true ? 1 : 0,
+    net.nodeCount,
+    net.elemCount,
+    net.nodeLabel.join(','),
+    net.elemKind.join(','),
+    net.elemPin.join(','),
+    net.elemDelayPs.join(','),
+    net.elemParam.join(','),
+    net.watchStart.join(','),
+    net.watchElem.join(','),
+    net.driveStart.join(','),
+    net.driveElem.join(','),
+    net.driveSlot.join(','),
+    net.ports.map((p) => `${p.id}:${p.name}:${p.dir}:${p.bit}:${p.node}:${p.elem}`).join(','),
+  ].join('|');
+  // 内容拼完再取 sha256 指纹：键从"上百 KB 的字符串"变成 64 个字符，缓存条目不占内存，
+  // 也不必为了省内存缩小上限而反复淘汰。模块哈希用的就是这套 sha256（见 sha256.ts）。
+  return sha256Hex(content);
+}
+
 export function analyzeTiming(net: FlatNet, options: TimingAnalysisOptions = {}): TimingAnalysis {
+  const cacheKey = analysisKey(net, options);
+  const cached = analysisCache.get(cacheKey);
+  if (cached) {
+    // 浅拷贝 + 克隆可变子对象：调用方（判定/评分）可能就地读写这些字段
+    return {
+      ...cached,
+      portDelayPs: { ...cached.portDelayPs },
+      diagnostics: [...cached.diagnostics],
+    };
+  }
   const windowPs = options.windowPs ?? DEFAULT_WINDOW_PS;
   const steadyPs = options.steadyPs ?? DEFAULT_STEADY_PS;
   const maxEvents = options.maxEvents ?? 2_000_000;
@@ -322,7 +375,19 @@ export function analyzeTiming(net: FlatNet, options: TimingAnalysisOptions = {})
     isSequential = true;
   }
 
-  return { portDelayPs, criticalPathPs, isSequential, uncertain, diagnostics };
+  const result: TimingAnalysis = {
+    portDelayPs,
+    criticalPathPs,
+    isSequential,
+    uncertain,
+    diagnostics,
+  };
+  if (analysisCache.size >= ANALYSIS_CACHE_LIMIT) {
+    const oldest = analysisCache.keys().next().value;
+    if (oldest !== undefined) analysisCache.delete(oldest);
+  }
+  analysisCache.set(cacheKey, result);
+  return result;
 }
 
 /** 由关键路径延迟推算「最高可用时钟频率」（Hz）；含建立/保持余量时 M2 再细化 */

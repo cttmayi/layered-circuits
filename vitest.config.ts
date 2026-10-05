@@ -28,6 +28,9 @@ export default defineConfig({
     ],
     // 时序分析用例（elementEdgeOf 快照、calc/reg-8 探测）很重，默认全核并行会让
     // worker 忙到 RPC 超时（vitest "Timeout calling onTaskUpdate" 假错误）→ 限并发保稳定。
-    maxWorkers: 2,
+    // 2026-01：给出 s3-bin2bcd / s3-calc 标定延迟预算之后，计算器的传播延迟实测（13 端口 ×
+    // 2 方向的全电路收敛，约 23s 同步阻塞）让单次阻塞更长了 —— maxWorkers: 2 时两个重文件
+    // 撞上就复现假超时（复现过：第一次红、第二次绿）。降到 1 彻底避免争抢，代价是墙钟变长。
+    maxWorkers: 1,
   },
 });
