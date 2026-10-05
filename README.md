@@ -164,4 +164,4 @@ console.log(sim.readPort('out')); // 0
 
 ## 许可
 
-许可证待定 —— 补上 `LICENSE` 后此节会同步更新。
+[MIT](LICENSE) © 2026 Ling Yuan —— 可自由使用、修改、分发（含商用），保留版权声明即可。

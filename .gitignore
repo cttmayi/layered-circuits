@@ -16,3 +16,6 @@ coverage/
 # 视觉工具产物
 .dsh-vision-router/
 .tmp-*/
+
+# 开发期的布局预览产物（本地生成，不进仓库）
+/artifacts/
