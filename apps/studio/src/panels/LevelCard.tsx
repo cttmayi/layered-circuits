@@ -112,7 +112,7 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
                 {truthTable}
                 {level.timingBudgetPs !== undefined && (
                   <p className="dim small">
-                    硬核模式还要求传播延迟 ≤ {(level.timingBudgetPs / 1000).toFixed(2)} ns
+                    交付还要求传播延迟 ≤ {(level.timingBudgetPs / 1000).toFixed(2)} ns
                   </p>
                 )}
               </>

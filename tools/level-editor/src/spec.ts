@@ -49,7 +49,7 @@ export const LevelSpecSchema = z.object({
   moduleAccess: z.enum(['none', 'all', 'listed']).default('all'),
   allowedModules: z.array(z.string()).default([]),
   bannedModules: z.array(z.string()).default([]),
-  /** 硬核模式的关键路径上限（ps） */
+  /** 关卡声明的关键路径上限（ps）：参考解延迟 ×2 */
   timingBudgetPs: z.number().int().positive().optional(),
   /** 时钟频率（时序关卡） */
   freqHz: z.number().positive().optional(),

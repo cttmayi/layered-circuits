@@ -113,7 +113,7 @@ describe('波形面板', () => {
 
   it('没有波形时给出提示而不是空白', () => {
     const html = renderToStaticMarkup(<WaveformPanel waveform={null} portNames={PORT_NAMES} />);
-    expect(html).toContain('先运行一次校验');
+    expect(html).toContain('先跑一次仿真或校验');
   });
 
   it('校验面板显示跳变次数、空翻结论与建立/保持时间', () => {

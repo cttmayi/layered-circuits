@@ -88,7 +88,7 @@ export type StudioRequest =
       design: Design;
       library: unknown[];
       level: Level;
-      /** 硬核工程模式：额外检查关卡时序预算 */
+      /** 是否额外检查关卡声明的时序预算（建立/保持）；主线关卡恒为 true */
       hardcore: boolean;
       /** 玩家契约：判定按契约换可用元件集、满分线/预算/时序预算（缺省 rtl） */
       family?: LogicFamily;

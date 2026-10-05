@@ -2,11 +2,13 @@
 /**
  * 端到端回归：s3-display2（数码管显示关，模块复用 2× 译码器）点击 bcd 输入，seg 数码管必须跟随变化。
  *
- * 曾复现的 bug：组合关卡也复用上次终态（prevSignals/prevContribs），而快照只含
- * 顶层网、模块内部节点不恢复 —— 「部分恢复 + 输入变化再收敛」时深组合链（43 门
- * 译码器）收敛到错误状态，表现就是「改 BCD 值后 seg 经常不更新」。
- * 修复：组合关卡不复用终态（shouldReuseSimState=false），每次从全量重算；
- * 另加「重新计算」按钮兜底（丢弃终态强制全量重算）。
+ * 曾复现的 bug：复用上次终态时（prevSignals/prevContribs），快照只含顶层网、模块内部节点
+ * 不恢复 —— 「部分恢复 + 输入变化再收敛」时深组合链（43 门译码器）收敛到错误状态，表现就是
+ * 「改 BCD 值后 seg 经常不更新」。根因（快照不含模块内部节点）已修：现在复用会带上全节点
+ * 电平，见 reuse-module-chain.test.ts；「重新计算」按钮仍可丢弃终态强制全量重算。
+ *
+ * 注：终态复用只在「电路指纹（拓扑 + 输入）相同」时发生，点输入这类操作本来就不走复用路径 ——
+ * 这条测试守的是玩家看得见的那件事：seg 跟着输入变。
  */
 import { ALL_LEVELS, teachingModulesFor, teachingSolutionOf } from '@lc/content';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -15,7 +17,6 @@ import { App } from '../src/App';
 import { fromDesign, toDesign } from '../src/editor/model';
 import { docForLevel } from '../src/level/progress';
 import type { StudioRequestInput, StudioResponse } from '../src/sim/protocol';
-import { shouldReuseSimState } from '../src/sim/sim-policy';
 import { enableDebugUrl, seedTeachCleared } from './helpers';
 
 /** 记录每个 simulate 请求与其（同步）响应 */
@@ -92,25 +93,13 @@ function enterDisplay(): void {
   fireEvent.click(screen.getByText(level.title));
 }
 
-describe('shouldReuseSimState：跟着「看法」走，不跟关卡判定口径走', () => {
-  it('策略矩阵', () => {
-    // 稳定值看法：每次从冷启动全量重算（点一下 = 一次独立求值，结果确定）
-    expect(shouldReuseSimState('level', 'logic')).toBe(false);
-    // 时序看法：必须复用才能跨仿真保持状态（锁存器/寄存器点一下不丢位）
-    expect(shouldReuseSimState('level', 'timing')).toBe(true);
-    // 沙盒未知是否含锁存器 → 两种看法都复用（保住玩家搭的状态机）
-    expect(shouldReuseSimState('free', 'logic')).toBe(true);
-    expect(shouldReuseSimState('free', 'timing')).toBe(true);
-  });
-});
-
-describe('数码管关：点 bcd 输入 seg 跟随 + 组合关不复用终态 + 重新计算', () => {
+describe('数码管关：点 bcd 输入 seg 跟随 + 重新计算', () => {
   beforeEach(() => {
     localStorage.clear();
     responses.length = 0;
   });
 
-  it('一键出答案后点 bcd 0→1→2，seg 段码跟随；切回稳定值看法后 simulate 不带 prevSignals', {
+  it('一键出答案后点 bcd 0→1→2，seg 段码跟随', {
     timeout: 40_000,
   }, async () => {
     enterDisplay();
@@ -121,22 +110,9 @@ describe('数码管关：点 bcd 输入 seg 跟随 + 组合关不复用终态 + 
     if (modal) fireEvent.click(modal);
     await waitFor(() => expect(responses.length).toBeGreaterThan(0), { timeout: 4000 });
 
-    // 数码管关已按真实时序判定（2026-01 批次③）→ 进来默认是时序看法。
-    // 这条测的是**稳定值看法**下的行为，所以先切回稳定值，并清掉切换前的请求记录。
-    if (level.mode === 'timing') {
-      fireEvent.click(screen.getByText('时序视图'));
-      await new Promise((r) => setTimeout(r, 300));
-    }
-    responses.length = 0;
-
-    // 稳定值看法：任何 simulate 请求都不复用终态 —— 点一下就是一次独立求值
-    for (const r of responses) {
-      expect(
-        r.req.prevSignals,
-        `组合关不复用 prevSignals（${r.req.inputs['bcd1[0]']}）`,
-      ).toBeUndefined();
-      expect(r.req.prevContribs).toBeUndefined();
-    }
+    // 画布恒按真实时序跑（2026-01 移除科普模式）。终态复用只在"电路指纹相同"时发生
+    // （输入一变指纹就变），所以这里不查 prevSignals —— 守的是玩家看得见的那件事：
+    // 点一下 bcd 输入，seg 段码照样跟着变（复用路径不能把输出冻住）。
 
     // 点 bcd1：值 0 → 1（seg 0x3F → 0x06），再点 → 2（0x5B）
     clickWorld(bcdSym.x, bcdSym.y);
@@ -152,11 +128,6 @@ describe('数码管关：点 bcd 输入 seg 跟随 + 组合关不复用终态 + 
     });
     const v2 = [...responses].reverse().find((x) => x.req.inputs['bcd1[1]'] === 1);
     expect(readSeg(v2?.resp)).toBe(0x5b);
-
-    for (const r of responses) {
-      expect(r.req.prevSignals).toBeUndefined();
-      expect(r.req.prevContribs).toBeUndefined();
-    }
   });
 
   it('「重新计算」按钮：丢弃终态，全量重新计算', { timeout: 40_000 }, async () => {

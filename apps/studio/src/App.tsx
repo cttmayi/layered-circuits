@@ -91,7 +91,6 @@ import { WorldMap } from './panels/WorldMap';
 import { probeModule } from './sim/probe';
 import type { SimSnapshot, StudioResponse } from './sim/protocol';
 import { createRunner } from './sim/runner';
-import { shouldReuseSimState } from './sim/sim-policy';
 
 interface DragState {
   mode: 'pan' | 'move' | 'none';
@@ -164,22 +163,14 @@ export function App(): React.JSX.Element {
     null,
   );
   const [pendingPoint, setPendingPoint] = useState<{ x: number; y: number } | null>(null);
-  const [mode, setMode] = useState<'logic' | 'timing'>('logic');
-  /** 时序挑战关（kind = 'timing'）强制硬核：科普模式会把传播延迟抹平，考不出时序问题 */
-  const forcedHardcore = levelOf(gameMode, levelId)?.kind === 'timing';
-  useEffect(() => {
-    if (forcedHardcore) setMode('timing');
-  }, [forcedHardcore]);
 
   // 换关时关掉上一单的结算页与过场（依赖 levelId 就是为了「换单即清屏」）
   useEffect(() => {
     void levelId;
     setSettlement(null);
     setChipDrop(null);
-    // 看法跟随新关卡的判定口径（判定走时序的关卡默认就是时序看法）
-    setTimingView(levelOf(gameMode, levelId)?.mode === 'timing');
     setLiveWave(null);
-  }, [levelId, gameMode]);
+  }, [levelId]);
 
   const [showWave, setShowWave] = useState(false);
   /** 左右侧面板整体收起/展开（体验：布线时把侧栏收起来腾画布），选择记忆在 localStorage */
@@ -203,19 +194,15 @@ export function App(): React.JSX.Element {
   /** 低频面板弹窗：组件库 / 波形（点击启动，不用时不留侧栏） */
   const [panelOpen, setPanelOpen] = useState<null | 'library' | 'wave'>(null);
   const [showTiming, setShowTiming] = useState(false);
-  /** 「时序视图」：用真实延迟跑一遍仿真并画波形 —— 把传播延迟/竞争/毛刺摆到玩家眼前。
-   *  它只是**看法**：判定口径仍由关卡声明（level.mode）与硬核开关决定，视图不动成绩。
-   *  没有时间轴的电路（纯组合）在时序视图下结论与稳定值一致，只是"看得见过程"。 */
-  /** 默认看法跟随关卡**判定口径**：判定走真实时序的关卡，进来就该看到真实时序
-   *  （判的和看的必须是同一回事）。玩家仍可用「时序视图」按钮切回稳定值看法。 */
-  const [timingView, setTimingView] = useState(
-    () => levelOf(session.mode, session.levelId)?.mode === 'timing',
-  );
+  /** 「时序视图」：在画布上画出真实波形（竞争/毛刺/传播延迟）。
+   *  仿真本身**恒按真实时序跑**（判定也是）—— 这个开关只决定画不画波形，绝不改判定结果。
+   *  默认打开；玩家的选择跨关卡保留。 */
+  const [timingView, setTimingView] = useState(true);
   /** 最近一次仿真的端口级波形（时序视图用）；逻辑模式没有时间轴，恒为 null */
   const [liveWave, setLiveWave] = useState<Waveform | null>(null);
-  /** 这次仿真的跑法：硬核模式或「时序视图」都走真实时序；判定另算（见 judge 请求，
-   *  它只用 mode/hardcore —— 视图绝不影响成绩）。 */
-  const simMode: 'logic' | 'timing' = mode === 'timing' || timingView ? 'timing' : 'logic';
+  /** 这次仿真的跑法：**恒为真实时序**（2026-01 移除「科普模式」后不再有抹平延迟的看法）。
+   *  判定另算：它按关卡声明的口径走，与画布无关。 */
+  const simMode: 'logic' | 'timing' = 'timing';
   const [snapshot, setSnapshot] = useState<SimSnapshot | null>(null);
   const [resultDoc, setResultDoc] = useState<Doc | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -269,15 +256,13 @@ export function App(): React.JSX.Element {
       // 拓扑一变就回到上电默认，避免用旧网的信号污染新电路。
       const designKey = JSON.stringify(design);
       const prev = prevSimRef.current;
-      // 复用属于**看法**这一轴（见 sim-policy）：时序看法必须复用才能保持状态；
-      // 稳定值看法每次从冷启动全量重算（点一下 = 一次独立求值，确定性最好）。
-      // 判定口径（关卡声明的 level.mode）不参与这里的决定。
-      const reuseState = shouldReuseSimState(gameMode, simMode);
-      const prevSignals = prev && prev.key === designKey && reuseState ? prev.signals : undefined;
-      const prevContribs = prev && prev.key === designKey && reuseState ? prev.contribs : undefined;
+      // 恒定复用上次终态：真实时序看法下必须复用才能跨点击保持锁存器/寄存器状态
+      // （不再有"稳定值看法"那条不satisfy复用的分支）。
+      const prevSignals = prev && prev.key === designKey ? prev.signals : undefined;
+      const prevContribs = prev && prev.key === designKey ? prev.contribs : undefined;
       // 全节点状态（含模块内部节点）：只恢复顶层网会让模块内部停在「上电态」，
       // 内部节点贡献不变、事件不再往下传，输出冻住（两级串联模块在 seq 关卡里点不动）
-      const prevNodeSignals = prev && prev.key === designKey && reuseState ? prev.nodes : undefined;
+      const prevNodeSignals = prev && prev.key === designKey ? prev.nodes : undefined;
       runner
         .send({
           type: 'simulate',
@@ -315,7 +300,7 @@ export function App(): React.JSX.Element {
         .catch((error: unknown) => setToast(`仿真失败：${String(error)}`));
     }, 40);
     return () => clearTimeout(timer);
-  }, [doc, mode, simMode, showTiming, runner, recomputeNonce]);
+  }, [doc, simMode, showTiming, runner, recomputeNonce]);
 
   // ---- 本地自动存档（按模式 + 关卡分开存） ----
   const storageKey = storageKeyFor(gameMode, levelId);
@@ -1029,7 +1014,8 @@ export function App(): React.JSX.Element {
         design,
         library: doc.library.map((m) => m.template),
         level: judgedLevel,
-        hardcore: forcedHardcore || mode === 'timing',
+        // 判定恒按真实时序：建立/保持等时序检查一律生效（不再由玩家的看法开关决定）
+        hardcore: true,
         family: progress.family,
       });
       if (response.error || !response.judge) {
@@ -1351,31 +1337,12 @@ export function App(): React.JSX.Element {
         <div className="group">
           <button
             type="button"
-            className={mode === 'logic' ? 'active' : ''}
-            onClick={() => setMode('logic')}
-            disabled={forcedHardcore}
-            title={forcedHardcore ? '本关强制硬核工程模式（时序挑战关）' : '忽略时序，只看逻辑'}
+            className={timingView ? 'active' : ''}
+            onClick={() => setTimingView(!timingView)}
+            title="在画布上画出真实波形：竞争、毛刺、传播延迟。只改画布，不改判定。"
           >
-            科普模式
+            时序视图
           </button>
-          <button
-            type="button"
-            className={mode === 'timing' ? 'active' : ''}
-            onClick={() => setMode('timing')}
-            title="带 1ns/0.5ns/0.8ns 延迟的硬核模式"
-          >
-            硬核模式{forcedHardcore ? '（本关强制）' : ''}
-          </button>
-          {mode === 'logic' && (
-            <button
-              type="button"
-              className={timingView ? 'active' : ''}
-              onClick={() => setTimingView(!timingView)}
-              title="用真实延迟跑一遍，把波形/竞争/毛刺摆出来看。只是看法：判定仍按稳定值，不影响成绩。"
-            >
-              时序视图
-            </button>
-          )}
         </div>
         <div className="group">
           <button type="button" onClick={undo} disabled={undoStack.length === 0}>
@@ -1626,7 +1593,7 @@ export function App(): React.JSX.Element {
                   : []
               }
             />
-            {timingView && mode === 'logic' && (
+            {timingView && (
               <WaveformPanel
                 waveform={liveWave}
                 portNames={Object.keys(snapshot?.portValues ?? {})}

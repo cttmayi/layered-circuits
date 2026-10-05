@@ -90,14 +90,14 @@ describe('仿真层：时序视图真的按真实时序跑，并带回端口波�
 });
 
 describe('界面层：时序视图只改仿真，不改判定', () => {
-  it('时序口径关卡 → 关掉时序视图：simulate 回到稳定值，judge 一个字段都没变', async () => {
+  it('时序视图开关只收放波形显示：不重跑仿真，判定也不受影响', async () => {
     enableDebugUrl();
     renderApp();
     startJob('非门');
     // 一键出答案：省得在测试里手搭电路
     fireEvent.click(screen.getByText('一键出答案'));
     await waitFor(() => expect(screen.getByText('三极管')).toBeTruthy());
-    // 非门已按真实时序判定 → 进来默认就是时序看法、带波形（判的和看的是同一回事）
+    // 画布恒按真实时序跑（2026-01 移除了「科普模式」），默认带波形
     await waitFor(() => {
       const last = simRequests().at(-1)!;
       expect(last.type === 'simulate' && last.mode).toBe('timing');
@@ -105,23 +105,23 @@ describe('界面层：时序视图只改仿真，不改判定', () => {
     const first = simRequests().at(-1)!;
     expect(first.type === 'simulate' && first.withWaveform).toBe(true);
     await waitFor(() => expect(document.querySelectorAll('.wlabel').length).toBeGreaterThan(0));
+    // 「科普模式 / 硬核模式」开关已移除（2026-01）：画布恒按真实时序跑
+    expect(screen.queryByText('科普模式')).toBeNull();
+    expect(screen.queryByText(/硬核模式/)).toBeNull();
 
-    // 关掉时序视图 → 仿真回到稳定值口径（只是"看法"变了）
+    // 收起「时序视图」：只收起波形显示，不重跑仿真
+    const before = simRequests().length;
     fireEvent.click(screen.getByText('时序视图'));
-    await waitFor(() => {
-      const last = simRequests().at(-1)!;
-      expect(last.type === 'simulate' && last.mode).toBe('logic');
-    });
-    const viewed = simRequests().at(-1)!;
-    expect(viewed.type === 'simulate' && viewed.withWaveform).toBe(false);
+    await waitFor(() => expect(document.querySelectorAll('.wlabel').length).toBe(0));
+    expect(simRequests().length).toBe(before);
 
-    // 交付验收：判定请求必须与视图无关（原样：不给 mode、hardcore 仍按科普模式为 false）
+    // 交付验收：判定请求与画布无关（不给 mode），而且恒按真实时序（hardcore 恒 true）
     fireEvent.click(screen.getAllByText('交付验收')[0]!);
     await waitFor(() => expect(judgeRequests().length).toBeGreaterThan(0));
     const judge = judgeRequests().at(-1)!;
-    expect(judge.type === 'judge' && judge.hardcore).toBe(false);
+    expect(judge.type === 'judge' && judge.hardcore).toBe(true);
     expect(judge.type === 'judge' && (judge as { mode?: unknown }).mode).toBeUndefined();
-    // 而且照样判过（说明视图没把判定带偏）
+    // 而且照样判过（说明收起波形没把判定带偏）
     await waitFor(() => expect(screen.getAllByText(/材料费/).length).toBeGreaterThan(0));
   }, 30_000);
 });
@@ -145,30 +145,29 @@ describe('判定走真实时序的关卡：进来默认就是时序看法', () =
 });
 
 describe('视图不残留', () => {
-  it('换关后视图回到该关自己的口径（不残留上一关的手动选择）', async () => {
+  it('波形视图的选择跨关保留（不再按关卡口径强制重置）', async () => {
     // 预置前六关已通关：这样「同或门」在地图上是可点的
     seedCleared();
     render(<App />);
     startJob('非门');
     await waitFor(() => expect(screen.getAllByText('交付验收').length).toBeGreaterThan(0));
-    // 手动把视图切到与关卡口径相反的一侧
-    const notMode = findLevel('s1-not')!.mode;
+    await waitFor(() => expect(document.querySelectorAll('.wlabel').length).toBeGreaterThan(0));
+
+    // 收起波形显示
     fireEvent.click(screen.getByText('时序视图'));
-    await waitFor(() => {
-      const last = simRequests().at(-1)!;
-      expect(last.type === 'simulate' && last.mode).toBe(notMode === 'timing' ? 'logic' : 'timing');
-    });
-    // 换关：视图回到新关卡自己声明的口径，而不是沿用上一关的手动选择
+    await waitFor(() => expect(document.querySelectorAll('.wlabel').length).toBe(0));
+
+    // 换关：选择保留（玩家偏好不该被关卡切换覆盖）
     fireEvent.click(screen.getByText('← 返回地图'));
     fireEvent.click(screen.getByText('同或门'));
     await waitFor(() => expect(screen.getAllByText('交付验收').length).toBeGreaterThan(0));
-    const xnorMode = findLevel('s1-xnor')!.mode;
+    expect(screen.queryByText('时序视图')?.className ?? '').not.toContain('active');
+    expect(document.querySelectorAll('.wlabel').length).toBe(0);
+
+    // 但仿真照样按真实时序跑 —— 「怎么看」和「怎么跑」已经分开
     await waitFor(() => {
       const last = simRequests().at(-1)!;
-      expect(last.type === 'simulate' && last.mode).toBe(xnorMode);
+      expect(last.type === 'simulate' && last.mode).toBe('timing');
     });
-    // 开关状态也要跟着口径走（timing 口径 = 打开）
-    const active = (screen.queryByText('时序视图')?.className ?? '').includes('active');
-    expect(active).toBe(xnorMode === 'timing');
   }, 30_000);
 });

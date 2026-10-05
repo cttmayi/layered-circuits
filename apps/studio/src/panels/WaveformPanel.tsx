@@ -35,7 +35,7 @@ export function WaveformPanel({
   waveform: wave,
   portNames,
   marks = [],
-  emptyHint = '先运行一次校验（硬核模式才有传播延迟与毛刺）。',
+  emptyHint = '先跑一次仿真或校验，才有传播延迟与毛刺可看。',
 }: WaveformPanelProps): React.JSX.Element {
   if (!wave || wave.nets.length === 0) {
     return (

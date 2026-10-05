@@ -21,7 +21,6 @@ import { docForLevel } from '../src/level/progress';
 import { handleRequest } from '../src/sim/handle';
 import { probeModule } from '../src/sim/probe';
 import type { DriveValue } from '../src/sim/protocol';
-import { shouldReuseSimState } from '../src/sim/sim-policy';
 
 type Req = Parameters<typeof handleRequest>[0];
 type Design = Extract<Req, { type: 'simulate' }>['design'];
@@ -117,21 +116,19 @@ function clicksInSr(moduleHash: string, values: Array<0 | 1>, library: StoredMod
   const design = toDesign(doc);
   const designKey = JSON.stringify(design);
   const qNet = design.nets.find((n) => n.pins.some((p) => p.inst === 'out-q'))!;
-  // 这次要测的是「复用路径下模块内部节点也得恢复」：用时序看法（= 会复用终态）
-  const reuse = shouldReuseSimState('level', 'timing');
-  expect(reuse).toBe(true);
+  // 这次要测的是「复用路径下模块内部节点也得恢复」：复用现在是常态（画布恒按真实时序跑）
 
   let prev: { key: string; nodes: number[] } | null = null;
   const out: string[] = [];
   for (const value of values) {
     const syms = doc.syms.map((s) => (s.id === 'in-sn' ? { ...s, value: value as DriveValue } : s));
-    const reuseNow = prev !== null && prev.key === designKey && reuse;
+    const reuseNow = prev !== null && prev.key === designKey;
     const response = handleRequest({
       id: 1,
       type: 'simulate',
       design: toDesign({ ...doc, syms }),
       library: library.map((m) => m.template),
-      mode: 'logic',
+      mode: 'timing',
       inputs: { sn: value, rn: 0 },
       buttonPorts: [],
       prevNodeSignals: reuseNow ? (prev as { nodes: number[] }).nodes : undefined,
