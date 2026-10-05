@@ -1,5 +1,7 @@
 # 部署（把《逐层电路》放到网上）
 
+**当前线上地址：<https://layered-circuits.pages.dev/>**（Cloudflare Pages，主分支自动构建）
+
 游戏是**纯静态前端**：没有后端、没有数据库、没有环境变量，进度存在玩家浏览器的
 `localStorage` 里。任何静态托管都能跑，构建产物只有两个文件：
 

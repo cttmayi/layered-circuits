@@ -1,0 +1,22 @@
+name: check
+
+# 质量门：类型检查 + lint + 全部测试。与本地 `pnpm check` 是同一条命令。
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 不写 version：action 会读 package.json 的 packageManager 字段
+      # （两者同时给出会报 "Multiple versions of pnpm specified"）
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check

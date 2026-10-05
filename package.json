@@ -25,5 +25,7 @@
     "@biomejs/biome": "2.5.14",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
-  }
+  },
+  "description": "逐层电路：自造计算机 —— 从三极管开始逐层搭出逻辑门、触发器、加法器与一台两位数加法计算器的纯数字电路设计沙盒",
+  "homepage": "https://layered-circuits.pages.dev/"
 }

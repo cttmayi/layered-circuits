@@ -95,9 +95,10 @@ docs/
 - **familyRefs 覆盖现状**：TTL 只 s1-not/and/or/nand/nor（5 基础门）；CMOS 覆盖 s1 全部（含 xor/xnor + 教学关）；
   **s2/s3 无 familyRefs** → TTL/CMOS 契约下回退 RTL 判定，门版仍用 RTL 积木即可。
 - 教学关（classroom）：s1-npn / s1-dio / s1-float / s1-cmos-inv / s1-cmos-nand。**不评星、不设预算与延迟标准**（App 里 `classroom ? 0 : starsOf(...)`）。
-- **教学模式**：5 个教学关已从关卡链拆出（`TEACH_LEVELS`），与关卡模式并列 —— 主菜单独立入口 → 元件图鉴墙
-  （`TeachPanel.tsx`，概念卡摘要 + 已掌握标记）→ 点开引导搭建（`gameMode = 'teach'`，独立存档 key `lc-studio-teach-<id>-v1`）。
-  不参与解锁链、不计主线「已交付」与星数；交付标「已掌握」（复用 `progress.cleared`，stars 恒 0）。
+- **知识卡片**（原教学关）：5 张元件卡片（`TEACH_LEVELS`），与关卡模式并列 —— 主菜单独立入口 → 卡片墙
+  （`TeachPanel.tsx`，概念卡摘要）→ 点开引导搭建（`gameMode = 'teach'`，独立存档 key `lc-studio-teach-<id>-v1`）。
+  **不算关卡、不计进度与成绩**：不参与解锁链，判定不写 attempts、通过不写 cleared，不弹结算、不产出积木；
+  老存档里的教学关记录会在装载时被清理（`loadProgress` 的迁移）。
 
 ### 4.3 关卡定义（schema/level.ts + content/levels*.ts）
 

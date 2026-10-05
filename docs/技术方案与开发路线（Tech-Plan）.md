@@ -432,7 +432,7 @@ M3 之后的内容主线（已落地，均含测试与 GUI 实测）：
   rtl/dtl = `weak-high`（高电平允许弱 1），ttl/cmos = `strong`（推挽，输出期望 1 必须强 1）。
 - `familySpecOf(level, family)`（level.ts）：教学关按契约全套换内容（教什么用什么，如 CMOS 契约从认识 MOS 学起）；
   正式关按 `familyRefs[family]` 换元件集/参考解/满分线/预算；无该契约条目 → 回退 rtl 判定。
-- **教学模式**：5 个教学关（s1-npn/dio/float、s1-cmos-inv/nand）已从关卡链拆入 `TEACH_LEVELS`，与关卡模式并列
+- **知识卡片**（原教学关）：5 张元件卡片（s1-npn/dio/float、s1-cmos-inv/nand）已从关卡链拆入 `TEACH_LEVELS`，与关卡模式并列
   （主菜单独立入口 → 元件图鉴墙 → 引导搭建，`gameMode='teach'`）；不评星、不参与解锁链、不计主线已交付计数。
 - 强度检查在判定侧执行（judge.ts）：强输出契约下弱 1 报「TTL 推挽输出 契约要求推挽输出 …」。
 - 修正：模块成本回写曾漏 `nmos/pmos`（CMOS 积木成本恒 0），已在 `cost.ts` 修复并加测试钉住。
@@ -524,7 +524,7 @@ M3 之后的内容主线（已落地，均含测试与 GUI 实测）：
 ## 12. 立刻可以执行的下一步
 
 ```bash
-cd /Users/ling/job/game/Layered_Circuits
+cd <仓库目录>
 git init
 pnpm init
 # 建 workspace：pnpm-workspace.yaml + apps/studio + packages/{schema,sim-core,compiler,library,content,ui}
