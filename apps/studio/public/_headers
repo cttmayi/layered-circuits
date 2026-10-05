@@ -1,0 +1,7 @@
+# Cloudflare Pages 响应头（放在静态资源目录，Vite 会把它复制到 dist 根）
+# 缓存策略：文件名带内容哈希的资源强缓存一年；入口 HTML 每次校验（更新后刷新即得新版）
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
