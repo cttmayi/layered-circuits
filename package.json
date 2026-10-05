@@ -20,7 +20,7 @@
     "build": "pnpm --filter @lc/studio build",
     "dev": "pnpm --filter @lc/studio dev",
     "preview": "pnpm --filter @lc/studio preview",
-    "deploy:cf": "pnpm build && npx wrangler pages deploy apps/studio/dist --project-name layered-circuits",
+    "deploy:cf": "pnpm build && npx wrangler pages deploy apps/studio/dist --project-name=layered-circuits --branch=main --commit-dirty=true",
     "solve": "node node_modules/.pnpm/vite-node@3.2.4/node_modules/vite-node/vite-node.mjs --config vitest.config.ts tools/opt-solver/src/cli.ts",
     "lc-level": "node node_modules/.pnpm/vite-node@3.2.4/node_modules/vite-node/vite-node.mjs --config vitest.config.ts tools/level-editor/src/cli.ts"
   },

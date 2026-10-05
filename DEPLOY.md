@@ -64,6 +64,36 @@ Cloudflare 走全球节点，**自定义域名不需要工信部备案**。加�
 > 国内可达性请自己实测一次：手机 4G、不挂梯子打开链接。Cloudflare 在大陆一般能直连，
 > 速度看当地网络（比国内节点慢，但不需要备案）。
 
+### 让 `git push` 自动部署（GitHub Actions 直传）
+
+仓库里的 `.github/workflows/ci.yml` 已经把这条流水线写好了：
+
+| 触发 | 做什么 |
+|---|---|
+| push / PR | `pnpm install --frozen-lockfile` + `pnpm check`（typecheck + lint + 298 个测试） |
+| **main 的 push**（或 Actions 页手动 Run workflow） | 先跑上面那套，**过了才** `pnpm build` + `wrangler pages deploy` |
+
+也就是：**测试不过就不会发布**；PR 只跑检查、不动线上。之后 `git push` 就会更新
+<https://layered-circuits.pages.dev/>。
+
+一次性配置（只有你本人能做）：
+
+1. **Cloudflare**：My Profile → API Tokens → Create Token → 用 Pages 模板（需要能编辑 Pages），
+   复制 token；Account ID 在 Workers & Pages 概览页的右侧栏。
+2. **GitHub**：仓库 Settings → Secrets and variables → Actions → New repository secret，
+   加两条，名字必须完全一致：`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。
+3. push 一次，或去 Actions 页点 **Run workflow**，看日志。
+
+> ⚠️ Cloudflare 官方限制：**直传项目无法事后改成 Git 集成**，要换成一个 Git 集成项目就得
+> 新建项目（会换域名）。所以这里的自动部署是用 Actions 直传实现的 —— 控制台里项目类型仍显示
+> Direct Upload，这不影响使用。想要 PR 预览环境的话才需要走 Git 集成项目。
+
+**排错**
+
+- `Authentication error` / 401 → Secrets 名字不对或 token 权限不足（要能编辑 Pages）
+- 发布到了别的项目 → `--project-name` 必须与控制台里的项目名一致（现在是 `layered-circuits`）
+- CI 里 `pnpm check` 失败但本地是绿的 → 先看 Node 版本（CI 固定 22）与 `--frozen-lockfile`
+
 ---
 
 ## 2. 腾讯云 EdgeOne Pages（要国内节点就得备案）
