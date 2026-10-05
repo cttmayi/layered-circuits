@@ -10,6 +10,7 @@
 import type { Level } from '@lc/schema';
 import { fireEvent, type RenderResult, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { StoredModule } from '../src/editor/model';
 import { Palette } from '../src/panels/Palette';
 
 /** 一个只开放 NPN/电阻 的假关卡（RTL 教学关同款约束） */
@@ -62,5 +63,58 @@ describe('元件库「隐藏本关不可用」', () => {
     renderPalette();
     expect(screen.queryByText('二极管')).toBeNull();
     expect(screen.getByText('三极管 NPN')).toBeTruthy();
+  });
+});
+
+/** 一个开放模块的假关卡（moduleAccess: 'all' 且不设白名单） */
+function moduleLevel(): Level {
+  return { ...lockedLevel(), moduleAccess: 'all' } as Level;
+}
+
+/** 一张「我的模块」卡片：关键路径写在模板里（与 App 封装后存下来的形状一致） */
+function fakeModule(criticalPathPs: number): StoredModule {
+  return {
+    hash: 'h-test',
+    name: '半加器',
+    version: '1.0',
+    stage: 3,
+    costHalf: 120,
+    isSequential: false,
+    ports: [
+      { id: 'a', name: 'a', dir: 'in', width: 1 },
+      { id: 'y', name: 'y', dir: 'out', width: 1 },
+    ],
+    template: { criticalPathPs },
+    sources: [],
+    createdAt: 0,
+  } as unknown as StoredModule;
+}
+
+describe('模块卡片的延迟显示', () => {
+  it('延迟显示在成本下面一行（文档顺序在成本之后）', () => {
+    render(
+      <Palette
+        placing={null}
+        onPick={() => {}}
+        library={[fakeModule(6500)]}
+        level={moduleLevel()}
+      />,
+    );
+    const cost = screen.getByText('成本 60');
+    const delay = screen.getByText('延迟 6.50 ns');
+    expect(cost).toBeTruthy();
+    expect(delay).toBeTruthy();
+    expect(
+      cost.compareDocumentPosition(delay) & Node.DOCUMENT_POSITION_FOLLOWING,
+      '延迟必须排在成本后面',
+    ).toBeTruthy();
+  });
+
+  it('未记录时序的早期模块显示「延迟 —」，不显示 0.00 ns', () => {
+    render(
+      <Palette placing={null} onPick={() => {}} library={[fakeModule(0)]} level={moduleLevel()} />,
+    );
+    expect(screen.getByText('延迟 —')).toBeTruthy();
+    expect(screen.queryByText('延迟 0.00 ns')).toBeNull();
   });
 });

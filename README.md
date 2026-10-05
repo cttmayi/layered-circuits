@@ -28,7 +28,7 @@ pnpm install --frozen-lockfile
 pnpm dev          # 开发服务器：http://localhost:5273/
 pnpm build        # 产出 apps/studio/dist（自包含 index.html + 仿真 Worker）
 pnpm preview      # 本地预览构建产物
-pnpm check        # 质量门：typecheck + lint + 全部测试（310 个 / 56 个测试文件）
+pnpm check        # 质量门：typecheck + lint + 全部测试（56 个测试文件、300+ 个用例）
 pnpm test         # 只跑测试
 pnpm ship         # 部署到线上（= build + Cloudflare Pages 直传；首次先跑 npx wrangler login）
 ```
@@ -117,7 +117,7 @@ pnpm ship         # 部署到线上（= build + Cloudflare Pages 直传；首次
 | 前端 | React 19 + TypeScript（strict）+ Vite 7，画布是 Canvas 2D 手写编辑器（无画布框架） |
 | 仿真 | `packages/sim-core`：**零 DOM 依赖**的纯 TS 内核（事件驱动 + 强度仲裁），游戏里跑在 Web Worker 上，离线求解器与测试里直接 `new Simulator(net)` |
 | 数据 | Zod 校验的元件 / 网表 / 模块 / 关卡模型（`packages/schema`）+ DesignBuilder |
-| 质量门 | Biome（lint + format）、Vitest（310 个测试，含判定回归与内容自检护栏）、`pnpm check` 一把跑全 |
+| 质量门 | Biome（lint + format）、Vitest（56 个文件、300+ 个用例，含判定回归与内容自检护栏）、`pnpm check` 一把跑全 |
 | 部署 | 纯静态（无后端、无数据库）：Cloudflare Pages，见 `DEPLOY.md` |
 
 ## 目录结构

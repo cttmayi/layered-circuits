@@ -3,6 +3,17 @@ import { type ReactNode, useState } from 'react';
 import type { PlaceKind, StoredModule, UnitKind } from '../editor/model';
 import { drawIcon } from '../editor/render';
 
+/**
+ * 模块封装时实测的关键路径（ps）—— 存在模板里（`StoredModule.template` 是完整模板的纯 JSON），
+ * 而 `StoredModule` 本身没有这个字段，所以这里按 App 里既有的做法窄化取值。
+ * 取不到（早期封装的模块、旧存档）返回 0，由调用方显示占位而不是「0.00 ns」。
+ */
+function moduleCriticalPathPs(mod: StoredModule): number {
+  const tpl = mod.template as { criticalPathPs?: unknown } | null | undefined;
+  const v = tpl?.criticalPathPs;
+  return typeof v === 'number' && v > 0 ? v : 0;
+}
+
 export interface PaletteProps {
   placing: PlaceKind | null;
   onPick: (kind: PlaceKind) => void;
@@ -366,6 +377,19 @@ export function Palette({
                   {mod.name} {mod.isSequential && <em>时序</em>}
                 </span>
                 <span className="palette-cost">成本 {mod.costHalf / 2}</span>
+              </span>
+              {/* 延迟：封装时实测的关键路径（任一输入 → 输出口的最长路径），放在成本下面一行 */}
+              <span
+                className="palette-delay"
+                title={
+                  moduleCriticalPathPs(mod) > 0
+                    ? '封装时实测：任一输入到输出口的最长路径'
+                    : '封装时未记录时序（早期模块，重新封装即可得到）'
+                }
+              >
+                {moduleCriticalPathPs(mod) > 0
+                  ? `延迟 ${(moduleCriticalPathPs(mod) / 1000).toFixed(2)} ns`
+                  : '延迟 —'}
               </span>
               <span className="palette-note">
                 {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}

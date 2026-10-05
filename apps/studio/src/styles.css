@@ -341,6 +341,13 @@ body,
   font-size: 11px;
 }
 
+/* 模块延迟：紧跟在成本下面一行（未记录时是「延迟 —」，同一行不跳动） */
+.palette-delay {
+  display: block;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
 /* 卡片第一行：名称靠左、价格靠右，省掉独立的价格行 */
 .palette-row {
   display: flex;
