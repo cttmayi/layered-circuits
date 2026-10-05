@@ -76,10 +76,30 @@ describe('时序判定推广护栏', () => {
     for (const id of listed) expect(findLevel(id)!.mode, id).toBe('timing');
   });
 
-  it('每关的参考解在它自己声明的口径下都判定通过', () => {
-    const failed = timingLevels.filter((l) => !judge(l.id).pass).map((l) => l.id);
+  it('每关的参考解都判定通过；声明了预算的关卡，延迟是真的量出来的', () => {
+    const failed: string[] = [];
+    const badDelay: string[] = [];
+    for (const l of timingLevels) {
+      const judged = judge(l.id);
+      if (!judged.pass) failed.push(l.id);
+      const budget = l.timingBudgetPs;
+      const path = judged.timing.criticalPathPs ?? 0;
+      // 有预算 ⇒ 判定器不会走 skipDelay 分支，关键路径必须 > 0，且预算留出至少一倍余量
+      // （2026-01 之前 s3-bin2bcd / s3-calc 没有预算 → 延迟实测被跳过 → 读数恒 0）
+      if (budget !== undefined && (path <= 0 || budget < path * 2)) {
+        badDelay.push(`${l.id}: 预算 ${budget} / 关键路径 ${path}`);
+      }
+    }
     expect(failed).toEqual([]);
-  }, 300_000);
+    expect(badDelay).toEqual([]);
+  }, 600_000);
+
+  it('每关都有明确的时序要求：组合关给关键路径预算，时钟关给时钟口', () => {
+    const bare = ALL_LEVELS.filter(
+      (l) => l.timingBudgetPs === undefined && parseLevel(l).checks.clockPort === undefined,
+    ).map((l) => l.id);
+    expect(bare).toEqual([]);
+  });
 
   it('电平型 / 组合型关卡：换成逻辑口径，逐行输出答案完全一致', () => {
     const mismatched: string[] = [];

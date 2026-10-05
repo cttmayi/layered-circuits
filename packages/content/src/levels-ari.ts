@@ -334,6 +334,8 @@ const BIN2BCD: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(7872, MAIN_OVERHEAD),
   optimalHalf: 7872,
+  // 延迟实测：参考解关键路径 52 ns（原来没有预算 → 判定器跳过延迟实测，读数恒 0）
+  timingBudgetPs: 104000,
   checks: {},
   vectors: [
     { inputs: { bin: 0 }, expect: { bcd: 0x00 }, note: '0 → 00' },
@@ -938,6 +940,8 @@ const CALC: Level = parseLevel({
   moduleAccess: 'all',
   budgetHalf: budgetFromOptimal(24764, MAIN_OVERHEAD),
   optimalHalf: 24764,
+  // 延迟实测：参考解关键路径 76 ns（原来没有预算 → 判定器跳过延迟实测，读数恒 0）
+  timingBudgetPs: 152000,
   checks: {},
   vectors: (() => {
     // 判定器只设置向量里列出的输入、其余默认 Z —— 时序关每个向量必须写全全部 13 个键位
