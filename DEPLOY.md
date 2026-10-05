@@ -150,3 +150,26 @@ Settings → Environment variables 里加一条 `PNPM_VERSION=9.6.0` 即可。
 **③ 缓存**：`/assets/*` 一年强缓存（文件名带内容哈希），`index.html` 每次校验
 （Cloudflare 读 `dist/_headers`，EdgeOne 读 `edgeone.json`），所以更新后玩家刷新即得新版。
 若平台对 `_headers` 里的中文注释报错，删掉注释行即可（规则本身不依赖注释）。
+
+## 5. 仓库信息（一次性设置）
+
+GitHub 仓库页右上「About」的三件套（简介 / 主页 / 标签）用 `gh` 一条命令填完，不必点网页：
+
+```bash
+gh repo edit cttmayi/layered-circuits \
+  --description "逐层电路 · Layered Circuits：从晶体管开始一层层搭出计算器的开源电路游戏，27 关全部按真实传播延迟判定" \
+  --homepage "https://layered-circuits.pages.dev/" \
+  --add-topic circuit-simulator --add-topic game --add-topic react --add-topic typescript --add-topic education
+```
+
+三个字段各自的作用：
+
+- **简介**：一句话说清「是什么 + 特别在哪」。这里特意点出「27 关全部按真实传播延迟判定」——
+  这是本项目和一般逻辑电路游戏最不一样的地方，也是搜索/推荐时最该被看到的一句。
+- **主页**：指向稳定线上地址 `https://layered-circuits.pages.dev/`。Cloudflare Pages 的项目域名
+  不随每次部署变化，适合长期挂在主页上（自定义域名就换成自己的）。
+- **标签**：`circuit-simulator` `game` `react` `typescript` `education` —— 前两个决定别人搜电路
+  游戏时能不能搜到你，后两个决定技术向的推荐流量。
+
+改简介/主页用网页设置也一样，`gh repo edit` 只是省得记字段名。仓库描述本身**不影响**任何构建
+或部署，纯属门面，改错了再改一次即可。
