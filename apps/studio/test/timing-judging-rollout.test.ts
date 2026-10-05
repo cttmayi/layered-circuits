@@ -22,12 +22,13 @@ import { describe, expect, it } from 'vitest';
 const library = new InMemoryModuleLibrary([...teachingModulesFor('rtl')] as never);
 
 /** 按关卡自己声明的口径判定；传 mode 则强制用该口径（用于"换口径不改答案"对照） */
-function judge(levelId: string, mode?: 'logic' | 'timing'): JudgeResult {
+function judge(levelId: string, mode?: 'logic' | 'timing', hardcore?: boolean): JudgeResult {
   const level = findLevel(levelId)!;
   const spec = familySpecOf(level, 'rtl');
   return judgeDesign(level.referenceSolution!, level, {
     library,
     ...(mode ? { mode } : {}),
+    ...(hardcore !== undefined ? { hardcore } : {}),
     family: spec.family,
     units: spec.units,
     timingBudgetPs: spec.timingBudgetPs,
@@ -183,4 +184,23 @@ describe('批次③：第 3 章组合与算术（进位链与译码器）', () =
     }
     expect(worst).toBeGreaterThan(4); // 太长进位链/译码器必然有多级竞争（实测最坏 26 次）
   }, 300_000);
+});
+
+describe('判定不受玩家开关影响（全面时序化的最后一条耦合）', () => {
+  it('hardcore 开关（科普/硬核）不改变任何一关的判定结论', () => {
+    // 背景：App 现在传 hardcore = 时序挑战关 || 「硬核模式」开关。实测这份开关对参考解的
+    // 结论没有影响（含带时钟口的三关），所以判定彻底与它解耦是安全的 —— 这条测试守住这点。
+    const mismatched: string[] = [];
+    for (const l of timingLevels) {
+      const on = judge(l.id, undefined, true);
+      const off = judge(l.id, undefined, false);
+      const same =
+        on.pass === off.pass &&
+        JSON.stringify(on.rows.map((r) => r.ok)) === JSON.stringify(off.rows.map((r) => r.ok)) &&
+        JSON.stringify(on.rows.map((r) => r.actual)) ===
+          JSON.stringify(off.rows.map((r) => r.actual));
+      if (!same) mismatched.push(l.id);
+    }
+    expect(mismatched).toEqual([]);
+  }, 600_000);
 });
