@@ -45,8 +45,22 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      # 密钥缺失时给出可执行的提示（否则只会看到 wrangler 的 401 / exit code 1）
+      - name: 检查部署密钥
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          missing=""
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::缺少仓库 Secret:$missing —— 在 Settings → Secrets and variables → Actions 里添加（见 DEPLOY.md）"
+            exit 1
+          fi
+          echo "密钥已就位 ✓"
       # 直传：--branch=main 让这次部署算「生产部署」，项目域名随之更新
-      # 需要仓库 Secrets：CLOUDFLARE_API_TOKEN（Pages 编辑权限）、CLOUDFLARE_ACCOUNT_ID
+      # 需要仓库 Secrets：CLOUDFLARE_API_TOKEN（Cloudflare Pages: Edit）、CLOUDFLARE_ACCOUNT_ID
       - name: 发布到 Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

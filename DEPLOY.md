@@ -78,8 +78,9 @@ Cloudflare 走全球节点，**自定义域名不需要工信部备案**。加�
 
 一次性配置（只有你本人能做）：
 
-1. **Cloudflare**：My Profile → API Tokens → Create Token → 用 Pages 模板（需要能编辑 Pages），
-   复制 token；Account ID 在 Workers & Pages 概览页的右侧栏。
+1. **Cloudflare**：右上头像 → My Profile → API Tokens → **Create Custom Token**，权限加一条
+   **Account → Cloudflare Pages → Edit**、账号资源选你自己的账号，创建后复制 token；
+   Account ID 在 Workers & Pages 概览页的右侧栏。
 2. **GitHub**：仓库 Settings → Secrets and variables → Actions → New repository secret，
    加两条，名字必须完全一致：`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。
 3. push 一次，或去 Actions 页点 **Run workflow**，看日志。
@@ -90,7 +91,8 @@ Cloudflare 走全球节点，**自定义域名不需要工信部备案**。加�
 
 **排错**
 
-- `Authentication error` / 401 → Secrets 名字不对或 token 权限不足（要能编辑 Pages）
+- `Authentication error` / 401 → Secrets 名字不对或 token 权限不足（要能编辑 Pages）；
+  现在 workflow 会先跑「检查部署密钥」这一步，缺哪个 secret 会直接在报错里点名
 - 发布到了别的项目 → `--project-name` 必须与控制台里的项目名一致（现在是 `layered-circuits`）
 - CI 里 `pnpm check` 失败但本地是绿的 → 先看 Node 版本（CI 固定 22）与 `--frozen-lockfile`
 
