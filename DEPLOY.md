@@ -39,8 +39,21 @@ npx wrangler login     # 浏览器里点授权；以后过期了再跑一次
 ### 每次部署
 
 ```bash
-pnpm deploy:cf         # = pnpm build + wrangler pages deploy（--branch=main 算生产部署）
+pnpm ship              # 就这一个命令；等价于 pnpm deploy:cf（= build + wrangler pages deploy）
 ```
+
+脚本在 `package.json` 里：`ship` 是短别名，真正干活的还是 `deploy:cf`，两者不会漂移。
+忘了名字不要紧 —— **直接输入 `pnpm run` 会列出全部脚本**。
+
+### （可选）把它变成一个词：`ship`
+
+想在**任意目录**输入一个词就上线，把这行加到 `~/.zshrc` 末尾，然后重开终端（或 `source ~/.zshrc`）：
+
+```bash
+alias ship='pnpm -C /Users/ling/job/game/Layered_Circuits ship'
+```
+
+之后不管在哪个目录，输入 `ship` 就行 —— `-C` 会让 pnpm 在那个仓库里执行，不用先 `cd`。
 
 不想用命令行：把 `pnpm build` 产出的 `apps/studio/dist` 整个文件夹**拖进**控制台项目页
 （Direct Upload 支持拖拽），效果一样。
@@ -58,7 +71,7 @@ Cloudflare 走全球节点，**自定义域名不需要工信部备案**。加�
 
 ### （可选）让 `git push` 自动部署
 
-**现在没开**：改完东西手动跑一次 `pnpm deploy:cf` 就行。想开的话两条路：
+**现在没开**：改完东西手动跑一次 `pnpm ship` 就行。想开的话两条路：
 
 | 做法 | 得到什么 | 代价 |
 |---|---|---|

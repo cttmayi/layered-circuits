@@ -30,6 +30,7 @@ pnpm build        # 产出 apps/studio/dist（自包含 index.html + 仿真 Work
 pnpm preview      # 本地预览构建产物
 pnpm check        # 质量门：typecheck + lint + 全部测试（298 个 / 55 个测试文件）
 pnpm test         # 只跑测试
+pnpm ship         # 部署到线上（= build + Cloudflare Pages 直传；首次先跑 npx wrangler login）
 ```
 
 不想装环境？`pnpm build` 之后**双击 `apps/studio/dist/index.html`** 就能离线玩（Worker 加载不了时会自动回退到主线程仿真）。
