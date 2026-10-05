@@ -83,6 +83,15 @@ export interface LevelDef {
   referenceHalf: number;
 }
 
+/**
+ * 关卡说明末尾统一补的时序口径提示（第一章 7 关门级关，2026-01 批次②）：
+ * 判定不再取"瞬时收敛答案"，而是按真实延迟跑到停稳再采样。
+ * 知识卡片（带 classroom 的关）不判定、也不补这句 —— 卡片默认仍看稳定值。
+ */
+const TIMING_NOTE =
+  '判定在真实时序下进行：输入一变，信号要沿真实的门延迟走一段才传到输出，中途可能闪几下' +
+  '（真实电路就是这样）——判定取的是稳定之后的值，闪的这几下不算错。想看这个过程，点工具栏的「时序视图」。';
+
 function gateLevel(input: {
   id: string;
   title: string;
@@ -138,9 +147,11 @@ function gateLevel(input: {
     kind: input.kind ?? 'main',
     title: input.title,
     brief: input.brief,
-    teaching: input.teaching,
+    teaching: input.classroom ? input.teaching : input.teaching + TIMING_NOTE,
     hint: input.hint,
-    mode: 'logic',
+    // 判定口径 = 真实时序（2026-01 批次②）：门延迟在这里是真的（判定取停稳之后的值）。
+    // 知识卡片不判定，保持逻辑口径 —— 卡片进来默认看稳定值，波形留给主线关卡。
+    mode: input.classroom ? 'logic' : 'timing',
     timingBudgetPs: input.timingBudgetPs,
     allowedUnits: [...(input.allowedUnits ?? STAGE1_UNITS)],
     requiredUnits: [...(input.requiredUnits ?? [])],

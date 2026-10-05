@@ -3,7 +3,7 @@
  * 「时序视图」：把"怎么看"和"怎么判"分开。
  *
  * 科普模式（逻辑模式）下点开时序视图，仿真改走真实时序（带延迟、能看波形/竞争），
- * 但**判定口径不变** —— 交付验收仍然按关卡声明的稳定值判，视图绝不影响成绩。
+ * 但**判定口径不变** —— 交付验收按关卡自己声明的口径判（logic 或 timing），视图绝不影响成绩。
  * 这是"全面改成时序模式"方向的第一步：先让玩家随时能看见真实时序，判定先不动。
  */
 
@@ -90,28 +90,30 @@ describe('仿真层：时序视图真的按真实时序跑，并带回端口波�
 });
 
 describe('界面层：时序视图只改仿真，不改判定', () => {
-  it('科普模式 → 开后时序视图：simulate 带 withWaveform，judge 一个字段都没变', async () => {
+  it('时序口径关卡 → 关掉时序视图：simulate 回到稳定值，judge 一个字段都没变', async () => {
     enableDebugUrl();
     renderApp();
     startJob('非门');
     // 一键出答案：省得在测试里手搭电路
     fireEvent.click(screen.getByText('一键出答案'));
     await waitFor(() => expect(screen.getByText('三极管')).toBeTruthy());
-    // 默认（科普模式、视图关）：逻辑模式跑，不带波形
-    const first = simRequests().at(-1)!;
-    expect(first).toMatchObject({ type: 'simulate', mode: 'logic' });
-    expect(first.type === 'simulate' && first.withWaveform).toBe(false);
-
-    // 打开时序视图
-    fireEvent.click(screen.getByText('时序视图'));
+    // 非门已按真实时序判定 → 进来默认就是时序看法、带波形（判的和看的是同一回事）
     await waitFor(() => {
       const last = simRequests().at(-1)!;
       expect(last.type === 'simulate' && last.mode).toBe('timing');
     });
-    const viewed = simRequests().at(-1)!;
-    expect(viewed.type === 'simulate' && viewed.withWaveform).toBe(true);
-    // 画布上出现真实波形（端口行有标签）
+    const first = simRequests().at(-1)!;
+    expect(first.type === 'simulate' && first.withWaveform).toBe(true);
     await waitFor(() => expect(document.querySelectorAll('.wlabel').length).toBeGreaterThan(0));
+
+    // 关掉时序视图 → 仿真回到稳定值口径（只是"看法"变了）
+    fireEvent.click(screen.getByText('时序视图'));
+    await waitFor(() => {
+      const last = simRequests().at(-1)!;
+      expect(last.type === 'simulate' && last.mode).toBe('logic');
+    });
+    const viewed = simRequests().at(-1)!;
+    expect(viewed.type === 'simulate' && viewed.withWaveform).toBe(false);
 
     // 交付验收：判定请求必须与视图无关（原样：不给 mode、hardcore 仍按科普模式为 false）
     fireEvent.click(screen.getAllByText('交付验收')[0]!);
@@ -143,25 +145,30 @@ describe('判定走真实时序的关卡：进来默认就是时序看法', () =
 });
 
 describe('视图不残留', () => {
-  it('换关后回到关卡自己的口径（视图关掉）', async () => {
+  it('换关后视图回到该关自己的口径（不残留上一关的手动选择）', async () => {
     // 预置前六关已通关：这样「同或门」在地图上是可点的
     seedCleared();
     render(<App />);
     startJob('非门');
     await waitFor(() => expect(screen.getAllByText('交付验收').length).toBeGreaterThan(0));
+    // 手动把视图切到与关卡口径相反的一侧
+    const notMode = findLevel('s1-not')!.mode;
     fireEvent.click(screen.getByText('时序视图'));
     await waitFor(() => {
       const last = simRequests().at(-1)!;
-      expect(last.type === 'simulate' && last.mode).toBe('timing');
+      expect(last.type === 'simulate' && last.mode).toBe(notMode === 'timing' ? 'logic' : 'timing');
     });
-    // 换关：视图应当回到该关自己的口径（默认稳定值视角）
+    // 换关：视图回到新关卡自己声明的口径，而不是沿用上一关的手动选择
     fireEvent.click(screen.getByText('← 返回地图'));
     fireEvent.click(screen.getByText('同或门'));
     await waitFor(() => expect(screen.getAllByText('交付验收').length).toBeGreaterThan(0));
+    const xnorMode = findLevel('s1-xnor')!.mode;
     await waitFor(() => {
       const last = simRequests().at(-1)!;
-      expect(last.type === 'simulate' && last.mode).toBe('logic');
+      expect(last.type === 'simulate' && last.mode).toBe(xnorMode);
     });
-    expect(screen.queryByText('时序视图')?.className ?? '').not.toContain('active');
+    // 开关状态也要跟着口径走（timing 口径 = 打开）
+    const active = (screen.queryByText('时序视图')?.className ?? '').includes('active');
+    expect(active).toBe(xnorMode === 'timing');
   }, 30_000);
 });

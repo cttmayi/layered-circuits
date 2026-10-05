@@ -43,6 +43,7 @@ const BATCHES: Record<string, string[]> = {
   先前: ['s2-dff', 's3-reg-8', 's3-digit-entry', 's3-calc'],
   试点: ['s2-sr-latch', 's3-display'],
   批次一_锁存器: ['s2-btn-latch', 's2-d-latch'],
+  批次二_门级: ['s1-not', 's1-and', 's1-or', 's1-nand', 's1-nor', 's1-xor', 's1-xnor'],
 };
 
 const timingLevels = ALL_LEVELS.filter((l) => parseLevel(l).mode === 'timing');
@@ -112,4 +113,30 @@ describe('批次①：两个锁存器（第 2 章收尾）', () => {
     expect(judged.timing.maxGlitches).toBeNull();
     expect(judged.timing.timingOk).toBe(true);
   });
+});
+
+describe('批次②：第一章门级关（判定看得见门延迟）', () => {
+  const GATES = ['s1-not', 's1-and', 's1-or', 's1-nand', 's1-nor', 's1-xor', 's1-xnor'];
+
+  it('纯度：都是纯组合（没藏锁存器），关键路径非 0 且在预算内', () => {
+    for (const id of GATES) {
+      const judged = judge(id);
+      expect(judged.pass, id).toBe(true);
+      expect(judged.isSequential, id).toBe(false);
+      expect(judged.timing.criticalPathPs ?? 0, id).toBeGreaterThan(0); // 延迟是真的
+      expect(judged.timing.timingOk, id).toBe(true);
+    }
+  }, 120_000);
+
+  it('门级关也会闪（真实竞争），但采样在停稳之后 → 仍全部答对，且不设毛刺上限', () => {
+    let sawGlitch = false;
+    for (const id of GATES) {
+      const judged = judge(id);
+      expect(judged.pass, id).toBe(true); // 闪不影响正确性：采样在停稳之后
+      expect(judged.timing.maxGlitches, id).toBeNull(); // 未声明上限 → 不误报"空翻超标"
+      if (Math.max(...judged.rows.map((r) => r.glitches)) > 1) sawGlitch = true;
+    }
+    // 防止这条测试空过：门级关确实存在 >1 次跳变（实测 1~3 次，见 timing-mode-parity 的实测记录）
+    expect(sawGlitch).toBe(true);
+  }, 120_000);
 });
