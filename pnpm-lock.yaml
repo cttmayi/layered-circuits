@@ -87,6 +87,39 @@ importers:
 
   packages/sim-core: {}
 
+  tools/level-editor:
+    dependencies:
+      '@lc/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
+      '@lc/content':
+        specifier: workspace:*
+        version: link:../../packages/content
+      '@lc/opt-solver':
+        specifier: workspace:*
+        version: link:../opt-solver
+      '@lc/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
+      '@lc/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+
+  tools/opt-solver:
+    dependencies:
+      '@lc/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
+      '@lc/content':
+        specifier: workspace:*
+        version: link:../../packages/content
+      '@lc/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
+      '@lc/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
+
 packages:
 
   '@asamuzakjp/css-color@7.1.2':

@@ -45,6 +45,10 @@ function singleFile(): Plugin {
 }
 
 export default defineConfig({
+  // base：默认 '/'（域名根目录部署）。子路径部署（如 GitHub Pages 项目站 user.github.io/repo/）
+  // 必须用 `LC_BASE=/repo/ pnpm build` —— 千万不要用 './'：Worker 的 URL 会变成
+  // './worker-xxx.js'（少了 assets/）→ 404 → 仿真静默回退主线程（见 DEPLOY.md）。
+  base: process.env.LC_BASE ?? '/',
   plugins: [react(), singleFile()],
   resolve: {
     alias: {
