@@ -44,7 +44,7 @@ const lib = teachingModulesFor('rtl').map((m) => ({
   isSequential: m.isSequential,
   ports: m.ports,
   template: m,
-  sources: [] as unknown[],
+  sources: [] as string[],
   createdAt: 0,
 }));
 const answerDoc = fromDesign(gateDesign, docForLevel(level, lib));
@@ -116,17 +116,43 @@ describe('数码管关：点 bcd 输入 seg 跟随 + 重新计算', () => {
 
     // 点 bcd1：值 0 → 1（seg 0x3F → 0x06），再点 → 2（0x5B）
     clickWorld(bcdSym.x, bcdSym.y);
-    await waitFor(() => expect(responses.some((x) => x.req.inputs['bcd1[0]'] === 1)).toBe(true), {
-      timeout: 4000,
-    });
-    const v1 = [...responses].reverse().find((x) => x.req.inputs['bcd1[0]'] === 1);
+    await waitFor(
+      () =>
+        expect(
+          responses.some(
+            (x) =>
+              ('inputs' in x.req ? x.req.inputs : ({} as Record<string, number>))['bcd1[0]'] === 1,
+          ),
+        ).toBe(true),
+      {
+        timeout: 4000,
+      },
+    );
+    const v1 = [...responses]
+      .reverse()
+      .find(
+        (x) => ('inputs' in x.req ? x.req.inputs : ({} as Record<string, number>))['bcd1[0]'] === 1,
+      );
     expect(readSeg(v1?.resp)).toBe(0x06);
 
     clickWorld(bcdSym.x, bcdSym.y);
-    await waitFor(() => expect(responses.some((x) => x.req.inputs['bcd1[1]'] === 1)).toBe(true), {
-      timeout: 4000,
-    });
-    const v2 = [...responses].reverse().find((x) => x.req.inputs['bcd1[1]'] === 1);
+    await waitFor(
+      () =>
+        expect(
+          responses.some(
+            (x) =>
+              ('inputs' in x.req ? x.req.inputs : ({} as Record<string, number>))['bcd1[1]'] === 1,
+          ),
+        ).toBe(true),
+      {
+        timeout: 4000,
+      },
+    );
+    const v2 = [...responses]
+      .reverse()
+      .find(
+        (x) => ('inputs' in x.req ? x.req.inputs : ({} as Record<string, number>))['bcd1[1]'] === 1,
+      );
     expect(readSeg(v2?.resp)).toBe(0x5b);
   });
 

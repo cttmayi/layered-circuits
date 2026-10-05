@@ -97,6 +97,10 @@ describe('模块详情：复制模块 JSON', () => {
     expect(writeText).toHaveBeenCalledTimes(1);
     const pasted = JSON.parse(writeText.mock.calls[0][0] as string) as StoredModule;
     expect(pasted.hash).toBe(notMod.hash);
-    expect(pasted.template?.ports.map((p) => `${p.name}:${p.dir}`)).toEqual(['a:in', 'y:out']);
+    expect(
+      (pasted.template as { ports?: { name: string; dir: string }[] } | undefined)?.ports?.map(
+        (p) => `${p.name}:${p.dir}`,
+      ),
+    ).toEqual(['a:in', 'y:out']);
   });
 });

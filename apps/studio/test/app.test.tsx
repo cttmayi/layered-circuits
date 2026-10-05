@@ -68,7 +68,7 @@ describe('仿真通道（Worker 与主线程共用 handleRequest）', () => {
       inputs: { in: 0 },
     });
     expect(off.snapshot?.cost.half).toBe(20);
-    expect(off.snapshot?.cost.half / 2).toBe(10);
+    expect((off.snapshot?.cost.half ?? 0) / 2).toBe(10);
     expect(off.snapshot?.portValues.out).toBe(1);
 
     const on = handleRequest({
@@ -147,7 +147,7 @@ describe('仿真通道（Worker 与主线程共用 handleRequest）', () => {
       inputs: {},
     });
     expect(result.snapshot?.cost.half).toBe(40);
-    expect(result.snapshot?.cost.half / 2).toBe(20);
+    expect((result.snapshot?.cost.half ?? 0) / 2).toBe(20);
   });
 });
 

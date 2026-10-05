@@ -135,7 +135,9 @@ describe('关卡内容与进度', () => {
         body: { schemaVersion: 1 as const, id: 'x', name: 'x', instances: [], nets: [], ports: [] },
       },
     };
-    const doc = docFor('level', 's1-xor', [stored]);
+    const doc = docFor('level', 's1-xor', [
+      stored as unknown as Parameters<typeof docFor>[2][number],
+    ]);
     expect(doc.library.map((m) => m.name)).toEqual(['与非门']);
     expect(doc.syms.filter((s) => s.kind === 'input').length).toBe(2);
   });
