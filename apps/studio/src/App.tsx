@@ -187,7 +187,6 @@ export function App(): React.JSX.Element {
     setLiveWave(null);
   }, [levelId]);
 
-  const [showWave, setShowWave] = useState(false);
   /** 左右侧面板整体收起/展开（体验：布线时把侧栏收起来腾画布），选择记忆在 localStorage */
   const [leftOpen, setLeftOpen] = usePersistentBool('lc-ui-left-open', true);
   const [rightOpen, setRightOpen] = usePersistentBool('lc-ui-right-open', true);
@@ -208,7 +207,6 @@ export function App(): React.JSX.Element {
   }, [debugFlag, setDebugMode]);
   /** 低频面板弹窗：组件库 / 波形（点击启动，不用时不留侧栏） */
   const [panelOpen, setPanelOpen] = useState<null | 'library' | 'wave'>(null);
-  const [showTiming, setShowTiming] = useState(false);
   /** 「时序视图」：在画布上画出真实波形（竞争/毛刺/传播延迟）。
    *  仿真本身**恒按真实时序跑**（判定也是）—— 这个开关只决定画不画波形，绝不改判定结果。
    *  默认打开；玩家的选择跨关卡保留。 */
@@ -295,7 +293,7 @@ export function App(): React.JSX.Element {
           prevSignals,
           prevContribs,
           prevNodeSignals,
-          withTiming: showTiming && simMode === 'timing',
+          withTiming: false, // 「时序分析」开关已移除
           withWaveform: simMode === 'timing',
         })
         .then((response: StudioResponse) => {
@@ -320,7 +318,7 @@ export function App(): React.JSX.Element {
         .catch((error: unknown) => setToast(`仿真失败：${String(error)}`));
     }, 40);
     return () => clearTimeout(timer);
-  }, [doc, simMode, showTiming, runner, recomputeNonce]);
+  }, [doc, simMode, runner, recomputeNonce]);
 
   // ---- 本地自动存档（按模式 + 关卡分开存） ----
   const storageKey = storageKeyFor(gameMode, levelId);
@@ -1702,22 +1700,6 @@ export function App(): React.JSX.Element {
           )}
         </div>
         <div className="spacer" />
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={showTiming}
-            onChange={(e) => setShowTiming(e.target.checked)}
-          />
-          时序分析
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={showWave}
-            onChange={(e) => setShowWave(e.target.checked)}
-          />
-          波形常显
-        </label>
       </header>
 
       <div className="body">
@@ -1928,7 +1910,7 @@ export function App(): React.JSX.Element {
                 emptyHint="点一下输入（或在画布上改电平），这里画真实延迟下每个端口的跳变。"
               />
             )}
-            {(showWave || panelOpen === 'wave') && judgeResult && (
+            {panelOpen === 'wave' && judgeResult && (
               <WaveformPanel
                 waveform={judgeWaveform}
                 portNames={judgePortNames}
