@@ -1,3 +1,4 @@
+import { BASIC_GATES } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { UNIT_COST, UNIT_DELAY_PS } from '@lc/schema';
 import { type ReactNode, useState } from 'react';
@@ -253,7 +254,12 @@ export function Palette({
   /** 基础门：本关提供的门（teaching 积木）。库里注入的是整族（复合门的身体会引用更底层的门），
    *  菜单只列本关允许的门，所以列表里不会出现被锁住的卡片。 */
   const gateModules = library.filter(
-    (m) => m.teaching === true && (level?.moduleAccess !== 'listed' || moduleAllowed(m.name)),
+    (m) =>
+      m.teaching === true &&
+      // 只列**基础门**：teachingModulesFor 里还混着"一键出答案"用的复合积木
+      // （二进制→BCD 3084 元、显示控制 1500 元、七段译码器 430 元…），列出来等于把答案给玩家
+      BASIC_GATES.includes(m.name) &&
+      (level?.moduleAccess !== 'listed' || moduleAllowed(m.name)),
   );
   const filteredModules = hideLocked
     ? userModules.filter((m) => modulesAllowed && moduleAllowed(m.name))

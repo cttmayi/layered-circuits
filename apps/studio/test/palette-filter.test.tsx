@@ -179,3 +179,38 @@ describe('左侧菜单的分层：基础门区', () => {
     expect(screen.queryByText(/基础门/)).toBeNull();
   });
 });
+
+describe('基础门区只列基础门（复合积木绝不能出现）', () => {
+  const asGate = (name: string, costHalf: number): StoredModule =>
+    ({
+      ...fakeModule(2500),
+      name,
+      hash: `h-${name}`,
+      costHalf,
+      teaching: true,
+    }) as unknown as StoredModule;
+
+  it('复合积木不会进菜单（否则等于把答案给玩家）', () => {
+    render(
+      <Palette
+        placing={null}
+        onPick={() => {}}
+        library={[
+          asGate('与非门', 20),
+          asGate('二进制→BCD', 6168),
+          asGate('显示控制', 3000),
+          asGate('全加器', 180),
+        ]}
+        level={moduleLevel()}
+      />,
+    );
+    expect(screen.getByText(/基础门（1）/)).toBeTruthy();
+    expect(screen.getByText('与非门')).toBeTruthy();
+    for (const composite of ['二进制→BCD', '显示控制', '全加器']) {
+      expect(
+        screen.queryByText(composite),
+        `${composite} 是复合积木，不该出现在元件库菜单`,
+      ).toBeNull();
+    }
+  });
+});

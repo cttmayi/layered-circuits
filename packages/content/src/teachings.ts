@@ -255,6 +255,23 @@ export const TEACHING_MODULES: readonly ModuleTemplate[] = [
 ];
 
 /** 某工艺的教学积木全集（基础门 + 复合积木；App 一键出答案门版时并入画布库；判定库也用这个） */
+/**
+ * 基础门：能直接摆到画布上搭电路的最小门。
+ *
+ * **必须与 `teachingModulesFor` 区分开** —— 后者是"一键出答案"用的整套教学积木，
+ * 里面混着复合积木（全加器 90 元、七段译码器 430 元、二进制→BCD 3084 元、
+ * 显示控制 1500 元…），把它们列进元件库菜单等于把答案摆在玩家面前。
+ * 各 family 有的门不一样（rtl 没有同或门），按名单过滤即可。
+ */
+export const BASIC_GATES: readonly string[] = [
+  '非门',
+  '与非门',
+  '或门',
+  '与门',
+  '异或门',
+  '同或门',
+];
+
 export function teachingModulesFor(family: LogicFamily): readonly ModuleTemplate[] {
   if (family === 'rtl') return TEACHING_MODULES;
   return [...baseTemplatesFor(family), ...COMPOSITE_ORDER.map((n) => compositeFor(n, family))];
