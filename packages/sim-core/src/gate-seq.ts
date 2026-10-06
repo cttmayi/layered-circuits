@@ -71,6 +71,8 @@ export interface GateStepOutcome {
   outPorts: Map<string, Bit[]>;
   updates: string[];
   clocked: boolean;
+  /** 组合阶段在迭代上限内没稳定下来（组合环/振荡）→ 判定不可信 */
+  unstable?: boolean;
 }
 
 export const stepGateNetlist = (
@@ -228,6 +230,7 @@ export const stepGateNetlist = (
     ok: true,
     nets: idx.netValues,
     outPorts: readOutPorts(design, idx),
+    unstable: !settled,
     updates,
     clocked: updates.length > 0,
   };

@@ -12,6 +12,7 @@ import {
   judgeDesign,
   wrapModule,
 } from '@lc/compiler';
+import { GATE_SEQ_SPECS } from '@lc/content';
 import {
   costHalfOf,
   familySpecOf,
@@ -86,6 +87,7 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       const spec = familySpecOf(level, req.family ?? 'rtl');
       const result = judgeDesign(req.design, level, {
         library,
+        gateSeqSpecs: GATE_SEQ_SPECS,
         hardcore: req.hardcore,
         mode: req.mode,
         family: spec.family,

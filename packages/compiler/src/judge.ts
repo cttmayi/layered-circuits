@@ -12,6 +12,7 @@
 
 import type { Design, Level, LevelVector, ModuleLibrary, Unit } from '@lc/schema';
 import { costHalfOf, FAMILY_CONTRACTS, type LogicFamily, scoreOf } from '@lc/schema';
+import type { GateSeqSpec } from '@lc/sim-core';
 import {
   type Logic,
   runVectors,
@@ -23,11 +24,17 @@ import {
 } from '@lc/sim-core';
 import { computeCosts } from './cost.js';
 import { compileDesign } from './flatten.js';
+import { runGateVectors } from './gate-fast.js';
 import { measureSetupHold } from './setup-hold.js';
 import { analyzeTiming } from './timing.js';
 
 export interface JudgeOptions {
   library: ModuleLibrary;
+  /**
+   * 逻辑版门级快路用的时序器件声明（端口知识属于内容层，由调用方传入，
+   * 免得 packages/compiler 反向依赖 @lc/content 成环）。缺省 = 不走快路。
+   */
+  gateSeqSpecs?: Readonly<Record<string, GateSeqSpec>>;
   /** 仿真模式；缺省用关卡声明的模式 */
   mode?: SimMode;
   /** 硬核工程模式：额外检查时序预算 */
@@ -354,12 +361,20 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
   const outputNodes = net.ports.filter((p) => p.dir === 'out').map((p) => p.node);
   if (missingInputs.length === 0 && missingOutputs.length === 0 && !widthBad) {
     const vectors = expandVectors(level.vectors, widthOf);
-    const run = runVectors(net, vectors, {
-      mode,
-      defaultSettlePs: defaultSettle(level),
-      trace: true,
-      tracePortsOnly: true,
-    });
+    // 逻辑版 + 纯模块设计 → 走**门级快路**（7 个基础门当原子、无延迟、无强弱）。
+    // 不适用（有元件 / 缺 SeqSpec / 库查不到）就返回 null，静默回落到原引擎 —— 宁可不快，不能算错。
+    const fast =
+      mode === 'logic' && options.gateSeqSpecs
+        ? runGateVectors(design, options.library, vectors, widthOf, options.gateSeqSpecs)
+        : null;
+    const run =
+      fast ??
+      runVectors(net, vectors, {
+        mode,
+        defaultSettlePs: defaultSettle(level),
+        trace: true,
+        tracePortsOnly: true,
+      });
     waveform = run.waveform;
     rows = run.rows.map((row) => {
       // 跳变次数按「单个输出端口」计数：q 与 qn 各跳一次不算毛刺
@@ -395,7 +410,9 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     //      弱 1 在族内自洽但跨族级联会压不过二极管门输入 → 契约打回，并给出可操作的报错。
     const family = options.family ?? level.family;
     const contract = FAMILY_CONTRACTS[family];
-    if (contract.output === 'strong') {
+    // 强度审计（强/弱）是**元件级**概念：门级快路里输出都是门驱动的推挽输出，
+    // 不存在"弱上拉凑出来的 1"，所以走快路时跳过（它也依赖元件级 Simulator）。
+    if (!fast && contract.output === 'strong') {
       // 强度审计只看直流电平，永远用 logic 模式（timing 模式没有 settle()）
       const sim = new Simulator(net, { mode: 'logic' });
       // 总线（位宽 > 1）按位展开成独立 FlatPort（bit 序号），只查第 0 位即可代表
