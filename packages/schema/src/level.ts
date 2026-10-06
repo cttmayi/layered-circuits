@@ -55,6 +55,20 @@ export type LevelKind = z.infer<typeof LevelKindSchema>;
 export const ModuleAccessSchema = z.enum(['none', 'all', 'listed']);
 export type ModuleAccess = z.infer<typeof ModuleAccessSchema>;
 
+/**
+ * 玩家能不能在**顶层画布**上摆元件。
+ *
+ * 与 moduleAccess 正交：moduleAccess 管"能不能用模块"，elementAccess 管"能不能用元件"。
+ * `'none'` = 只能用模块搭建（第 8 关起，20 关）——端口与 VCC/GND 电源轨是系统预置的，
+ * 不受影响（否则电路没法工作）；模块**内部**仍然是用元件搭的，否则没法造模块。
+ */
+export const ElementAccessSchema = z.enum(['all', 'none']);
+export type ElementAccess = z.infer<typeof ElementAccessSchema>;
+
+/** 本关的判定口径。时序关按真实延迟判（含毛刺/建立保持），逻辑关只看逻辑（成本评星）。 */
+export const JudgeModeSchema = z.enum(['logic', 'timing']);
+export type JudgeMode = z.infer<typeof JudgeModeSchema>;
+
 /** 单个逻辑族契约下的差异化关卡规格（referenceSolution 之外的工艺答案）。
  *
  *  两种用法：
@@ -139,6 +153,10 @@ export const LevelSchema = z.object({
   /** 模块可用性：none = 阶段 1 只能用手搭；all = 全部组件库；listed = 仅白名单 */
   moduleAccess: ModuleAccessSchema.default('none'),
   allowedModules: z.array(z.string()).default([]),
+  /** 顶层画布是否允许摆元件；'none' = 只能用模块搭（第 8 关起） */
+  elementAccess: ElementAccessSchema.default('all'),
+  /** 本关判定口径：1~7 关 = timing（真实时序），8 关起 = logic（只判逻辑） */
+  judgeMode: JudgeModeSchema.default('timing'),
   /** 复古复用关：禁用后期优化版本（GDD 4.4） */
   bannedModules: z.array(z.string()).default([]),
   /** 预算上限（半分整数口径） */

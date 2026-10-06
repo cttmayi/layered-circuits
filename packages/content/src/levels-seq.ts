@@ -103,6 +103,9 @@ export const STAGE2_LEVELS: Level[] = [
     mode: 'timing',
     allowedUnits: [...STAGE2_UNITS],
     moduleAccess: 'all',
+    // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+    elementAccess: 'none',
+    judgeMode: 'logic',
     budgetHalf: budgetFromOptimal(40, MAIN_OVERHEAD),
     optimalHalf: 40,
     timingBudgetPs: 8000,
@@ -148,6 +151,9 @@ export const STAGE2_LEVELS: Level[] = [
     mode: 'timing',
     allowedUnits: [...STAGE2_UNITS],
     moduleAccess: 'all',
+    // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+    elementAccess: 'none',
+    judgeMode: 'logic',
     budgetHalf: budgetFromOptimal(64, MAIN_OVERHEAD),
     optimalHalf: 64,
     timingBudgetPs: 11000,
@@ -189,6 +195,9 @@ export const STAGE2_LEVELS: Level[] = [
     mode: 'timing',
     allowedUnits: [...STAGE2_UNITS],
     moduleAccess: 'all',
+    // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+    elementAccess: 'none',
+    judgeMode: 'logic',
     budgetHalf: budgetFromOptimal(92, MAIN_OVERHEAD),
     optimalHalf: 92,
     timingBudgetPs: 14000,
@@ -226,6 +235,9 @@ export const STAGE2_LEVELS: Level[] = [
     timingBudgetPs: 13_000,
     allowedUnits: [...STAGE2_UNITS],
     moduleAccess: 'all',
+    // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+    elementAccess: 'none',
+    judgeMode: 'logic',
     budgetHalf: budgetFromOptimal(196, MAIN_OVERHEAD),
     optimalHalf: 196,
     clock: { freqHz: 20_000_000 },

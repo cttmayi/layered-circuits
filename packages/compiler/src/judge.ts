@@ -138,6 +138,17 @@ function checkModulePolicy(
     errors.push('本关只能用底层元件手搭，不能用组件库模块');
     return { errors };
   }
+  // 第 8 关起：只能用模块搭建（端口 / VCC / GND 是系统预置的，不算摆元件）
+  // 判定器收到的关卡类型可能是教学关（没有 elementAccess 字段）→ 宽化读取，缺省视为 all
+  if ((level as { elementAccess?: string }).elementAccess === 'none') {
+    // 注意用 design.instances：上面的 used 已经过滤成「只有模块实例」了
+    const strays = design.instances.filter((i) => i.kind === 'unit');
+    if (strays.length > 0) {
+      errors.push(
+        `本关只能用模块搭建：画布上直接摆了 ${strays.length} 个元件（端口与 VCC/GND 不受影响）`,
+      );
+    }
+  }
   for (const instance of used) {
     if (instance.kind !== 'module') continue;
     const template = library.get(instance.module);

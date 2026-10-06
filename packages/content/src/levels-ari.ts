@@ -67,6 +67,9 @@ const HALF_ADDER: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(120, MAIN_OVERHEAD),
   optimalHalf: 120,
   timingBudgetPs: 13000,
@@ -112,6 +115,9 @@ const FULL_ADDER: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(180, MAIN_OVERHEAD),
   optimalHalf: 180,
   timingBudgetPs: 26000,
@@ -160,6 +166,9 @@ const ADDER_4: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(720, MAIN_OVERHEAD),
   optimalHalf: 720,
   timingBudgetPs: 30000,
@@ -200,6 +209,9 @@ const ADDER_8: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(1440, MAIN_OVERHEAD),
   optimalHalf: 1440,
   timingBudgetPs: 30000,
@@ -241,6 +253,9 @@ const ALU: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(1040, MAIN_OVERHEAD),
   optimalHalf: 1040,
   timingBudgetPs: 60000,
@@ -287,6 +302,9 @@ const BCD2BIN: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(2160, MAIN_OVERHEAD),
   optimalHalf: 2160,
   timingBudgetPs: 70000,
@@ -332,6 +350,9 @@ const BIN2BCD: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(7872, MAIN_OVERHEAD),
   optimalHalf: 7872,
   // 延迟实测：参考解关键路径 52 ns（原来没有预算 → 判定器跳过延迟实测，读数恒 0）
@@ -392,6 +413,9 @@ const S3_DISPLAY: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(380, MAIN_OVERHEAD),
   optimalHalf: 380,
   timingBudgetPs: 25000,
@@ -453,6 +477,9 @@ const S3_SEG_DE: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(360, MAIN_OVERHEAD),
   optimalHalf: 360,
   timingBudgetPs: 33000,
@@ -514,6 +541,9 @@ const S3_SEG_FG: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(380, MAIN_OVERHEAD),
   optimalHalf: 380,
   timingBudgetPs: 26000,
@@ -570,6 +600,9 @@ const S3_DISPLAY2: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(1720, MAIN_OVERHEAD),
   optimalHalf: 1720,
   timingBudgetPs: 33000,
@@ -614,6 +647,9 @@ const REG_8: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(1568, MAIN_OVERHEAD),
   optimalHalf: 1568,
   ports: [port('d', 'in', 8), port('clk', 'in'), port('q', 'out', 8)],
@@ -684,6 +720,9 @@ const S3_OR_CHAIN: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(12, MAIN_OVERHEAD),
   optimalHalf: 12,
   timingBudgetPs: 3200,
@@ -741,6 +780,9 @@ const S3_ENCODER: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(88, MAIN_OVERHEAD),
   optimalHalf: 88,
   timingBudgetPs: 5000,
@@ -814,6 +856,9 @@ const S3_DIGIT_ENTRY: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(1748, MAIN_OVERHEAD),
   optimalHalf: 1748,
   checks: { clockPort: 'wr' },
@@ -936,6 +981,9 @@ const CALC: Level = parseLevel({
   mode: 'timing',
   allowedUnits: [...STAGE3_UNITS],
   moduleAccess: 'all',
+  // 第 8 关起（20 关）：只能用模块搭建 + 只判逻辑 —— 见 docs/design-gates.md
+  elementAccess: 'none',
+  judgeMode: 'logic',
   budgetHalf: budgetFromOptimal(24764, MAIN_OVERHEAD),
   optimalHalf: 24764,
   // 延迟实测：参考解关键路径 76 ns（原来没有预算 → 判定器跳过延迟实测，读数恒 0）

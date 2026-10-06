@@ -253,6 +253,8 @@ export function Palette({
   const userModules = library.filter((m) => !m.teaching);
   /** 基础门：本关提供的门（teaching 积木）。库里注入的是整族（复合门的身体会引用更底层的门），
    *  菜单只列本关允许的门，所以列表里不会出现被锁住的卡片。 */
+  /** 本关是否允许在顶层画布摆元件（第 8 关起为 false） */
+  const elementAllowed = level?.elementAccess !== 'none';
   const gateModules = library.filter(
     (m) =>
       m.teaching === true &&
@@ -274,50 +276,53 @@ export function Palette({
           <span>隐藏本关不可用</span>
         </label>
       )}
-      <Section
-        open={openSections.has(SECTIONS.parts)}
-        onToggle={() => toggleSection(SECTIONS.parts)}
-        title="我的元件"
-        badge={level ? `可用 ${availableUnits}/${UNITS.length}` : String(UNITS.length)}
-      >
-        {filteredUnits.length === 0 && <p className="palette-empty">本关没有可用元件。</p>}
-        {filteredUnits.map((item) => {
-          const locked = !unitAllowed(item.unit);
-          return (
-            <button
-              key={item.unit}
-              type="button"
-              disabled={locked}
-              draggable={!locked}
-              onDragStart={(e) => {
-                e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'unit', unit: item.unit }));
-                e.dataTransfer.effectAllowed = 'copy';
-                e.dataTransfer.setDragImage(dragImage(item.unit), 48, 48);
-              }}
-              title={
-                locked ? lockReason(item.unit) : `${item.note}（拖到画布放置，或点击后点画布）`
-              }
-              className={isArmed('unit', item.unit) ? 'palette-item active' : 'palette-item'}
-              onClick={() => pick('unit', item.unit)}
-            >
-              <span className="palette-row">
-                <span className="palette-name">
-                  {item.name} {locked && <em className="locked">本关不可用</em>}
-                </span>
-                <span className="palette-cost">价格 {UNIT_COST[item.unit]}</span>
-              </span>
-              <span className="palette-row">
-                <span className="palette-note">{locked ? lockReason(item.unit) : item.note}</span>
-                {mode !== 'logic' && (
-                  <span className="palette-delay" title="在时序仿真里的信号延迟">
-                    延迟 {((UNIT_DELAY_PS[item.unit] ?? 0) / 1000).toFixed(1)} ns
+      {/* 「只能用模块」的关卡（第 8 关起）不显示元件区 */}
+      {elementAllowed && (
+        <Section
+          open={openSections.has(SECTIONS.parts)}
+          onToggle={() => toggleSection(SECTIONS.parts)}
+          title="我的元件"
+          badge={level ? `可用 ${availableUnits}/${UNITS.length}` : String(UNITS.length)}
+        >
+          {filteredUnits.length === 0 && <p className="palette-empty">本关没有可用元件。</p>}
+          {filteredUnits.map((item) => {
+            const locked = !unitAllowed(item.unit);
+            return (
+              <button
+                key={item.unit}
+                type="button"
+                disabled={locked}
+                draggable={!locked}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(DRAG_MIME, dragPayload({ kind: 'unit', unit: item.unit }));
+                  e.dataTransfer.effectAllowed = 'copy';
+                  e.dataTransfer.setDragImage(dragImage(item.unit), 48, 48);
+                }}
+                title={
+                  locked ? lockReason(item.unit) : `${item.note}（拖到画布放置，或点击后点画布）`
+                }
+                className={isArmed('unit', item.unit) ? 'palette-item active' : 'palette-item'}
+                onClick={() => pick('unit', item.unit)}
+              >
+                <span className="palette-row">
+                  <span className="palette-name">
+                    {item.name} {locked && <em className="locked">本关不可用</em>}
                   </span>
-                )}
-              </span>
-            </button>
-          );
-        })}
-      </Section>
+                  <span className="palette-cost">价格 {UNIT_COST[item.unit]}</span>
+                </span>
+                <span className="palette-row">
+                  <span className="palette-note">{locked ? lockReason(item.unit) : item.note}</span>
+                  {mode !== 'logic' && (
+                    <span className="palette-delay" title="在时序仿真里的信号延迟">
+                      延迟 {((UNIT_DELAY_PS[item.unit] ?? 0) / 1000).toFixed(1)} ns
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </Section>
+      )}
 
       <Section
         open={openSections.has(SECTIONS.power)}

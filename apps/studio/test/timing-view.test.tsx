@@ -127,21 +127,28 @@ describe('界面层：时序视图只改仿真，不改判定', () => {
   }, 30_000);
 });
 
-describe('判定走真实时序的关卡：进来默认就是时序看法', () => {
-  it('s2-sr-latch：simulate 直接按真实时序跑并带回波形（判的和看的是同一回事）', async () => {
+describe('判定口径跟随关卡：1~7 关走真实时序，第 8 关起走逻辑', () => {
+  it('SR 锁存器（第 8 关起）：按关卡口径走逻辑验证，不再跑真实时序', async () => {
     seedCleared();
     render(<App />);
     startJob('SR 锁存器');
-    // 先确认真的进了工作台：锁着的关卡点不动，否则后面的断言会"空过"
+    // 先确认真的进了工作台：锁着的关卡点不动，否则后面的断言会「空过」
     await waitFor(() => expect(screen.getAllByText('交付验收').length).toBeGreaterThan(0));
     await waitFor(() => {
-      const last = simRequests().at(-1)!;
-      expect(last.type === 'simulate' && last.mode).toBe('timing');
+      const last = simRequests().at(-1);
+      expect(last?.type === 'simulate' && last.mode).toBe('logic');
     });
-    const last = simRequests().at(-1)!;
-    expect(last.type === 'simulate' && last.withWaveform).toBe(true);
-    // 时序看法下波形面板直接可用
-    await waitFor(() => expect(document.querySelectorAll('.wlabel').length).toBeGreaterThan(0));
+  }, 30_000);
+
+  it('与非门（第 4 关）：按关卡口径走真实时序', async () => {
+    seedCleared(); // 预置第一章已通关，「与非门」在地图上可点
+    render(<App />);
+    startJob('与非门');
+    await waitFor(() => expect(screen.getAllByText('交付验收').length).toBeGreaterThan(0));
+    await waitFor(() => {
+      const last = simRequests().at(-1);
+      expect(last?.type === 'simulate' && last.mode).toBe('timing');
+    });
   }, 30_000);
 });
 

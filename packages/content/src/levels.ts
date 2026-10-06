@@ -117,6 +117,10 @@ function gateLevel(input: {
   /** 按契约的差异化参考解/满分线/时序预算（一键出答案按玩家契约给对应工艺解） */
   familyRefs?: Level['familyRefs'];
   moduleAccess: 'none' | 'all' | 'listed';
+  /** 顶层画布是否允许摆元件（缺省 all；'none' = 只能用模块搭） */
+  elementAccess?: 'all' | 'none';
+  /** 本关判定口径（缺省 timing） */
+  judgeMode?: 'logic' | 'timing';
   reference: Level['referenceSolution'];
   unlockName: string;
   freqHz: number;
@@ -152,6 +156,8 @@ function gateLevel(input: {
     guideSteps: [...(input.guideSteps ?? [])],
     moduleAccess: input.moduleAccess,
     allowedModules: [...(input.allowedModules ?? [])],
+    elementAccess: input.elementAccess ?? 'all',
+    judgeMode: input.judgeMode ?? 'timing',
     bannedModules: [...(input.bannedModules ?? [])],
     ...(input.family !== undefined ? { family: input.family } : {}),
     ...(input.familyRefs !== undefined ? { familyRefs: input.familyRefs } : {}),

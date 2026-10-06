@@ -205,7 +205,10 @@ export function App(): React.JSX.Element {
    *  于是评星只按成本（延迟档视为达标），毛刺与建立/保持也都不查。
    *  画布与判定共用同一口径，切换后立刻重新仿真；选择持久化、跨关卡保留。 */
   const [logicMode, setLogicMode] = usePersistentBool('lc.logicMode', false);
-  const simMode: 'logic' | 'timing' = logicMode ? 'logic' : 'timing';
+  // 本关自带的判定口径：1~7 关 = timing（走真实时序），第 8 关起 = logic（只判逻辑）。
+  // 自由/教学模式没有关卡口径，仍听工具栏那个总开关。
+  const levelJudgeMode = levelOf(gameMode, levelId)?.judgeMode;
+  const simMode: 'logic' | 'timing' = levelJudgeMode ?? (logicMode ? 'logic' : 'timing');
   const [snapshot, setSnapshot] = useState<SimSnapshot | null>(null);
   const [resultDoc, setResultDoc] = useState<Doc | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -1345,6 +1348,7 @@ export function App(): React.JSX.Element {
             className={logicMode ? 'active' : ''}
             title="逻辑版：抹平元件延迟、只看逻辑对不对（不评延迟档，只按成本评星）"
             onClick={() => setLogicMode(!logicMode)}
+            disabled={Boolean(levelJudgeMode)}
           >
             {logicMode ? '逻辑版' : '时序版'}
           </button>
