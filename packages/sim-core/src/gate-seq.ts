@@ -11,6 +11,8 @@
  *
  * 状态**按位**保存，并**穿透复合模块递归**（模块内部的触发器用 `外层/内层` 前缀各自占槽）。
  */
+
+import { beginGateCacheBatch, type GateEvalCache, gateCacheKey } from './gate-cache.js';
 import {
   B0,
   B1,
@@ -26,6 +28,7 @@ import {
   evalAtomOutputs,
   type GateLibrary,
   type GateNetlistDesign,
+  isPureCombinational,
   makePinIndex,
   needsSeqSpec,
   pinKey,
@@ -109,7 +112,14 @@ export const stepGateNetlist = (
   state: GateStateStore = new GateStateStore(),
   /** 递归进复合模块时的实例路径前缀 */
   prefix = '',
+  /**
+   * 组合模块求值缓存。**只有 settleGateSteps 的递归才会传进来** →
+   * 一次 settle 的 8 趟推进共用一个批次（省掉整棵子电路的重复递归，见 gate-cache.ts）；
+   * 直接调用本函数则是新的一批（上一批条目作废，不会跨调用串味）。
+   */
+  cache?: GateEvalCache,
 ): GateStepOutcome => {
+  const evalCache = cache ?? beginGateCacheBatch(library);
   const fail = (reason: string, nets: Map<string, Bit> = new Map()): GateStepOutcome => ({
     ok: false,
     reason,
@@ -170,15 +180,16 @@ export const stepGateNetlist = (
             .getPort(prefix + inst.id, p)
             .map((_v, b) => state.get(prefix + inst.id, p.name, b) ?? init);
           for (let b = 0; b < widthOf(p); b++) {
-            const netId = idx.pinToNet.get(pinKey(inst.id, p.name, b));
-            if (netId !== undefined) push(netId, bits[b] ?? 'Z');
+            // 一个输出脚可以接多条网名（元件级里它们是同一个节点）→ 每条都要拿到驱动
+            for (const netId of idx.netsPinTo.get(pinKey(inst.id, p.name, b)) ?? [])
+              push(netId, bits[b] ?? 'Z');
           }
         });
         continue;
       }
       const ins = mod.ports.filter((p) => p.dir === 'in');
       const inBits = ins.map((p) => idx.readPort(inst.id, p));
-      let outBits: Bit[][];
+      let outBits: Bit[][] | undefined;
       const atomOut = isFunctionAtom(mod.name)
         ? evalAtomOutputs(mod.name, ins, outs, inBits)
         : null;
@@ -211,21 +222,42 @@ export const stepGateNetlist = (
             reason: `模块【${mod.name}】身体里含元件（门级快路只处理纯门/模块电路）`,
           } as GateStepOutcome;
         }
-        const inner = stepGateNetlist(mod.body, library, inMap, state, `${prefix}${inst.id}/`);
-        if (!inner.ok)
-          return {
-            ...inner,
-            nets: idx.netValues,
-            outPorts: new Map(),
-            updates: [],
-            clocked: false,
-          };
-        outBits = outs.map((p) => inner.outPorts.get(p.name) ?? []);
+        // ── 组合模块求值缓存（与 gate-netlist 同一口径）──
+        // **只对纯组合模块**生效：含时序后代的身体（八位寄存器 / 数字输入寄存器）一律不缓存，
+        // 那种身体的输出还取决于上一向量留下的状态，缓存会把上一向量的结果算错。
+        const hash = inst.module;
+        const pure = hash !== undefined && isPureCombinational(mod, library);
+        const key = pure ? gateCacheKey(hash, inBits) : '';
+        const hit = pure ? evalCache.lookup(hash, key) : undefined;
+        if (hit) {
+          outBits = hit;
+        } else {
+          const inner = stepGateNetlist(
+            mod.body,
+            library,
+            inMap,
+            state,
+            `${prefix}${inst.id}/`,
+            evalCache,
+          );
+          if (!inner.ok)
+            return {
+              ...inner,
+              nets: idx.netValues,
+              outPorts: new Map(),
+              updates: [],
+              clocked: false,
+            };
+          outBits = outs.map((p) => inner.outPorts.get(p.name) ?? []);
+          // 它自己也递归出组合环（不稳定）时不缓存，与 gate-netlist 保持一致
+          if (pure) evalCache.store(hash, key, outBits, inner.unstable !== true);
+        }
       }
       outs.forEach((p, i) => {
         for (let b = 0; b < widthOf(p); b++) {
-          const netId = idx.pinToNet.get(pinKey(inst.id, p.name, b));
-          if (netId !== undefined) push(netId, outBits[i]?.[b] ?? 'X');
+          // 一个输出脚可以接多条网名（元件级里它们是同一个节点）→ 每条都要拿到驱动
+          for (const netId of idx.netsPinTo.get(pinKey(inst.id, p.name, b)) ?? [])
+            push(netId, outBits?.[i]?.[b] ?? 'X');
         }
       });
     }
@@ -320,13 +352,16 @@ export const settleGateSteps = (
   state: GateStateStore = new GateStateStore(),
   maxPasses = 8,
 ): GateStepOutcome => {
-  let out = stepGateNetlist(design, library, inputs, state);
+  // 一次 settle = **一批**缓存：8 趟推进共用（顶层模块纯组合时，输入没变就直接命中，
+  // 不再整棵树重算一遍）。批次在 settle 开始时开，结束即作废，不会跨调用串味。
+  const cache = beginGateCacheBatch(library);
+  let out = stepGateNetlist(design, library, inputs, state, '', cache);
   if (!out.ok) return out;
   const key = (o: GateStepOutcome): string =>
     [...o.outPorts.entries()].map(([k, v]) => `${k}:${v.map(String).join('')}`).join('|');
   let prev = key(out);
   for (let pass = 1; pass < maxPasses; pass++) {
-    out = stepGateNetlist(design, library, inputs, state);
+    out = stepGateNetlist(design, library, inputs, state, '', cache);
     if (!out.ok) return out;
     const now = key(out);
     if (now === prev) return out;

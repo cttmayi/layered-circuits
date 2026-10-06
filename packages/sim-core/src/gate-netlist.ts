@@ -15,6 +15,8 @@
  *
  * 为了不把 sim-core 绑到 @lc/schema 上，这里只要求**结构兼容**的最小接口。
  */
+
+import { beginGateCacheBatch, type GateEvalCache, gateCacheKey } from './gate-cache.js';
 import {
   B0,
   type Bit,
@@ -166,8 +168,87 @@ export const needsSeqSpec = (mod: GateModuleInfo): boolean => {
   return !moduleOnly;
 };
 
+/**
+ * 这个门级模块是否**纯组合**（递归下去没有任何时序器件）？—— 求值缓存的准入条件。
+ *
+ * 判定刻意保守，**不靠 `isSequential` 一个字段**：实测（本文件上方 probes）库里
+ * 「八位寄存器 / 数字输入寄存器」这种"模块搭的时序积木"的 `isSequential` 是 **false**，
+ * 可它们内部全是主从 D 触发器 —— 只看标记就会把它们当成纯组合缓存起来，
+ * 那是直接把上一向量的状态算错。所以还有一条**结构性**的判据（见下）。
+ *
+ * 判据（任一命中就不纯，不缓存）：
+ *  · 标了 `isSequential`（元件级时序积木，如 D 锁存器 / 主从 D 触发器）；
+ *  · 带了 `seq` 声明（SeqSpec —— 引擎明确知道它是状态元件）；
+ *  · **身体里嵌着带 SeqSpec 的子模块**（结构性地抓到上面那两个漏网之鱼）；
+ *  · 身体里含**元件**（`unit`）且这个模块不是门级原子 —— 那种身体门级引擎本来就"如实拒绝"；
+ *  · 库里查不到的子模块（不知道里面是什么，不敢缓存）。
+ *
+ * 反过来，`isGateName` / `isFunctionAtom` 的模块**算纯**：门级引擎遇到它们是
+ * **按真值函数算原子、根本不展开身体**的（教学库里异或门/与门/全加器这些"积木"的身体
+ * 恰恰是一堆 npn/res/dio），输出当然是输入的函数。
+ *
+ * `seen` 按哈希去重：库是 Merkle 结构本该无环，真出现环也不会转不出来。
+ */
+export const isPureCombinational = (
+  mod: GateModuleInfo,
+  library: GateLibrary,
+  seen: Set<string> = new Set(),
+): boolean => {
+  if (mod.isSequential === true) return false;
+  if (mod.seq !== undefined) return false;
+  if (needsSeqSpec(mod)) return false; // 兜底：要 SeqSpec 的必然是时序器件
+  if (isFunctionAtom(mod.name) || isGateName(mod.name)) return true; // 门级原子：按真值算，不展开
+  const body = mod.body;
+  if (!body || body.instances.length === 0) return false;
+  // 走到这里 = 这个模块要**递归展开**求值 → 身体里有元件就根本算不了（不纯）
+  if (body.instances.some((inst) => inst.kind === 'unit')) return false;
+  for (const inst of body.instances) {
+    if (inst.kind !== 'module') continue;
+    const hash = inst.module;
+    if (!hash || seen.has(hash)) continue;
+    const sub = library.get(hash);
+    if (!sub) return false;
+    // 结构性判据：子模块自己带了 SeqSpec ⇒ 这个身体里嵌着状态元件 ⇒ 输出不是纯函数
+    if (sub.seq !== undefined || sub.isSequential === true) return false;
+    seen.add(hash);
+    if (!isPureCombinational(sub, library, seen)) return false;
+  }
+  return true;
+};
+
+/**
+ * 复合模块实例是否可缓存：库里有、且被判定为纯组合。
+ * 判定结果按**哈希**记在缓存里（同一批里库不会变，哈希就是内容身份），
+ * 所以每个模块的递归纯度检查只做一次；一旦判定不可缓存，缓存里这个哈希的旧条目会被清掉。
+ */
+const cacheableModuleOf = (
+  cache: GateEvalCache,
+  library: GateLibrary,
+  hash: string,
+  mod: GateModuleInfo,
+): boolean => {
+  if (cache.isBlocked(hash)) return false;
+  const pure = isPureCombinational(mod, library);
+  if (!pure) {
+    cache.block(hash);
+    return false;
+  }
+  return true;
+};
+
 /** 一份设计里 pin → net 的索引（**含位**）与按位读值 */
 export interface GatePinIndex {
+  /**
+   * pin → **它接到的所有 net**（一个引脚可以同时接多条不同的网名）。
+   *
+   * 为什么必须是一对多：元件级编译（flatten）把同一个引脚上的各条网名**并成同一个节点**
+   * ——电气上它们就是一根线。门级如果只认一条（Map.set 后写覆盖前写），别的网名就永远没有驱动、
+   * 读出来恒 0。实测（s3-calc）：八位寄存器 `q0..q7` 与顶层 `acc0..acc7`、数字输入寄存器
+   * `q0..q7` 与 `er0..er7`、ALU 的各段总线都是这种"同脚多名"接线，于是门级读数与元件级整片相反
+   * （元件级上电 Q=1，门级读成 0），差异 58/67。修成一对多之后差异 0/67。
+   */
+  netsPinTo: Map<string, string[]>;
+  /** 兼容旧口径：pin → **第一条** net（读值请用 readBit/readPort，它们会合并多条 net）*/
   pinToNet: Map<string, string>;
   netValues: Map<string, Bit>;
   readBit: (inst: string, pin: string, bit?: number) => Bit;
@@ -176,18 +257,28 @@ export interface GatePinIndex {
 }
 
 export const makePinIndex = (design: GateNetlistDesign): GatePinIndex => {
-  const pinToNet = new Map<string, string>();
+  const netsPinTo = new Map<string, string[]>();
   for (const net of design.nets) {
-    for (const ref of net.pins) pinToNet.set(pinKey(ref.inst, ref.pin, ref.bit ?? 0), net.id);
+    for (const ref of net.pins) {
+      const key = pinKey(ref.inst, ref.pin, ref.bit ?? 0);
+      const list = netsPinTo.get(key);
+      if (list) {
+        if (!list.includes(net.id)) list.push(net.id);
+      } else netsPinTo.set(key, [net.id]);
+    }
   }
+  const pinToNet = new Map<string, string>();
+  for (const [key, list] of netsPinTo) if (list[0] !== undefined) pinToNet.set(key, list[0]);
   const netValues = new Map<string, Bit>();
   const readBit = (inst: string, pin: string, bit = 0): Bit => {
-    const netId = pinToNet.get(pinKey(inst, pin, bit));
+    const netIds = netsPinTo.get(pinKey(inst, pin, bit));
     // 没接到任何 net、或该 net 没人驱动 → 按 **0** 处理（不是 Z）。
     // 实测依据：同一份门版设计上，元件级引擎给出的 y[0]=0，而按 Z 处理会变成 X 导致判定不符；
     // 元件级对未定节点就是按 0 走的，两套引擎的口径必须一致。
-    if (netId === undefined) return B0;
-    return netValues.get(netId) ?? B0;
+    if (netIds === undefined || netIds.length === 0) return B0;
+    if (netIds.length === 1) return netValues.get(netIds[0] as string) ?? B0;
+    // 一个脚接多条网名 = 同一个节点，取各条 net 的合并值（同值则同值，冲突判 X）
+    return mergeDrivers(netIds.map((id) => netValues.get(id) ?? B0));
   };
   const readPort = (inst: string, port: { name: string; width?: number }): Bit[] =>
     Array.from({ length: widthOf(port) }, (_, b) => readBit(inst, port.name, b));
@@ -197,12 +288,12 @@ export const makePinIndex = (design: GateNetlistDesign): GatePinIndex => {
     values: readonly Bit[],
   ): void => {
     Array.from({ length: widthOf(port) }, (_, b) => {
-      const netId = pinToNet.get(pinKey(inst, port.name, b));
-      if (netId !== undefined) netValues.set(netId, values[b] ?? 'X');
+      for (const netId of netsPinTo.get(pinKey(inst, port.name, b)) ?? [])
+        netValues.set(netId, values[b] ?? 'X');
       return b;
     });
   };
-  return { pinToNet, netValues, readBit, readPort, writeTo };
+  return { netsPinTo, pinToNet, netValues, readBit, readPort, writeTo };
 };
 
 /** 把输入端口的值放进它们绑的 net（按位） */
@@ -234,11 +325,14 @@ export const readOutPorts = (design: GateNetlistDesign, idx: GatePinIndex): Map<
 /**
  * 纯组合求值（含时序模块就回落）。
  * `inputs` 是端口名 → 各位的值（缺省按 Z）。
+ *
+ * `cache` 只在**递归**时由本函数自己传进去（顶层不给 = 开新的一批缓存，见 gate-cache.ts）。
  */
 export const evalGateNetlist = (
   design: GateNetlistDesign,
   library: GateLibrary,
   inputs: ReadonlyMap<string, Bit[]> = new Map(),
+  cache: GateEvalCache = beginGateCacheBatch(library),
 ): GateEvalOutcome => {
   const gate = gateFastPathCheck(design, library);
   if (!gate.ok) {
@@ -279,7 +373,7 @@ export const evalGateNetlist = (
       const outs = mod.ports.filter((p) => p.dir === 'out');
       const ins = mod.ports.filter((p) => p.dir === 'in');
       const inBits = ins.map((p) => idx.readPort(inst.id, p));
-      let outBits: Bit[][];
+      let outBits: Bit[][] | undefined;
       const atomOut = isFunctionAtom(mod.name)
         ? evalAtomOutputs(mod.name, ins, outs, inBits)
         : null;
@@ -327,14 +421,28 @@ export const evalGateNetlist = (
             unstable: [],
           };
         }
-        const inner = evalGateNetlist(mod.body, library, inMap);
-        if (!inner.ok) return { ...inner, rounds, unstable: [] };
-        outBits = outs.map((p) => inner.outPorts.get(p.name) ?? []);
+        // ── 组合模块求值缓存 ──
+        // 纯组合模块的输出是输入的纯函数（见 isPureCombinational），命中就直接写回，
+        // 不再递归 —— 同一份子电路在同一批求值里会被算几十次，这是门级引擎最大的重复开销。
+        // 键 = 模块哈希 + 这次调用的输入位；含时序器件的身体走不到这里（一律不缓存）。
+        const hash = inst.module;
+        const cacheable = hash !== undefined && cacheableModuleOf(cache, library, hash, mod);
+        const key = cacheable ? gateCacheKey(hash, inBits) : '';
+        const hit = cacheable ? cache.lookup(hash, key) : undefined;
+        if (hit) {
+          outBits = hit;
+        } else {
+          const inner = evalGateNetlist(mod.body, library, inMap, cache);
+          if (!inner.ok) return { ...inner, rounds, unstable: [] };
+          outBits = outs.map((p) => inner.outPorts.get(p.name) ?? []);
+          if (cacheable) cache.store(hash, key, outBits, inner.unstable.length === 0);
+        }
       }
       outs.forEach((p, i) => {
         for (let b = 0; b < widthOf(p); b++) {
-          const netId = idx.pinToNet.get(pinKey(inst.id, p.name, b));
-          if (netId !== undefined) push(netId, outBits[i]?.[b] ?? 'X');
+          // 一个输出脚可以接多条网名（元件级里它们是同一个节点）→ 每条都要拿到驱动
+          for (const netId of idx.netsPinTo.get(pinKey(inst.id, p.name, b)) ?? [])
+            push(netId, outBits?.[i]?.[b] ?? 'X');
         }
       });
     }
