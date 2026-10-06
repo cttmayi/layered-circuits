@@ -44,6 +44,28 @@ const laneKey = (port: string, bit: number, width: number): string =>
   width > 1 ? `${port}[${bit}]` : port;
 
 /**
+ * 门级快路**能不能跑这份设计**：能跑返回 null，不能跑返回**人类可读的原因**。
+ *
+ * 抽出来是为了让"哪些关吃不到快路、为什么"可被自动审计
+ * （见 apps/studio/test/gate-fast-audit.test.ts），而不是靠人记。
+ */
+export const gateFastSupportReason = (
+  design: Design,
+  library: ModuleLibrary,
+  seqSpecs: Readonly<Record<string, GateSeqSpec>>,
+): string | null => {
+  for (const inst of design.instances) {
+    if (inst.kind === 'unit') return `顶层含元件 ${inst.id}（门级只处理纯模块设计）`;
+    if (inst.kind !== 'module') continue;
+    const mod = library.get(inst.module);
+    if (!mod) return `库里找不到模块 ${inst.module}（实例 ${inst.id}）`;
+    if (needsSeqSpec(mod as never) && !seqSpecs[mod.name])
+      return `时序模块「${mod.name}」没有 SeqSpec（不知道该拿哪个脚当时钟）`;
+  }
+  return null;
+};
+
+/**
  * 跑门级快路。不适用时返回 null（调用方回落），绝不做"部分正确"的近似。
  */
 export const runGateVectors = (
@@ -54,13 +76,7 @@ export const runGateVectors = (
   seqSpecs: Readonly<Record<string, GateSeqSpec>>,
 ): GateFastResult | null => {
   // ── 适用性：全部实例都得是能解析的模块，且时序模块都有 SeqSpec ──
-  for (const inst of design.instances) {
-    if (inst.kind === 'unit') return null;
-    if (inst.kind !== 'module') continue;
-    const mod = library.get(inst.module);
-    if (!mod) return null;
-    if (needsSeqSpec(mod as never) && !seqSpecs[mod.name]) return null;
-  }
+  if (gateFastSupportReason(design, library, seqSpecs) !== null) return null;
 
   // ── 把真实库包成门级引擎要的最小接口（结构兼容，不改库）──
   const gateLib = {

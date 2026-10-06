@@ -1,5 +1,7 @@
 export * from './cost.js';
 export * from './flatten.js';
+// 门级快路：runGateVectors + gateFastSupportReason（后者供"哪些关吃不到快路"的审计使用）
+export * from './gate-fast.js';
 export * from './judge.js';
 export * from './setup-hold.js';
 export * from './sha256.js';

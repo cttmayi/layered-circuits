@@ -2,9 +2,12 @@
 
 | 目录 | 作用 | 跑法 |
 | --- | --- | --- |
-| `level-expect/` | **关卡期望值生成/校验器**（改关卡后期望值必须由它再生成一遍） | `pnpm lc-expect <关卡id> [--write] [--mode=timing\|logic]` |
+| `level-expect/` | **关卡期望值生成/校验器**（改关卡后期望值必须由它再生成一遍） | `pnpm lc-expect <关卡id> [--write]` |
 | `level-editor/` | 关卡编辑器 CLI | `pnpm lc-level` |
 | `opt-solver/` | 成本最优解求解器 CLI | `pnpm solve` |
+
+> 门级快路的**可读审计**（哪些关吃不到快路、为什么）不是脚本，而是一条测试：
+> `apps/studio/test/gate-fast-audit.test.ts`，跑 `npx vitest run apps/studio/test/gate-fast-audit.test.ts` 看输出。
 
 ## 期望值生成器为什么必须存在
 
@@ -25,3 +28,22 @@ pnpm lc-expect s3-calc --write  # 差异时才改写关卡源文件里的 expect
 ⚠️ **改关卡（改电路 / 改向量 / 改答案）之后必须重跑它**，否则期望值会与引擎口径脱钩，
 下一轮排查就没人说得清谁对。详细背景与实例（s3-calc 的 29 处差异）见
 `docs/design-gates.md` 第 10 节。
+
+## ⚠️ 假绿坑：**不要用 timing 口径量门级快路**
+
+`judge.ts` 里的门级快路**只在 `mode === 'logic'` 时执行**；传 `mode:'timing'` 时
+judge 会**静默回落到元件级引擎**——读数看起来"和元件级完全一致"，其实门级**根本没跑**。
+实测同一关（s3-calc）：
+
+```
+门级真实结论（mode='logic' + gateSeqSpecs）：pass=false，逐行数值差异 58/67
+强行按 timing 口径量：                      "0 差异、完全一致"   ← 假绿（元件级跑了两遍）
+```
+
+**规矩**：
+
+1. 比较两个引擎时，必须确认门级那一遍**真的执行了**（耗时差异、或直接用
+   `runGateVectors` / `gateFastSupportReason` 复核对不对得上），否则仪器会给假绿。
+2. `pnpm lc-expect` **只接受 logic 口径**：传 `--mode=timing` 会被直接拒绝并退出（退出码 2），
+   免得拿元件级读数冒充门级期望值；关卡若门级引擎吃不下（含元件 / 缺 SeqSpec），也会报错退出。
+3. 谁吃不到快路、为什么，看 `apps/studio/test/gate-fast-audit.test.ts` 的输出。

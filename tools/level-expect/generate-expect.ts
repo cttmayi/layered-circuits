@@ -17,15 +17,23 @@
  *   脚本再生一遍 —— 手改 `expect` 会和引擎口径脱钩，下一轮就没人说得清谁对。
  *
  * 口径与边界：
- *   · 只用**门级引擎**（gateSeqSpecs）跑 teachingSolutionOf 参考解；模式默认取关卡自己的判定口径
- *     （judgeMode ?? mode），可用 --mode 覆盖（门级与 mode 无关，覆盖只为复核）。
+ *   · 只用**门级引擎**（gateSeqSpecs）跑 teachingSolutionOf 参考解；判定口径固定为 **logic**
+ *     —— 这是本脚本**唯一有效的口径**，理由见下面的「假绿坑」。
  *   · **只写 `expect`**：输入、note、顺序、条数、settlePs 一律不动。
  *   · 原本没有 `expect` 的向量（"松开"行）**保持不检查**，不凭空补期望值；
  *     `expect` 里没列的端口也保持不检查。
  *   · 默认只校验并报告差异；`--write` 才改写关卡源文件里的 expect 字面量。
+ *
+ * ⚠️ 假绿坑（本脚本直接拒绝踩）：
+ *   judge 里门级快路**只在 `mode === 'logic'` 时才会被执行**（见 judge.ts 的分派）；
+ *   若传 `mode:'timing'`，judge 会**静默回落到元件级引擎**。于是
+ *   `--mode=timing` 会得到"元件级跑了一遍"的读数，却看起来像"门级结论"——
+ *   实测同一关：门级 pass=false 且逐行 58/67 有差异，而 timing 口径下 0 差异"完全一致"。
+ *   一次这样的假绿会让人得出"门级已经能算这一关了"的错误结论。
+ *   所以：本脚本**不接受** `--mode=timing`（直接报错退出），要复核就复核逻辑口径。
  */
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { judgeDesign } from '@lc/compiler';
+import { gateFastSupportReason, judgeDesign } from '@lc/compiler';
 import { ALL_LEVELS, GATE_SEQ_SPECS, teachingModulesFor, teachingSolutionOf } from '@lc/content';
 import { familySpecOf, InMemoryModuleLibrary } from '@lc/schema';
 
@@ -51,9 +59,26 @@ if (!design) {
 const ports = level.ports as { name: string; dir: string; width?: number }[];
 
 const modeArg = args.find((a) => a.startsWith('--mode='))?.slice('--mode='.length);
-const mode = (modeArg ?? level.judgeMode ?? level.mode ?? 'timing') as 'logic' | 'timing';
+// ⚠️ 只认 logic：timing 口径下 judge 不会走门级快路（静默回落元件级）→ 假绿。见文件头。
+if (modeArg !== undefined && modeArg !== 'logic') {
+  console.error(
+    `拒绝 --mode=${modeArg}：门级快路只在 mode='logic' 下执行，timing 口径会**静默回落元件级**，\n` +
+      '拿到的不是门级读数（实测同一关 timing 0 差异"完全一致" vs 门级真实 58/67 有差异）。\n' +
+      '要门级期望值就用 `pnpm lc-expect <关卡id>`（默认 logic），不要覆盖口径。',
+  );
+  process.exit(2);
+}
+const mode = 'logic' as const;
 const spec = familySpecOf(level, 'rtl');
 const library = new InMemoryModuleLibrary([...teachingModulesFor('rtl')]);
+// 门级引擎吃不下这份设计（含元件 / 缺 SeqSpec / 库缺模块）→ 报错，别拿元件级读数冒充门级
+const unsupported = gateFastSupportReason(design, library, GATE_SEQ_SPECS);
+if (unsupported !== null) {
+  console.error(
+    `关卡 ${levelId} 的门级快路不适用：${unsupported}\n门级期望值无从生成，本脚本只用于门级口径。`,
+  );
+  process.exit(2);
+}
 const result = judgeDesign(design, level, {
   library,
   mode,
