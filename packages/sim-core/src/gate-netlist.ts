@@ -315,6 +315,18 @@ export const evalGateNetlist = (
         ins.forEach((p, i) => {
           inMap.set(p.name, inBits[i] ?? []);
         });
+        // 身体里含**元件**的模块：门级引擎算不了 → **如实拒绝**（宁可不快，不能算错）。
+        // 实测：顶层查了元件，但递归里漏了 —— s3-calc 的显示链路就是这样被静默算错的。
+        if (mod.body.instances.some((ci) => ci.kind === 'unit')) {
+          return {
+            ok: false,
+            reason: `模块【${mod.name}】身体里含元件（门级快路只处理纯门/模块电路）`,
+            nets: idx.netValues,
+            outPorts: new Map(),
+            rounds,
+            unstable: [],
+          };
+        }
         const inner = evalGateNetlist(mod.body, library, inMap);
         if (!inner.ok) return { ...inner, rounds, unstable: [] };
         outBits = outs.map((p) => inner.outPorts.get(p.name) ?? []);

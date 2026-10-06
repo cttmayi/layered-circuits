@@ -204,6 +204,13 @@ export const stepGateNetlist = (
         ins.forEach((p, i) => {
           inMap.set(p.name, inBits[i] ?? []);
         });
+        // 身体里含**元件**的模块 → 门级引擎算不了，如实拒绝（与 gate-netlist 同一口径）
+        if (mod.body.instances.some((ci) => ci.kind === 'unit')) {
+          return {
+            ok: false,
+            reason: `模块【${mod.name}】身体里含元件（门级快路只处理纯门/模块电路）`,
+          } as GateStepOutcome;
+        }
         const inner = stepGateNetlist(mod.body, library, inMap, state, `${prefix}${inst.id}/`);
         if (!inner.ok)
           return {
