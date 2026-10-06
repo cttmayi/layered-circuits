@@ -105,7 +105,7 @@ describe('门级网表求值', () => {
     }
   });
 
-  it('悬空输入（没接线）→ 结果不确定，不会假装算出一个值', () => {
+  it('悬空输入（没接线）→ 按 0 处理（与元件级引擎口径一致，实测得出）', () => {
     const d: GateNetlistDesign = {
       instances: [{ id: 'g1', kind: 'module', module: 'and' }],
       nets: [
@@ -118,7 +118,7 @@ describe('门级网表求值', () => {
       ],
     };
     const r = evalGateNetlist(d, lib({ and: gate('与门') }), new Map([['a', [1]]]));
-    expect(r.outPorts.get('y')).toEqual(['X']); // b 悬空 → X
+    expect(r.outPorts.get('y')).toEqual([0]); // 与门(1, 0) = 0：b 悬空按 0，不再是 X
   });
 
   it('复合模块按 body 递归：与非门 + 非门 = 与门', () => {

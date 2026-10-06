@@ -16,6 +16,7 @@
  * 为了不把 sim-core 绑到 @lc/schema 上，这里只要求**结构兼容**的最小接口。
  */
 import {
+  B0,
   type Bit,
   evalFullAdder,
   evalGate,
@@ -175,8 +176,11 @@ export const makePinIndex = (design: GateNetlistDesign): GatePinIndex => {
   const netValues = new Map<string, Bit>();
   const readBit = (inst: string, pin: string, bit = 0): Bit => {
     const netId = pinToNet.get(pinKey(inst, pin, bit));
-    if (netId === undefined) return 'Z'; // 没接 → 悬空
-    return netValues.get(netId) ?? 'Z';
+    // 没接到任何 net、或该 net 没人驱动 → 按 **0** 处理（不是 Z）。
+    // 实测依据：同一份门版设计上，元件级引擎给出的 y[0]=0，而按 Z 处理会变成 X 导致判定不符；
+    // 元件级对未定节点就是按 0 走的，两套引擎的口径必须一致。
+    if (netId === undefined) return B0;
+    return netValues.get(netId) ?? B0;
   };
   const readPort = (inst: string, port: { name: string; width?: number }): Bit[] =>
     Array.from({ length: widthOf(port) }, (_, b) => readBit(inst, port.name, b));
@@ -214,7 +218,7 @@ export const readOutPorts = (design: GateNetlistDesign, idx: GatePinIndex): Map<
     if (port.dir !== 'out') continue;
     out.set(
       port.name,
-      port.nets.map((netId) => idx.netValues.get(netId) ?? 'Z'),
+      port.nets.map((netId) => idx.netValues.get(netId) ?? B0),
     );
   }
   return out;

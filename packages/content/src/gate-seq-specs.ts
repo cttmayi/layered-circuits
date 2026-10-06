@@ -43,6 +43,26 @@ export const seqSpecOf = (moduleName: string): GateSeqSpec | undefined =>
  *   · s3-calc     ：元件级 108ms(pass=true) / 带快路 4928ms(**pass=false**) → **结论不一致**，
  *     而且慢 45 倍。在查清原因并修好之前，它**不许**走快路 —— 宁可不快，不能算错。
  */
-export const GATE_FAST_LEVELS: readonly string[] = ['s3-half-adder'];
+export const GATE_FAST_LEVELS: readonly string[] = [
+  // 下面这些关已由 apps/studio/test/gate-fast-report.test.ts（对照表）实测：
+  // 门级与元件级**判定结论相同、逐行数值也完全相同**（在各自的门版参考解上）。
+  's3-half-adder',
+  's3-full-adder',
+  's3-adder-4',
+  's3-adder-8',
+  's3-alu',
+  's3-bcd2bin',
+  's3-bin2bcd',
+  's3-display',
+  's3-seg-de',
+  's3-seg-fg',
+  's3-display2',
+  's3-encoder',
+  // 暂不放行（对照表里仍有差异，宁可不快不能算错）：
+  //   s2-sr-latch / s2-btn-latch / s2-d-latch / s2-dff（电平型锁存器与首个向量的差异）
+  //   s3-reg-8 / s3-digit-entry（各 1 行差异）
+  //   s3-calc（结论不一致 + 慢 100 倍以上）
+  //   s3-or-chain（没有门版参考解）
+];
 
 export const gateFastEnabledFor = (levelId: string): boolean => GATE_FAST_LEVELS.includes(levelId);
