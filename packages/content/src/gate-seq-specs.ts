@@ -59,11 +59,14 @@ export const GATE_FAST_LEVELS: readonly string[] = [
   's3-seg-de',
   's3-seg-fg',
   's3-display2',
+  's2-sr-latch',
+  's2-btn-latch',
+  's2-d-latch',
   's3-encoder',
   's3-reg-8',
   's3-digit-entry',
   // 暂不放行（对照表里仍有差异，宁可不快不能算错）：
-  //   s2-sr-latch / s2-btn-latch / s2-d-latch / s2-dff（电平型锁存器与首个向量的差异）
+  //   s2-dff（个别向量差异）
   //   s3-calc（结论不一致 + 慢 100 倍以上）
   //   s3-or-chain（没有门版参考解）
 ];

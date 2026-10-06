@@ -41,6 +41,7 @@ const widthOf = (p: { width?: number }): number => Math.max(1, p.width ?? 1);
 /** 时序器件的状态：`实例路径/端口#位 → 值`，跨求值步保存 */
 export class GateStateStore {
   private readonly values = new Map<string, Bit>();
+  private readonly nets = new Map<string, Map<string, Bit>>();
 
   constructor(initial?: Readonly<Record<string, Bit>>) {
     for (const [k, v] of Object.entries(initial ?? {})) this.values.set(k, v);
@@ -68,6 +69,21 @@ export class GateStateStore {
 
   setClock(instId: string, value: Bit): void {
     this.values.set(`${instId}/${CLK_KEY}`, value);
+  }
+
+  /**
+   * 按**实例路径**隔离的 net 值表：`路径 → (netId → 值)`。
+   * 为什么必须隔离：递归进复合模块时如果用同一张全局表、又按 `prefix + id` 回写，
+   * 前缀会层层叠加 → key 无限增长 → Map maximum size exceeded（上一版就是这样炸的）。
+   * 这里每层只碰**自己那份**，键不会再叠加。
+   */
+  netsOf(path: string): Map<string, Bit> {
+    let m = this.nets.get(path);
+    if (!m) {
+      m = new Map();
+      this.nets.set(path, m);
+    }
+    return m;
   }
 
   snapshot(): Record<string, Bit> {
@@ -115,7 +131,10 @@ export const stepGateNetlist = (
   }
 
   const idx = makePinIndex(design);
-  bindInputs(design, idx, inputs);
+  // 本层自己的 net 底稿（上一次的值）——**只碰本层**，不碰别的模块
+  const prevNets = state.netsOf(prefix);
+  for (const [id, v] of prevNets) idx.netValues.set(id, v);
+  bindInputs(design, idx, inputs); // 输入端口覆盖自己绑的 net
 
   // ── ① 组合阶段 ──
   const MAX_ROUNDS = 64;
@@ -209,6 +228,15 @@ export const stepGateNetlist = (
     settled = !changed;
   }
 
+  // 组合环在迭代上限内没稳定 → **保持上一次的状态**（零延迟仿真的标准做法）。
+  // 用门搭的锁存器就是这种情况：没有有效激励时它不该改变，只有回路收敛时才接受新值。
+  if (!settled) {
+    for (const net of design.nets) {
+      const prev = prevNets.get(net.id);
+      if (prev !== undefined) idx.netValues.set(net.id, prev);
+    }
+  }
+
   // ── ② 更新阶段 ──
   const updates: string[] = [];
   for (const inst of design.instances) {
@@ -250,6 +278,10 @@ export const stepGateNetlist = (
     state.setClock(prefix + inst.id, clockNow);
   }
 
+  for (const net of design.nets) {
+    const v = idx.netValues.get(net.id);
+    if (v !== undefined) prevNets.set(net.id, v);
+  }
   return {
     ok: true,
     nets: idx.netValues,
