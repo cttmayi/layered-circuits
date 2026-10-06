@@ -2560,8 +2560,15 @@ body,
     text-align: left;
   }
 
-  /* 开合手柄挪到底部：收起时浮在画布左下角；展开时贴在抽屉左上角（点它收起） */
+  /* 开合手柄挪到底部（题干原话：「右上的验证和元件库一样，放在下方」）：
+     不拉开时两颗手柄并排浮在画布左下角；拉开抽屉时一起贴在抽屉左上角（点它收起）。
+     flex 行保证两颗手柄互不重叠、间距固定，各自 ≥44px（尺寸来自窄屏块的 .edge-strip > button）。 */
   .edge-strip.left {
+    display: flex;
+    /* 基础块里 .edge-strip 是**竖排**（桌面那条 16px 竖条），这里必须改成横排一行 */
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
     top: auto;
     bottom: calc(8px + env(safe-area-inset-bottom));
     left: max(8px, env(safe-area-inset-left));
@@ -2570,6 +2577,22 @@ body,
   .edge-strip.left:not(.closed) {
     /* 抽屉高度 - 52px → 手柄顶边落在抽屉顶沿下方 8px（抽屉高度是同一个 min() 表达式） */
     bottom: calc(min(46%, 380px) - 52px + env(safe-area-inset-bottom));
+  }
+
+  /* ---- ⑤ 验收（右侧面板）：竖屏也改成**底部抽屉**，尺寸/圆角/投影/贴底与元件库逐项一致 ---- */
+  .side {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: min(46%, 380px); /* 与 .palette 同一个 min()：≤46% 画布区高、380px 上限 */
+    border-left: none;
+    border-top: 1px solid var(--line);
+    border-radius: 14px 14px 0 0;
+    padding: 56px 12px calc(12px + env(safe-area-inset-bottom));
+    box-shadow: 0 -16px 32px rgba(0, 0, 0, 0.5);
+    animation: lc-sheet-up 0.18s ease;
   }
 
   /* 画布底部那行触屏提示让开左下角的手柄，别把手柄压住 */

@@ -89,10 +89,10 @@ function bodyChildren(): string[] {
 // ---------- 视口行为 ----------
 describe('窄屏 = 覆盖抽屉：进工作台先把画布让出来', () => {
   it.each([
-    ['390×844（手机竖屏）', 390, 844],
-    ['844×390（横屏手机，高度很矮）', 844, 390],
-    ['768×1024（竖屏平板）', 768, 1024],
-  ])('视口 %s：左右面板默认收起，画布是 body 里唯一的布局子元素', (_label, w, h) => {
+    ['390×844（手机竖屏）', 390, 844, true],
+    ['844×390（横屏手机，高度很矮）', 844, 390, false],
+    ['768×1024（竖屏平板）', 768, 1024, true],
+  ])('视口 %s：左右面板默认收起，画布是 body 里唯一的布局子元素', (_label, w, h, portrait) => {
     setViewport(w, h);
     renderApp();
     startJob('非门');
@@ -100,10 +100,11 @@ describe('窄屏 = 覆盖抽屉：进工作台先把画布让出来', () => {
     // 两块面板都不在 DOM 里 → 不会盖住画布
     expect(screen.queryByText('三极管 NPN')).toBeNull();
     expect(screen.queryByRole('complementary')).toBeNull();
+    // 竖屏两颗手柄在**同一行**里（所以没有独立的 .edge-strip.right）；横屏仍是一左一右
     expect(bodyChildren()).toEqual([
       'edge-strip left closed',
       'canvas-wrap',
-      'edge-strip right closed',
+      ...(portrait ? [] : ['edge-strip right closed']),
     ]);
 
     // 两个开合手柄在，语义名与桌面一致（44px 尺寸由 @media 块保证，见下面的样式表契约）
@@ -120,24 +121,109 @@ describe('窄屏 = 覆盖抽屉：进工作台先把画布让出来', () => {
     fireEvent.click(screen.getByRole('button', { name: '展开元件库' }));
     expect(screen.getByText('三极管 NPN')).toBeTruthy();
     expect(document.querySelector('aside.palette')).toBeTruthy();
-    expect(bodyChildren()).toEqual([
-      'palette',
-      'edge-strip left',
-      'canvas-wrap',
-      'edge-strip right closed',
-    ]);
+    expect(bodyChildren()).toEqual(['palette', 'edge-strip left', 'canvas-wrap']);
 
     // 同一个按钮换成「收起」语义，再收回去
     fireEvent.click(screen.getByRole('button', { name: '收起元件库' }));
     expect(screen.queryByText('三极管 NPN')).toBeNull();
 
-    // 右侧：拉出验收/属性抽屉（右侧抽屉的行为：竖屏与横屏一致，仍是右侧覆盖抽屉）
+    // 右侧：拉出验收/属性抽屉（竖屏时它也是底部抽屉，见下面的专项用例）
     fireEvent.click(screen.getByRole('button', { name: '展开右侧面板' }));
     expect(document.querySelector('.side')).toBeTruthy();
     await waitFor(() => expect(screen.getAllByText('材料费').length).toBeGreaterThanOrEqual(1));
 
     fireEvent.click(screen.getByRole('button', { name: '收起右侧面板' }));
     expect(document.querySelector('.side')).toBeNull();
+  });
+});
+
+// ---------- 竖屏：验收手柄并到左下角那行 + 验收也是底部抽屉 + 两个抽屉互斥 ----------
+describe('竖屏：验收和元件库一样放到底部（两颗手柄一行、两个抽屉互斥）', () => {
+  it.each([
+    ['390×844', 390, 844],
+    ['360×640', 360, 640],
+    ['430×932', 430, 932],
+  ])('%s：两颗手柄在同一个左下角行里（结构性不重叠），各自带文字标签', (_label, w, h) => {
+    setViewport(w, h);
+    renderApp();
+    startJob('非门');
+
+    // 只有一行手柄：.edge-strip.right 在竖屏不渲染
+    expect(document.querySelector('.edge-strip.right')).toBeNull();
+    const row = document.querySelector('.edge-strip.left');
+    const buttons = [...(row?.querySelectorAll('button') ?? [])];
+    expect(buttons.length).toBe(2);
+    // 同一个父节点 + 文字标签 → 44px 尺寸与 flex 行的间距由 CSS 保证（见样式表契约 / CDP 实测）
+    expect(buttons.map((b) => b.parentElement)).toEqual([row, row]);
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([
+      '展开元件库',
+      '展开右侧面板',
+    ]);
+    for (const b of buttons) {
+      expect(b.textContent?.trim()).toMatch(/元件库|验收/);
+      expect(b.getAttribute('title')).toMatch(/元件库|右侧面板/);
+    }
+  });
+
+  it.each([
+    ['390×844', 390, 844],
+    ['360×640', 360, 640],
+    ['430×932', 430, 932],
+  ])('%s：两个底部抽屉互斥 —— 开一个自动关另一个', (_label, w, h) => {
+    setViewport(w, h);
+    renderApp();
+    startJob('非门');
+
+    // 开元件库
+    fireEvent.click(screen.getByRole('button', { name: '展开元件库' }));
+    expect(document.querySelector('aside.palette')).toBeTruthy();
+    expect(document.querySelector('.side')).toBeNull();
+
+    // 开验收 → 元件库自动收起（两个底部抽屉同开必然叠在一起）
+    fireEvent.click(screen.getByRole('button', { name: '展开右侧面板' }));
+    expect(document.querySelector('.side')).toBeTruthy();
+    expect(document.querySelector('aside.palette')).toBeNull();
+    // 手柄行仍在（两个抽屉共用同一行，任一开着就一起贴抽屉顶沿）
+    expect(document.querySelector('.edge-strip.left')?.className).toBe('edge-strip left');
+
+    // 再开元件库 → 验收自动收起
+    fireEvent.click(screen.getByRole('button', { name: '展开元件库' }));
+    expect(document.querySelector('aside.palette')).toBeTruthy();
+    expect(document.querySelector('.side')).toBeNull();
+
+    // 收起来以后两颗手柄都回到「收起」态
+    fireEvent.click(screen.getByRole('button', { name: '收起元件库' }));
+    expect(document.querySelector('aside.palette')).toBeNull();
+    expect(document.querySelector('.edge-strip.left')?.className).toBe('edge-strip left closed');
+  });
+
+  it.each([
+    ['844×390（横屏手机）', 844, 390],
+    ['1024×768（横屏平板）', 1024, 768],
+    ['1280×800（桌面）', 1280, 800],
+  ])('%s：手柄位置与共存行为不变（两侧仍可同时展开）', (_label, w, h) => {
+    setViewport(w, h);
+    renderApp();
+    startJob('非门');
+
+    // 手柄仍是一左一右两颗独立元素（左边那颗里没有第二颗按钮）
+    expect(document.querySelectorAll('.edge-strip.right')).toHaveLength(1);
+    expect(document.querySelectorAll('.edge-strip.left button')).toHaveLength(1);
+    expect(document.querySelectorAll('.edge-strip.right button')).toHaveLength(1);
+
+    // 桌面默认两块都开着；横屏窄屏默认收起（narrow 时自动收起）→ 手工拉开成「都开着」
+    if (!document.querySelector('aside.palette'))
+      fireEvent.click(screen.getByRole('button', { name: '展开元件库' }));
+    if (!document.querySelector('.side'))
+      fireEvent.click(screen.getByRole('button', { name: '展开右侧面板' }));
+    expect(document.querySelector('aside.palette')).toBeTruthy();
+    expect(document.querySelector('.side')).toBeTruthy();
+
+    // 宽屏下开关一个**不会**关掉另一个（竖屏的互斥不能漏到这里）
+    fireEvent.click(screen.getByRole('button', { name: '收起元件库' }));
+    fireEvent.click(screen.getByRole('button', { name: '展开元件库' }));
+    expect(document.querySelector('aside.palette')).toBeTruthy();
+    expect(document.querySelector('.side')).toBeTruthy();
   });
 });
 
@@ -482,6 +568,40 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
     expect(rules.get('.edge-strip.left:not(.closed)')).toMatch(/bottom:\s*calc\(min\(/);
     // 底部提示让开手柄
     expect(rules.get('.hint')).toMatch(/bottom:\s*calc\(/);
+  });
+
+  it('竖屏块里：验收抽屉与元件库抽屉逐项同款 + 手柄行 flex 并排 + 验收手柄不再贴右上', () => {
+    const rules = parseCss(PORTRAIT_BLOCK).base;
+    // ① 验收（.side）与元件库（.palette）的底部抽屉形态逐项一致
+    const palette = rules.get('.palette') ?? '';
+    const side = rules.get('.side') ?? '';
+    expect(side).not.toBe('');
+    for (const same of [
+      'bottom: 0',
+      'height: min(46%, 380px)',
+      'border-radius: 14px 14px 0 0',
+      'box-shadow: 0 -16px 32px rgba(0, 0, 0, 0.5)',
+      'animation: lc-sheet-up 0.18s ease',
+    ]) {
+      expect(palette).toContain(same);
+      expect(side).toContain(same);
+    }
+    expect(side).toMatch(/top:\s*auto/); // 不再占满整高
+    expect(side).toMatch(/left:\s*0/);
+    expect(side).toMatch(/right:\s*0/);
+    expect(side).toMatch(/width:\s*auto/);
+    // 窄屏块给 .side 定的「贴右」在竖屏被覆盖掉
+    expect(rules.get('.side')).not.toContain('right: max(');
+    // ② 两颗手柄同一行：flex + 固定间距（结构性不重叠），整行贴底、抽屉开着时一起上抬
+    const row = rules.get('.edge-strip.left') ?? '';
+    expect(row).toContain('display: flex');
+    expect(row).toContain('flex-direction: row'); // 基础块是竖排，这里必须横过来
+    expect(row).toContain('gap: 8px');
+    expect(row).toMatch(/top:\s*auto/);
+    expect(row).toMatch(/bottom:\s*calc\(8px/);
+    expect(rules.get('.edge-strip.left:not(.closed)')).toMatch(/bottom:\s*calc\(min\(46%, 380px\)/);
+    // ③ 竖屏块里没有给 .edge-strip.right 的独立定位（这颗手柄在竖屏根本不渲染）
+    expect(rules.get('.edge-strip.right')).toBeUndefined();
   });
 
   it('竖屏块里的精简卡片：一行横排 + 固定宽度 + 可横滑 + 触屏目标 ≥44px', () => {
