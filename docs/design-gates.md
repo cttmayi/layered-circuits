@@ -355,19 +355,59 @@ D judgeDesign(timing, 门级):  pass=true  row1=0x3f     ← 门级没跑，元�
 3. **跑审计**：`npx vitest run apps/studio/test/gate-fast-audit.test.ts`，看你这关在不在"⛔ 回落元件级"里、
    原因是什么。**新增关卡会自动出现在这份清单里**，不用靠人记。
 
+#### 硬规定：新增 logic 关卡要吃门级快路，**必须通过那条前置条件护栏**
+
+把一关加进 `GATE_FAST_LEVELS`（`packages/content/src/gate-seq-specs.ts`）之前，
+它必须**同时**满足下面四条，缺一条就只能**回落元件级**：
+
+1. **门级 `pass` 与元件级相同**；
+2. **逐行数值相同**（只比每行读数，数字与字符串归一化后比）；
+3. **行数相同**；
+4. **门版参考解自身通过**（`teachingSolutionOf(id,'rtl')` 存在，且它在元件级口径下 `pass=true`）。
+
+这四条由 `apps/studio/test/gate-fast-whitelist-precondition.test.ts` **自动核对**，
+每次 `pnpm check` 都会跑；不通过它就会红。
+
+> **⛔ 不许为了加速改期望值**：关卡 `vectors[].expect` 是**教学答案**。
+> 若门级算出的读数与期望值不同，正确的处理是**这一关回落元件级**（判定仍正确、只是不加速），
+> 而不是把期望值改成门级读数 —— 那等于"为了指标把教学意图颠倒"
+> （例：本关"按 C 清屏"期望 `3f,3f`("00")，若按门级塌掉的读数改就是 `6f,6f`("99")，意思全反）。
+
+#### 怎么随时看这张表（同一份实现，三个出口）
+
+```
+pnpm lc-expect --audit                                   # 命令行，随时看
+npx vitest run apps/studio/test/gate-fast-audit.test.ts  # 跑测试看，并自动拦"回落没记根因 / 能复现却漏放行"
+pnpm check                                               # 白名单前置条件护栏每次都会把全表打印出来
+```
+
+审计实现只有一份（`packages/content/src/gate-fast-audit.ts` 的
+`auditGateFastEligibility()` / `formatGateFastAudit()`），三个出口共用，避免各写一遍再各自漂移。
+**新增关卡会自动出现在这份清单里**：若它吃不到快路却没人记录根因，审计会红，逼着作者把"为什么"写清楚
+（根因表：`GATE_FAST_BLOCKED_CAUSES`）；若它其实能吃快路却没进白名单，审计也会红（少赚加速同样要发现）。
+
 #### 当前清单（审计实测输出，供对照）
 
 ```
-[门级快路审计] logic 关卡 20 个：能吃到 18 个
-  ✅ 已放行 s2-sr-latch / s2-btn-latch / s2-d-latch / s2-dff / s3-half-adder / s3-full-adder /
-     s3-adder-4 / s3-adder-8 / s3-alu / s3-bcd2bin / s3-bin2bcd / s3-display / s3-seg-de /
-     s3-seg-fg / s3-display2 / s3-reg-8 / s3-encoder / s3-digit-entry
-  ⛔ 回落元件级 s3-or-chain：没有门版参考解（无从比较，也就无从放行）
-  ⛔ 回落元件级 s3-calc：门级结论与元件级不同（pass true→false，逐行数值差异 58/67）
+[门级快路审计] 判定口径 = logic 的关卡 20 个：能吃到快路 18 个 / 回落元件级 2 个
+
+✅ 已放行（18 关，门级 pass 与逐行数值都与元件级一致）：
+   s2-sr-latch（4 行） s2-btn-latch（5 行） s2-d-latch（5 行） s2-dff（7 行）
+   s3-half-adder（4 行） s3-full-adder（8 行） s3-adder-4（8 行） s3-adder-8（8 行）
+   s3-alu（8 行） s3-bcd2bin（8 行） s3-bin2bcd（8 行） s3-display（10 行）
+   s3-seg-de（10 行） s3-seg-fg（10 行） s3-display2（6 行） s3-reg-8（7 行）
+   s3-encoder（11 行） s3-digit-entry（11 行）
+
+⛔ 回落元件级（2 关，判定仍正确、只是不加速）：
+   s3-or-chain：没有门版参考解（teachingSolutionOf(id, "rtl") 返回空）→ 门级结论无从比较，也就无从放行
+        证据｜teachingSolutionOf(id, "rtl") 为空
+   s3-calc：时钟来自【运算控制】内部 10 级反相延迟链（延迟本身就是功能，向量按键行还带 settlePs 1µs）：
+           零延迟求值把这条环路塌成静态电平、产生不出"沿"，而八位寄存器靠沿写入 → 门级会有若干行读到旧值
+        证据｜实测：门级 pass=true→false，逐行数值差异 58/67
 ```
 
-审计还会**自动拦住漏网**：若某关门级明明能算对（pass 与元件级相同、逐行数值 0 差异）却没进
-`GATE_FAST_LEVELS`，它会以"该放行却没放行"判红 —— 少赚加速和"静默算错"一样都要被发现。
+（注：`settlePs` 本身**不是**"吃不到快路"的判据 —— s2-dff / s3-reg-8 / s3-digit-entry
+的向量也带 `settlePs`，但它们的门级读数与元件级完全一致、都已放行。判据只有实测那一条。）
 
 #### (a) 有界延迟 / 事件驱动推进 —— 记为**未来可选**，本轮不做
 

@@ -2,7 +2,8 @@
  * 关卡期望值生成器 / 校验器（**唯一出口**）
  *
  * 用法（仓库根目录）：
- *   pnpm exec vite-node --config vitest.config.ts tools/level-expect/generate-expect.ts <关卡id> [--write] [--mode=timing|logic]
+ *   pnpm lc-expect <关卡id> [--write]      （只校验 / 差异时改写 expect）
+ *   pnpm lc-expect --audit                 （打印"哪些 logic 关卡吃不到门级快路、为什么"全表）
  *   例：pnpm exec vite-node --config vitest.config.ts tools/level-expect/generate-expect.ts s3-calc --write
  *
  * 背景（为什么必须有这个脚本）：
@@ -34,14 +35,33 @@
  */
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { gateFastSupportReason, judgeDesign } from '@lc/compiler';
-import { ALL_LEVELS, GATE_SEQ_SPECS, teachingModulesFor, teachingSolutionOf } from '@lc/content';
+import {
+  ALL_LEVELS,
+  auditGateFastEligibility,
+  formatGateFastAudit,
+  GATE_SEQ_SPECS,
+  teachingModulesFor,
+  teachingSolutionOf,
+} from '@lc/content';
 import { familySpecOf, InMemoryModuleLibrary } from '@lc/schema';
 
 const args = process.argv.slice(2);
 const write = args.includes('--write');
+
+// ── `--audit`：不生成期望值，只打印"哪些 logic 关卡吃不到门级快路、为什么"全表 ──
+// （与 apps/studio/test/gate-fast-audit.test.ts、gate-fast-whitelist-precondition.test.ts
+//   共用 @lc/content 里的同一份实现，避免三处各写一遍再各自漂移）
+if (args.includes('--audit')) {
+  console.log(formatGateFastAudit(auditGateFastEligibility()));
+  process.exit(0);
+}
+
 const levelId = args.find((a) => !a.startsWith('--'));
 if (!levelId) {
-  console.error('用法：… generate-expect.ts <关卡id> [--write]');
+  console.error(
+    '用法：… generate-expect.ts <关卡id> [--write]\n' +
+      '      … generate-expect.ts --audit    （打印"哪些 logic 关卡吃不到门级快路、为什么"全表）',
+  );
   process.exit(2);
 }
 

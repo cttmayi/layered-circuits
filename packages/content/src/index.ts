@@ -1,4 +1,5 @@
 export * from './contract.js';
+export * from './gate-fast-audit.js';
 export * from './gate-seq-specs.js';
 export * from './levels.js';
 export * from './levels-ari.js';

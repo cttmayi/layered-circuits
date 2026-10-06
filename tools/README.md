@@ -3,11 +3,13 @@
 | 目录 | 作用 | 跑法 |
 | --- | --- | --- |
 | `level-expect/` | **关卡期望值生成/校验器**（改关卡后期望值必须由它再生成一遍） | `pnpm lc-expect <关卡id> [--write]` |
+| ↑ 同上 | **门级快路审计**：哪些 logic 关卡吃不到快路、为什么 | `pnpm lc-expect --audit` |
 | `level-editor/` | 关卡编辑器 CLI | `pnpm lc-level` |
 | `opt-solver/` | 成本最优解求解器 CLI | `pnpm solve` |
 
-> 门级快路的**可读审计**（哪些关吃不到快路、为什么）不是脚本，而是一条测试：
-> `apps/studio/test/gate-fast-audit.test.ts`，跑 `npx vitest run apps/studio/test/gate-fast-audit.test.ts` 看输出。
+跑审计的另外两个出口（同一份实现，见 `packages/content/src/gate-fast-audit.ts`）：
+`npx vitest run apps/studio/test/gate-fast-audit.test.ts`，以及每次 `pnpm check` 都会打印全表的
+`apps/studio/test/gate-fast-whitelist-precondition.test.ts`。
 
 ## 期望值生成器为什么必须存在
 
@@ -46,4 +48,19 @@ judge 会**静默回落到元件级引擎**——读数看起来"和元件级完
    `runGateVectors` / `gateFastSupportReason` 复核对不对得上），否则仪器会给假绿。
 2. `pnpm lc-expect` **只接受 logic 口径**：传 `--mode=timing` 会被直接拒绝并退出（退出码 2），
    免得拿元件级读数冒充门级期望值；关卡若门级引擎吃不下（含元件 / 缺 SeqSpec），也会报错退出。
-3. 谁吃不到快路、为什么，看 `apps/studio/test/gate-fast-audit.test.ts` 的输出。
+3. 谁吃不到快路、为什么，看下面这张表。
+
+## 谁吃不到门级快路（可读审计）
+
+```
+pnpm lc-expect --audit     # 打印全表：每关 → 能否吃快路 / 原因
+```
+
+当前：**18 关 ✅ 已放行 / s3-calc（时钟来自 10 级反相延迟链 + 向量带 settlePs，零延迟模型不适用）/
+s3-or-chain（无门版参考解）**。这张表由 `packages/content/src/gate-fast-audit.ts` 生成，
+命令行、审计测试、白名单前置条件护栏（每次 `pnpm check`）三个出口共用。
+
+**硬规定**：新增 logic 关卡要吃门级快路，**必须通过前置条件护栏**
+（门级 `pass` 相同 + 逐行数值相同 + 行数相同 + 门版参考解自身通过）——
+不通过就只能回落元件级（判定仍正确、只是不加速），**不许为了加速改期望值**。
+详见 `docs/design-gates.md` §10.5。

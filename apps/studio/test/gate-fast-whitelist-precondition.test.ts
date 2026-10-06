@@ -1,6 +1,8 @@
 import { judgeDesign } from '@lc/compiler';
 import {
   ALL_LEVELS,
+  auditGateFastEligibility,
+  formatGateFastAudit,
   GATE_FAST_LEVELS,
   GATE_SEQ_SPECS,
   teachingModulesFor,
@@ -80,6 +82,9 @@ describe('白名单前置条件：门级必须能复现元件级判定', () => {
         problems.push(`${id}: 门版参考解自己没通过（元件级 pass=${String(slow.pass)}）`);
     }
     console.log(`[白名单前置条件]\n${lines.join('\n')}`);
+    // 每次跑（含每次 pnpm check）都**同时打印全表**：哪些 logic 关卡吃不到快路、为什么。
+    // 于是"静默回落"不再是隐形的坑 —— 看 check 输出就知道边界在哪（实现见 @lc/content）。
+    console.log(`\n${formatGateFastAudit(auditGateFastEligibility())}\n`);
     expect(problems).toEqual([]);
   }, 600_000);
 });
