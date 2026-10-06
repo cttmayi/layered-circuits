@@ -43,7 +43,6 @@ import {
   inputValues,
   moduleBox,
   type PlaceKind,
-  pinNames,
   pinOffsets,
   type StoredModule,
   type Sym,
@@ -59,7 +58,6 @@ import {
   hitTest,
   type Scene,
   screenToWorld,
-  signalText,
 } from './editor/render';
 import { addModule, dedupeLibrary, storeModule } from './level/library';
 import {
@@ -130,6 +128,7 @@ export function App(): React.JSX.Element {
     nodes: number[];
   } | null>(null);
   /** 「重新计算」触发计数：+1 强制全量重算（丢弃上次终态） */
+  const [_liveWave, setLiveWave] = useState<Waveform | null>(null);
   const [recomputeNonce, setRecomputeNonce] = useState(0);
   const dragRef = useRef<DragState>({
     mode: 'none',
@@ -210,11 +209,7 @@ export function App(): React.JSX.Element {
   /** 「时序视图」：在画布上画出真实波形（竞争/毛刺/传播延迟）。
    *  仿真本身**恒按真实时序跑**（判定也是）—— 这个开关只决定画不画波形，绝不改判定结果。
    *  默认打开；玩家的选择跨关卡保留。 */
-  // 「时序视图」按钮已按用户要求移除：默认值保持 true（与移除前的默认行为一致，
-  // 时序版关卡照旧在画布上画真实波形），只是不再提供开关。
-  const timingView = true;
   /** 最近一次仿真的端口级波形（时序视图用）；逻辑模式没有时间轴，恒为 null */
-  const [liveWave, setLiveWave] = useState<Waveform | null>(null);
   /** 这次仿真与判定用的口径。**时序版**（默认）：按真实元件延迟跑，主线的硬核口径；
    *  **逻辑版**：抹平延迟、只看逻辑对不对 —— 判定器把 timingBudgetPs 置空，
    *  于是评星只按成本（延迟档视为达标），毛刺与建立/保持也都不查。
@@ -1488,11 +1483,6 @@ export function App(): React.JSX.Element {
   const selectedSyms = doc.syms.filter((s) => selection.includes(s.id));
   const levelRecord = currentLevel ? progress.cleared[currentLevel.id] : undefined;
   /** 单选中的模块（Inspector 里给出「展开内部电路」入口） */
-  const selectedModule =
-    selectedSyms.length === 1 && selectedSyms[0]?.kind === 'module' && selectedSyms[0]?.module
-      ? (doc.library.find((m) => m.hash === (selectedSyms[0] as Sym).module) ?? null)
-      : null;
-
   // ---- 主菜单（开场）：模式只在这是选 ----
   if (screen === 'menu') {
     const resumeLevelRaw = findLevel(session.levelId);
@@ -1885,24 +1875,7 @@ export function App(): React.JSX.Element {
                     ? describeSym(selectedSyms[0] as Sym, doc)
                     : `已选中 ${selectedSyms.length} 个元件`
               }
-              selectedModule={selectedModule}
-              onExpandModule={selectedModule ? () => setExpandedModule(selectedModule) : undefined}
-              pinTable={
-                selectedSyms.length === 1
-                  ? pinNames(selectedSyms[0] as Sym, doc.library).map((pin) => ({
-                      pin,
-                      text: signalText(pinSignals.get(`${(selectedSyms[0] as Sym).id}.${pin}[0]`)),
-                    }))
-                  : []
-              }
             />
-            {timingView && simMode === 'timing' && (
-              <WaveformPanel
-                waveform={liveWave}
-                portNames={Object.keys(snapshot?.portValues ?? {})}
-                emptyHint="点一下输入（或在画布上改电平），这里画真实延迟下每个端口的跳变。"
-              />
-            )}
             {panelOpen === 'wave' && judgeResult && (
               <WaveformPanel
                 waveform={judgeWaveform}

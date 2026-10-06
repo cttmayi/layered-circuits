@@ -6,7 +6,6 @@ export interface InspectorProps {
   snapshot: SimSnapshot | null;
   units: Array<[UnitKind, number]>;
   selectionLabel: string | null;
-  pinTable: Array<{ pin: string; text: string }>;
   /** 单选中的模块（有则显示「展开内部电路」入口） */
   selectedModule?: StoredModule | null;
   onExpandModule?: () => void;
@@ -22,14 +21,7 @@ const UNIT_NAME: Record<UnitKind, string> = {
 };
 
 /** 右侧检查器：材料费 / 诊断 / 时序 */
-export function Inspector({
-  snapshot,
-  units,
-  selectionLabel,
-  pinTable,
-  selectedModule,
-  onExpandModule,
-}: InspectorProps): React.JSX.Element {
+export function Inspector({ snapshot, units }: InspectorProps): React.JSX.Element {
   const timing = snapshot?.timing ?? null;
   const simErrors = snapshot?.simDiagnostics ?? [];
   const compileDiags = snapshot?.compileDiagnostics ?? [];
@@ -60,45 +52,6 @@ export function Inspector({
         </table>
       ) : (
         <p className="dim small">等待仿真…</p>
-      )}
-
-      {snapshot && (
-        <>
-          <h3>仿真状态</h3>
-          <p className="small">
-            {snapshot.nodeCount} 节点 · {snapshot.elemCount} 元件 · {snapshot.evaluations} 次求值 ·
-            最后事件 {snapshot.timePs} ps
-          </p>
-        </>
-      )}
-
-      {selectionLabel && (
-        <>
-          <h3>选中</h3>
-          <p className="small">{selectionLabel}</p>
-          {pinTable.length > 0 && (
-            <table className="kv">
-              <tbody>
-                {pinTable.map((row) => (
-                  <tr key={row.pin}>
-                    <td className="mono">{row.pin}</td>
-                    <td className="num small">{row.text}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {selectedModule && onExpandModule && (
-            <button
-              type="button"
-              className="expand-btn"
-              onClick={onExpandModule}
-              title="打开内部电路图与成本明细（双击画布上的模块也可以）"
-            >
-              展开内部电路…
-            </button>
-          )}
-        </>
       )}
 
       {timing && (
