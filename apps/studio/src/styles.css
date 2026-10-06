@@ -403,23 +403,39 @@ body,
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  /* 触屏：平移/缩放由画布自己的手势处理，别让浏览器抢走（否则单指滑动会把整页拖走、
+     双指捏合会缩放页面）；同时禁止长按选中文本与 iOS 长按弹菜单 */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .canvas-wrap canvas {
   display: block;
   cursor: crosshair;
+  touch-action: none;
 }
 
 .hint {
   position: absolute;
   left: 12px;
   bottom: 10px;
+  max-width: calc(100% - 24px);
   font-size: 11px;
+  line-height: 1.5;
   color: var(--dim);
   background: rgba(14, 19, 25, 0.82);
   padding: 4px 8px;
   border-radius: 6px;
   pointer-events: none;
+}
+
+/* 触屏手势提示（第二行）：比鼠标行再暗一点，不抢画布注意力 */
+.hint-touch {
+  margin-top: 2px;
+  font-size: 10.5px;
+  opacity: 0.85;
 }
 
 .legend {

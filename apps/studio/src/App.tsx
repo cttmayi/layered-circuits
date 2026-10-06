@@ -19,6 +19,21 @@ import type { Waveform } from '@lc/sim-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { notGateDemo } from './editor/demos';
 import {
+  INITIAL_TOUCH,
+  isDoubleTap,
+  LONG_PRESS_MS,
+  type Point,
+  type PressTarget,
+  pairOf,
+  pinchCamera,
+  pointerKindOf,
+  reduceTouch,
+  type TapRecord,
+  type TouchEffect,
+  type TouchEvent,
+  type TouchState,
+} from './editor/gesture';
+import {
   createDeviceSym,
   createSym,
   type Doc,
@@ -472,14 +487,19 @@ export function App(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  // ---- 鼠标交互 ----
-  const localPoint = (
-    event: React.MouseEvent,
-  ): { sx: number; sy: number; wx: number; wy: number } => {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  // ---- 画布交互：鼠标 + 触屏 ----
+  const worldOf = (sx: number, sy: number): { x: number; y: number } =>
+    screenToWorld(camera, size.width, size.height, sx, sy);
+
+  const localPoint = (event: {
+    clientX: number;
+    clientY: number;
+    currentTarget: Element;
+  }): { sx: number; sy: number; wx: number; wy: number } => {
+    const rect = event.currentTarget.getBoundingClientRect();
     const sx = event.clientX - rect.left;
     const sy = event.clientY - rect.top;
-    const w = screenToWorld(camera, size.width, size.height, sx, sy);
+    const w = worldOf(sx, sy);
     return { sx, sy, wx: w.x, wy: w.y };
   };
 
@@ -499,10 +519,9 @@ export function App(): React.JSX.Element {
     setSelection([created.id]);
   };
 
-  /** 双击连线 → 直接删除这根线（比「点选 + Delete」顺手）；双击模块 → 展开内部电路 */
-  const onDoubleClick = (event: React.MouseEvent): void => {
+  /** 双击语义：删除连线 / 展开模块（鼠标 dblclick、触屏双击、触屏长按松手共用同一套） */
+  const applyDoubleClick = (wx: number, wy: number): void => {
     if (placing) return;
-    const { wx, wy } = localPoint(event);
     const target = hitTest(currentScene(), wx, wy);
     if (target?.kind === 'sym') {
       const sym = findSym(doc, target.id);
@@ -517,6 +536,11 @@ export function App(): React.JSX.Element {
       setSelectedWires([]);
       setSelection([]);
     }
+  };
+
+  const onDoubleClick = (event: React.MouseEvent): void => {
+    const { wx, wy } = localPoint(event);
+    applyDoubleClick(wx, wy);
   };
 
   /** 从元件库拖拽到画布放置 */
@@ -543,22 +567,30 @@ export function App(): React.JSX.Element {
       placeAt({ kind: tag }, w.x, w.y);
   };
 
-  const onMouseDown = (event: React.MouseEvent): void => {
-    const { sx, sy, wx, wy } = localPoint(event);
-    const target = hitTest(currentScene(), wx, wy);
+  /**
+   * 「按下 / 轻点」共用的命中处理：鼠标按下与触屏轻点走同一套语义，避免两条路各写一遍后漂移。
+   * 返回 true = 这一下已被消费（调用方不要再进入平移）；false = 点在空白处。
+   * - beginDrag：鼠标按下即可拖元件；触屏轻点不拖（拖元件交给「长按后拖动」手势）
+   * - togglePort：点输入端口切 0/1；长按拖元件时关掉，免得手指一放值就跳
+   */
+  const applyPressHit = (
+    p: { sx: number; sy: number; wx: number; wy: number },
+    opts: { beginDrag: boolean; altKey: boolean; shiftKey: boolean; togglePort: boolean },
+  ): boolean => {
+    const target = hitTest(currentScene(), p.wx, p.wy);
 
     if (placing) {
-      placeAt(placing, wx, wy);
+      placeAt(placing, p.wx, p.wy);
       setPlacing(null);
-      return;
+      return true;
     }
 
     if (target?.kind === 'pin') {
       const sym = findSym(doc, target.id);
-      if (!sym) return;
+      if (!sym) return true;
       if (!pendingPin) {
         setPendingPin({ inst: target.id, pin: target.pin as string, bit: target.bit ?? 0 });
-        setPendingPoint({ x: wx, y: wy });
+        setPendingPoint({ x: p.wx, y: p.wy });
       } else {
         const from = pendingPin;
         const samePinClicked =
@@ -571,23 +603,24 @@ export function App(): React.JSX.Element {
         setPendingPin(null);
         setPendingPoint(null);
       }
-      return;
+      return true;
     }
 
     if (target?.kind === 'sym') {
       const sym = findSym(doc, target.id);
-      if (sym?.kind === 'input') {
-        if (event.altKey) stepInput(sym.id, -1);
+      if (sym?.kind === 'input' && opts.togglePort) {
+        if (opts.altKey) stepInput(sym.id, -1);
         else toggleInput(sym.id);
       }
-      if (!event.shiftKey && !selection.includes(target.id)) setSelection([target.id]);
-      else if (event.shiftKey)
+      if (!opts.shiftKey && !selection.includes(target.id)) setSelection([target.id]);
+      else if (opts.shiftKey)
         setSelection((prev) =>
           prev.includes(target.id) ? prev.filter((id) => id !== target.id) : [...prev, target.id],
         );
       setSelectedWires([]);
+      if (!opts.beginDrag) return true;
       const startSyms = new Map<string, { x: number; y: number }>();
-      const ids = event.shiftKey
+      const ids = opts.shiftKey
         ? [...selection, target.id]
         : selection.includes(target.id)
           ? selection
@@ -598,78 +631,55 @@ export function App(): React.JSX.Element {
       }
       dragRef.current = {
         mode: 'move',
-        originX: sx,
-        originY: sy,
+        originX: p.sx,
+        originY: p.sy,
         cameraX: camera.x,
         cameraY: camera.y,
         moved: false,
         startSyms,
       };
-      return;
+      return true;
     }
 
     if (target?.kind === 'wire') {
       setSelectedWires([target.id]);
       setSelection([]);
-      return;
+      return true;
     }
 
-    setSelection([]);
-    setSelectedWires([]);
-    setPendingPin(null);
-    dragRef.current = {
-      mode: 'pan',
-      originX: sx,
-      originY: sy,
-      cameraX: camera.x,
-      cameraY: camera.y,
-      moved: false,
-      startSyms: new Map(),
-    };
+    return false;
   };
 
-  const onMouseMove = (event: React.MouseEvent): void => {
-    const { sx, sy, wx, wy } = localPoint(event);
+  /** 平移：鼠标拖动、触屏单指拖动、双指一起拖都走这里（相机算法只有这一份） */
+  const applyPan = (sx: number, sy: number): void => {
     const drag = dragRef.current;
-    if (drag.mode === 'pan') {
-      if (Math.abs(sx - drag.originX) + Math.abs(sy - drag.originY) > 3) drag.moved = true;
-      setCamera((prev) => ({
-        ...prev,
-        x: drag.cameraX - (sx - drag.originX) / prev.scale,
-        y: drag.cameraY - (sy - drag.originY) / prev.scale,
-      }));
-      return;
-    }
-    if (drag.mode === 'move') {
-      drag.moved = true;
-      const dx = (sx - drag.originX) / camera.scale;
-      const dy = (sy - drag.originY) / camera.scale;
-      setDoc((prev) => ({
-        ...prev,
-        syms: prev.syms.map((s) => {
-          const start = drag.startSyms.get(s.id);
-          return start ? { ...s, x: snap(start.x + dx), y: snap(start.y + dy) } : s;
-        }),
-      }));
-      return;
-    }
-    setHover(hitTest(currentScene(), wx, wy));
-    if (pendingPin) setPendingPoint({ x: wx, y: wy });
+    if (Math.abs(sx - drag.originX) + Math.abs(sy - drag.originY) > 3) drag.moved = true;
+    setCamera((prev) => ({
+      ...prev,
+      x: drag.cameraX - (sx - drag.originX) / prev.scale,
+      y: drag.cameraY - (sy - drag.originY) / prev.scale,
+    }));
   };
 
-  const onMouseUp = (): void => {
-    // 松开按住的按钮 → 归 0（按住 = 1、松开 = 0）
-    const held = heldButtonRef.current;
-    if (held) {
-      heldButtonRef.current = null;
-      setDoc((prev) => ({
-        ...prev,
-        syms: prev.syms.map((s) => (s.id === held ? { ...s, value: 0 as InputDrive } : s)),
-      }));
-    }
+  /** 拖动选中元件：鼠标按下即拖、触屏长按后拖（算法只有这一份） */
+  const applySymMove = (sx: number, sy: number): void => {
+    const drag = dragRef.current;
+    drag.moved = true;
+    const dx = (sx - drag.originX) / camera.scale;
+    const dy = (sy - drag.originY) / camera.scale;
+    setDoc((prev) => ({
+      ...prev,
+      syms: prev.syms.map((s) => {
+        const start = drag.startSyms.get(s.id);
+        return start ? { ...s, x: snap(start.x + dx), y: snap(start.y + dy) } : s;
+      }),
+    }));
+  };
+
+  /** 拖动收尾：把「拖动前」的状态压入撤销栈（鼠标松手 / 触屏抬手 / 手势被打断共用） */
+  const finishSymMove = (): void => {
     const drag = dragRef.current;
     if (drag.mode === 'move' && drag.moved) {
-      // 拖动结束后把「拖动前」的状态压入撤销栈
       setUndoStack((stack) => [
         ...stack.slice(-49),
         {
@@ -685,6 +695,70 @@ export function App(): React.JSX.Element {
     dragRef.current = { ...drag, mode: 'none', moved: false, startSyms: new Map() };
   };
 
+  /** 瞬时按钮端口松手归 0（鼠标松手 / 触屏手指抬起共用） */
+  const releaseHeldButton = (): void => {
+    const held = heldButtonRef.current;
+    if (!held) return;
+    heldButtonRef.current = null;
+    setDoc((prev) => ({
+      ...prev,
+      syms: prev.syms.map((s) => (s.id === held ? { ...s, value: 0 as InputDrive } : s)),
+    }));
+  };
+
+  /** 点在空白处：清掉选中与半截连线（鼠标按下空白处、触屏轻点空白处共用） */
+  const clearPressSelection = (): void => {
+    setSelection([]);
+    setSelectedWires([]);
+    setPendingPin(null);
+  };
+
+  const onMouseDown = (event: React.MouseEvent): void => {
+    const p = localPoint(event);
+    // 鼠标：按下即拖元件（与触屏改造前逐字一致）
+    if (
+      applyPressHit(p, {
+        beginDrag: true,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        togglePort: true,
+      })
+    )
+      return;
+
+    clearPressSelection();
+    dragRef.current = {
+      mode: 'pan',
+      originX: p.sx,
+      originY: p.sy,
+      cameraX: camera.x,
+      cameraY: camera.y,
+      moved: false,
+      startSyms: new Map(),
+    };
+  };
+
+  const onMouseMove = (event: React.MouseEvent): void => {
+    const { sx, sy, wx, wy } = localPoint(event);
+    const drag = dragRef.current;
+    if (drag.mode === 'pan') {
+      applyPan(sx, sy);
+      return;
+    }
+    if (drag.mode === 'move') {
+      applySymMove(sx, sy);
+      return;
+    }
+    setHover(hitTest(currentScene(), wx, wy));
+    if (pendingPin) setPendingPoint({ x: wx, y: wy });
+  };
+
+  const onMouseUp = (): void => {
+    // 松开按住的按钮 → 归 0（按住 = 1、松开 = 0）
+    releaseHeldButton();
+    finishSymMove();
+  };
+
   const onWheel = (event: React.WheelEvent): void => {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const sx = event.clientX - rect.left;
@@ -694,6 +768,232 @@ export function App(): React.JSX.Element {
     const scale = Math.min(2.6, Math.max(0.35, camera.scale * factor));
     const after = screenToWorld({ ...camera, scale }, size.width, size.height, sx, sy);
     setCamera({ x: camera.x + (before.x - after.x), y: camera.y + (before.y - after.y), scale });
+  };
+
+  // ---- 触屏手势：pointerdown/move/up/cancel → 状态机（editor/gesture.ts）→ 动作 ----
+  // 鼠标不经过这里（pointerdown 里 pointerType === 'mouse' 直接返回），老路径一行不动。
+  /** 手势状态（纯状态机持有一份，App 只负责执行效果） */
+  const touchRef = useRef<TouchState>(INITIAL_TOUCH);
+  /** 当前按着的手指：指针 id → 画布内坐标（双指缩放要两根一起看） */
+  const pointersRef = useRef(new Map<number, Point>());
+  /** 长按计时器（按住不动 420ms → 长按就绪） */
+  const longPressTimerRef = useRef<number | null>(null);
+  /** 上一次轻点（触屏双击判定用；鼠标走原生 dblclick） */
+  const lastTapRef = useRef<TapRecord | null>(null);
+  /** 长按就绪：底部提示换成「拖动＝移动元件 / 松手＝双击」，给手指一点反馈 */
+  const [longPressReady, setLongPressReady] = useState(false);
+
+  const clearLongPressTimer = (): void => {
+    if (longPressTimerRef.current === null) return;
+    window.clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  };
+
+  /** 指针事件 → 画布内屏幕坐标（与鼠标路径同源：都用画布 rect） */
+  const pointerScreen = (event: { clientX: number; clientY: number }): Point => {
+    const canvas = canvasRef.current;
+    const rect = canvas ? canvas.getBoundingClientRect() : { left: 0, top: 0 };
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  };
+
+  const pressTargetOf = (hit: HoverTarget | null): PressTarget => {
+    if (!hit) return 'none';
+    return hit.kind === 'pin' ? 'pin' : hit.kind === 'sym' ? 'sym' : 'wire';
+  };
+
+  /** 长按就绪后拖动命中的元件：选中并开始拖（不切输入端口的 0/1，免得一拖值就跳） */
+  const beginTouchSymDrag = (point: Point): void => {
+    const w = worldOf(point.x, point.y);
+    applyPressHit(
+      { sx: point.x, sy: point.y, wx: w.x, wy: w.y },
+      { beginDrag: true, altKey: false, shiftKey: false, togglePort: false },
+    );
+  };
+
+  /** 触屏轻点 → 单击语义；两次轻点在同一点 → 双击语义（删除连线 / 展开模块） */
+  const handleTouchTap = (point: Point): void => {
+    const w = worldOf(point.x, point.y);
+    const target = hitTest(currentScene(), w.x, w.y);
+    const now = Date.now();
+    const onSymOrWire = target?.kind === 'sym' || target?.kind === 'wire';
+    if (onSymOrWire && isDoubleTap(lastTapRef.current, { time: now, x: point.x, y: point.y })) {
+      lastTapRef.current = null; // 双击用完即弃，免得三连击又触发一次
+      applyDoubleClick(w.x, w.y);
+      return;
+    }
+    lastTapRef.current = { time: now, x: point.x, y: point.y };
+    // 瞬时按钮端口：按下已置 1、抬手已归 0（真的"按了一下"），这里不再重复触发
+    const sym = target?.kind === 'sym' ? findSym(doc, target.id) : null;
+    if (sym?.kind === 'input' && sym.button) return;
+    const consumed = applyPressHit(
+      { sx: point.x, sy: point.y, wx: w.x, wy: w.y },
+      { beginDrag: false, altKey: false, shiftKey: false, togglePort: true },
+    );
+    // 轻点空白处 = 清选中（与鼠标按下空白处一致）；拖动平移不改选中（触屏上平移纯属导航）
+    if (!consumed) clearPressSelection();
+  };
+
+  const applyTouchEffects = (effects: TouchEffect[]): void => {
+    for (const effect of effects) {
+      switch (effect.type) {
+        case 'delegate-mouse':
+          break; // 鼠标：交给原生鼠标事件，什么都不做
+        case 'arm-longpress':
+          longPressTimerRef.current = window.setTimeout(() => {
+            dispatchTouch({ type: 'longpress' });
+          }, LONG_PRESS_MS);
+          break;
+        case 'longpress-ready':
+          setLongPressReady(true);
+          break;
+        case 'cancel-longpress':
+          break; // 计时器已在 dispatchTouch 入口清掉
+        case 'begin-pan':
+          dragRef.current = {
+            mode: 'pan',
+            originX: effect.point.x,
+            originY: effect.point.y,
+            cameraX: camera.x,
+            cameraY: camera.y,
+            moved: false,
+            startSyms: new Map(),
+          };
+          break;
+        case 'pan':
+          applyPan(effect.point.x, effect.point.y);
+          break;
+        case 'begin-move':
+          // 用按下点起算：长按期间手指没怎么动，命中对象与按下时一致
+          beginTouchSymDrag(touchRef.current.origin);
+          break;
+        case 'move-sym':
+          applySymMove(effect.point.x, effect.point.y);
+          break;
+        case 'end-move':
+          finishSymMove();
+          break;
+        case 'tap':
+          handleTouchTap(effect.point);
+          break;
+        case 'double-click': {
+          const w = worldOf(effect.point.x, effect.point.y);
+          applyDoubleClick(w.x, w.y);
+          break;
+        }
+        case 'pinch':
+          // 函数式更新：手指快速划动时多次 move 能连续叠加，不会丢帧跳变
+          setCamera((prev) =>
+            pinchCamera(
+              prev,
+              size.width,
+              size.height,
+              { a: effect.fromA, b: effect.fromB },
+              { a: effect.toA, b: effect.toB },
+            ),
+          );
+          break;
+      }
+    }
+  };
+
+  /** 事件 → 状态机 → 效果。非长按事件先撤掉长按计时（手指一动/一抬就不再算长按） */
+  const dispatchTouch = (event: TouchEvent): void => {
+    if (event.type !== 'longpress') {
+      clearLongPressTimer();
+      setLongPressReady(false);
+    }
+    const { state, effects } = reduceTouch(touchRef.current, event);
+    touchRef.current = state;
+    applyTouchEffects(effects);
+  };
+
+  const capturePointer = (pointerId: number, on: boolean): void => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const fn = on ? canvas.setPointerCapture : canvas.releasePointerCapture;
+    if (typeof fn !== 'function') return; // 测试环境（jsdom）没有指针捕获
+    try {
+      fn.call(canvas, pointerId);
+    } catch {
+      /* 指针已经抬起，忽略 */
+    }
+  };
+
+  const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>): void => {
+    const kind = pointerKindOf(event.pointerType);
+    if (kind === 'mouse') return; // 鼠标继续走 onMouseDown/Move/Up，行为与改造前逐字一致
+
+    const point = pointerScreen(event);
+    // 把指针钉在画布上：手指滑出画布也能继续收到 move/up
+    capturePointer(event.pointerId, true);
+    pointersRef.current.set(event.pointerId, point);
+    const w = worldOf(point.x, point.y);
+
+    // 放置模式：按下即放置（与鼠标一致），这一下不算手势
+    if (placing) {
+      placeAt(placing, w.x, w.y);
+      setPlacing(null);
+      pointersRef.current.delete(event.pointerId);
+      return;
+    }
+
+    const hit = hitTest(currentScene(), w.x, w.y);
+    // 瞬时按钮端口：按住 = 1、抬手 = 0（触屏也要真按一会儿，仿真才吃得到上升沿）
+    if (hit?.kind === 'sym') {
+      const sym = findSym(doc, hit.id);
+      if (sym?.kind === 'input' && sym.button) {
+        heldButtonRef.current = sym.id;
+        setDoc((prev) => ({
+          ...prev,
+          syms: prev.syms.map((s) => (s.id === sym.id ? { ...s, value: 1 as InputDrive } : s)),
+        }));
+      }
+    }
+
+    dispatchTouch({
+      type: 'down',
+      kind,
+      point,
+      target: pressTargetOf(hit),
+      pair: pairOf(pointersRef.current),
+    });
+  };
+
+  const onPointerMove = (event: React.PointerEvent<HTMLCanvasElement>): void => {
+    if (pointerKindOf(event.pointerType) === 'mouse') return;
+    if (!pointersRef.current.has(event.pointerId)) return; // 没按着（触控笔悬停等）不动画布
+    const point = pointerScreen(event);
+    pointersRef.current.set(event.pointerId, point);
+    dispatchTouch({ type: 'move', point, pair: pairOf(pointersRef.current) });
+  };
+
+  const firstPointerPoint = (): Point | null => {
+    for (const point of pointersRef.current.values()) return point;
+    return null;
+  };
+
+  const onPointerUp = (event: React.PointerEvent<HTMLCanvasElement>): void => {
+    if (pointerKindOf(event.pointerType) === 'mouse') return;
+    if (!pointersRef.current.has(event.pointerId)) return;
+    const point = pointerScreen(event);
+    pointersRef.current.delete(event.pointerId);
+    releaseHeldButton(); // 瞬时按钮端口：手指一抬就归 0
+    dispatchTouch({
+      type: 'up',
+      point,
+      remaining: firstPointerPoint(),
+      pair: pairOf(pointersRef.current),
+    });
+    capturePointer(event.pointerId, false);
+  };
+
+  const onPointerCancel = (event: React.PointerEvent<HTMLCanvasElement>): void => {
+    if (pointerKindOf(event.pointerType) === 'mouse') return;
+    if (!pointersRef.current.has(event.pointerId)) return;
+    pointersRef.current.clear(); // 系统抢走指针（来电/切后台）：这一轮手势整体作废
+    releaseHeldButton();
+    dispatchTouch({ type: 'cancel' });
+    capturePointer(event.pointerId, false);
   };
 
   // ---- 编辑动作 ----
@@ -1470,14 +1770,26 @@ export function App(): React.JSX.Element {
             onMouseUp={onMouseUp}
             onMouseLeave={onMouseUp}
             onWheel={onWheel}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerCancel}
             onContextMenu={(e) => e.preventDefault()}
           />
           <div className="hint">
-            {placing
-              ? '点击画布放置元件（Esc 取消）'
-              : pendingPin
-                ? '再点一个引脚完成连线（Esc 取消）'
-                : '拖动空白处平移 · 滚轮缩放 · 点两个引脚连线 · 双击连线删除 · 双击模块展开内部电路 · 点输入符号切换 0/1（Alt 循环 X/Z）'}
+            <div>
+              {placing
+                ? '点击/轻点画布放置元件（Esc 取消）'
+                : pendingPin
+                  ? '再点/再轻点一个引脚完成连线（Esc 或再轻点同一个引脚取消）'
+                  : '拖动空白处平移 · 滚轮缩放 · 点两个引脚连线 · 双击连线删除 · 双击模块展开内部电路 · 点输入符号切换 0/1（Alt 循环 X/Z）'}
+            </div>
+            {/* 触屏手势说明：手机上没有滚轮/右键/键盘，手势与鼠标一一对应（详见 editor/gesture.ts） */}
+            <div className="hint-touch">
+              {longPressReady
+                ? '长按已就绪：拖动 ＝ 移动元件 · 原地松手 ＝ 删除连线 / 展开模块'
+                : '触屏：单指拖动 ＝ 平移 · 双指捏合 ＝ 缩放（两指一起拖也是平移）· 轻点引脚 ＝ 选中/连线 · 双击或长按后松手 ＝ 删除连线/展开模块 · 长按后拖动 ＝ 移动元件'}
+            </div>
           </div>
           {classroomOpen && currentLevel?.classroom && (
             <ClassroomModal
