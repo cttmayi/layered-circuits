@@ -2456,3 +2456,79 @@ body,
     padding: 16px;
   }
 }
+
+/* 底部抽屉向上滑出的入场动画（只在竖屏用；桌面/横屏读不到） */
+@keyframes lc-sheet-up {
+  from {
+    transform: translateY(14%);
+    opacity: 0.55;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* ==========================================================================
+   竖屏专项（H ≥ W）：「窄屏 且 竖屏」两件事一起才生效
+   --------------------------------------------------------------------------
+   横屏手机（844×390）与桌面宽屏都不匹配这条查询 —— 它们的地图 6 列 + 横向滚动、
+   元件库在左侧，全部逐字不变（靠 test/mobile-layout.test.tsx 的样式表契约 + 真机
+   headless Chrome 的新旧构建计算样式指纹对比守住）。
+   只做两件事：
+     ① 关卡地图：靠**减少列数**（6 → 3，几何在 WorldMap.tsx 里算）适配屏宽，
+        不再横向滚动；
+     ② 元件库：从左侧栏改成底部抽屉（向上滑出），手柄跟着挪到底部。
+   ========================================================================== */
+@media (max-width: 900px) and (orientation: portrait) {
+  /* ---- ① 地图：整幅放进屏宽，去掉窄屏块里那条给横屏手机横滑用的 720px 下限 ---- */
+  .map-stage {
+    overflow-x: hidden; /* 竖屏不许横滑 */
+    overflow-y: auto;
+  }
+
+  .map-canvas {
+    min-width: 0; /* 3 列 + 480 单位画布宽：缩放 0.75~0.9，96px 节点放得下 */
+  }
+
+  /* ---- ② 元件库：底部抽屉（向上滑出）----
+     高度取 min(46%, 380px)：46% 是**画布区**（.body）高度的比例，不是整个视口，
+     所以横屏/小屏都不会把画布吃光 —— 390×844 上抽屉 362px、画布 787px，还剩 425px
+     （54%）可以平移/缩放；360×640 上抽屉 268px、剩 315px（54%）。 */
+  .palette {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: min(46%, 380px);
+    border-right: none;
+    border-top: 1px solid var(--line);
+    border-radius: 14px 14px 0 0;
+    /* 顶部 56px 留给浮在抽屉左上角的手柄（和左右抽屉同一套做法） */
+    padding: 56px 12px calc(12px + env(safe-area-inset-bottom));
+    box-shadow: 0 -16px 32px rgba(0, 0, 0, 0.5);
+    animation: lc-sheet-up 0.18s ease;
+  }
+
+  /* 开合手柄挪到底部：收起时浮在画布左下角；展开时贴在抽屉左上角（点它收起） */
+  .edge-strip.left {
+    top: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+  }
+
+  .edge-strip.left:not(.closed) {
+    /* 抽屉高度 - 52px → 手柄顶边落在抽屉顶沿下方 8px（抽屉高度是同一个 min() 表达式） */
+    bottom: calc(min(46%, 380px) - 52px + env(safe-area-inset-bottom));
+  }
+
+  /* 画布底部那行触屏提示让开左下角的手柄，别把手柄压住 */
+  .hint {
+    bottom: calc(58px + env(safe-area-inset-bottom));
+  }
+
+  .toast {
+    bottom: calc(116px + env(safe-area-inset-bottom));
+  }
+}

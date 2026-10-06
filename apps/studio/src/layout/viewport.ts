@@ -18,31 +18,61 @@ export const NARROW_BREAKPOINT_PX = 900;
 export const NARROW_MEDIA_QUERY = `(max-width: ${NARROW_BREAKPOINT_PX}px)`;
 
 /**
+ * 竖屏窄屏（手机竖屏）媒体查询串：既 ≤ 断点、又是「高 ≥ 宽」的竖屏。
+ * 横屏手机（844×390）与桌面宽屏都不匹配 —— 它们的地图/元件库布局必须逐字不变。
+ */
+export const PORTRAIT_MEDIA_QUERY = `${NARROW_MEDIA_QUERY} and (orientation: portrait)`;
+
+/** 媒体查询求值：优先 matchMedia；jsdom（没有 matchMedia）用 fallback 兜底 */
+function queryMatches(query: string, fallback: () => boolean): boolean {
+  if (typeof window === 'undefined') return false;
+  if (typeof window.matchMedia === 'function') return window.matchMedia(query).matches;
+  return fallback();
+}
+
+/**
+ * 订阅一条媒体查询：命中状态变化（旋屏、拖窗口）时重新渲染。
+ * `initial` 是惰性初始值，只在首帧求值一次，且不进 effect 依赖（没 matchMedia 时不再更新）。
+ */
+function useMediaQuery(query: string, initial: () => boolean): boolean {
+  const [on, setOn] = useState(initial);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const mql = window.matchMedia(query);
+    setOn(mql.matches);
+    const onChange = (event: MediaQueryListEvent): void => setOn(event.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, [query]);
+  return on;
+}
+
+/**
  * 当前视口是不是窄屏。
  * jsdom（测试环境）没有 window.matchMedia，退回用 window.innerWidth 判断：
  * jsdom 的窗口宽是 1024 > 断点 → 一律按桌面处理，现有桌面用例的 DOM 结构不受影响。
  */
 export function isNarrowViewport(): boolean {
-  if (typeof window === 'undefined') return false;
-  if (typeof window.matchMedia === 'function') {
-    return window.matchMedia(NARROW_MEDIA_QUERY).matches;
-  }
-  return window.innerWidth <= NARROW_BREAKPOINT_PX;
+  return queryMatches(NARROW_MEDIA_QUERY, () => window.innerWidth <= NARROW_BREAKPOINT_PX);
 }
 
 /**
- * 订阅视口宽度：窄屏 ⇄ 桌面（旋屏、拖窗口）时重新渲染，让布局跟着断点走。
- * 监听器不可用时退化成「只在挂载时判定一次」，不会抛错。
+ * 当前视口是不是窄屏**且竖屏**（高 ≥ 宽）。
+ * jsdom 兜底路径同理：没有 matchMedia 时用 innerWidth/innerHeight 算。
  */
+export function isPortraitNarrowViewport(): boolean {
+  return queryMatches(
+    PORTRAIT_MEDIA_QUERY,
+    () => window.innerWidth <= NARROW_BREAKPOINT_PX && window.innerHeight >= window.innerWidth,
+  );
+}
+
+/** 订阅「窄屏」：窄屏 ⇄ 桌面（旋屏、拖窗口）时重新渲染，让布局跟着断点走 */
 export function useNarrowScreen(): boolean {
-  const [narrow, setNarrow] = useState<boolean>(isNarrowViewport);
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return;
-    const query = window.matchMedia(NARROW_MEDIA_QUERY);
-    setNarrow(query.matches);
-    const onChange = (event: MediaQueryListEvent): void => setNarrow(event.matches);
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
-  }, []);
-  return narrow;
+  return useMediaQuery(NARROW_MEDIA_QUERY, isNarrowViewport);
+}
+
+/** 订阅「窄屏且竖屏」：竖屏 → 横屏（旋屏）时重新渲染（地图列数、元件库位置跟着变） */
+export function usePortraitNarrow(): boolean {
+  return useMediaQuery(PORTRAIT_MEDIA_QUERY, isPortraitNarrowViewport);
 }

@@ -1,42 +1,55 @@
 // @vitest-environment jsdom
 /**
- * 手机端（窄屏）响应式布局的**行为与样式表契约**：
+ * 手机端（窄屏 / 竖屏）响应式布局的**行为与样式表契约**：
  *
  *  1. 窄屏行为：命中「窄屏」时进工作台左右面板默认收起（画布独占整个 body），
  *     两颗 44px 开合手柄能把抽屉拉出来/收回去，可访问名与原来完全一致
  *     （panels-collapse.test.tsx 依赖「收起元件库」「收起右侧面板」这批名字）。
- *  2. 桌面防回归：视口 ≥ 断点时 DOM 结构与基线逐字一致（面板默认展开、顺序不变）。
- *  3. 样式表契约：所有媒体查询都不得命中桌面宽屏；窄屏断点值与 src/layout/viewport.ts
- *     的 NARROW_BREAKPOINT_PX 必须一致；窄屏块里必须真有关键规则（覆盖抽屉 / 顶栏横向滚动 /
- *     44px 触屏目标）；基础块里的桌面关键声明原样还在。
+ *  2. 竖屏专项：关卡地图靠**减少列数**（6 → 3）适配屏宽、不再横向滚动；元件库改**底部抽屉**。
+ *     这两条只写在 `(max-width: 900px) and (orientation: portrait)` 里 —— 横屏手机与桌面读不到。
+ *  3. 桌面 / 横屏防回归：视口 ≥ 断点或横屏时 DOM 结构与基线逐字一致（面板默认展开、6 列地图）。
+ *  4. 样式表契约：所有媒体查询都必须带「宽 ≤ 断点」的上限（否则竖屏规则会漏到桌面竖屏窗口）；
+ *     断点值与 src/layout/viewport.ts 的常量一致；竖屏块必须排在窄屏块之后（层叠顺序）。
  *
  * ⚠️ 老实说清楚：jsdom **不做真实布局**（没有排版引擎，宽度恒为 0，也不解析 @media）。
  * 所以这里量到的是「DOM 结构 + 样式表文本」，不是真实像素；真实视口尺寸下的
- * 像素/滚动/溢出由 headless Chrome 实测（提交信息里给了做法与数字）。
+ * 像素/滚动/重叠由 headless Chrome 实测（提交信息里给了做法与数字）。
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { NARROW_BREAKPOINT_PX, NARROW_MEDIA_QUERY } from '../src/layout/viewport';
+import {
+  NARROW_BREAKPOINT_PX,
+  NARROW_MEDIA_QUERY,
+  PORTRAIT_MEDIA_QUERY,
+} from '../src/layout/viewport';
 import { renderApp, startJob } from './helpers';
 
 // ---------- 视口模拟 ----------
 const realMatchMedia = window.matchMedia;
 const realInnerWidth = window.innerWidth;
+const realInnerHeight = window.innerHeight;
 
-/** 模拟视口宽度：jsdom 没实现 matchMedia，这里按 max-width 求值；innerWidth 一起改（兜底路径） */
-function setViewportWidth(width: number): void {
-  Object.defineProperty(window, 'innerWidth', {
-    configurable: true,
-    writable: true,
-    value: width,
-  });
+/**
+ * 模拟视口尺寸：jsdom 没实现 matchMedia，这里按 max-width / orientation 求值；
+ * innerWidth/innerHeight 一起改（走「没有 matchMedia」的兜底路径时也一致）。
+ */
+function setViewport(width: number, height: number): void {
+  for (const [key, value] of [
+    ['innerWidth', width],
+    ['innerHeight', height],
+  ] as const) {
+    Object.defineProperty(window, key, { configurable: true, writable: true, value });
+  }
   window.matchMedia = ((query: string): MediaQueryList => {
-    const matched = /\(max-width:\s*(\d+)px\)/.exec(query);
-    const matches = matched ? width <= Number(matched[1]) : false;
+    const cap = /\(max-width:\s*(\d+)px\)/.exec(query);
+    const narrow = cap ? width <= Number(cap[1]) : false;
+    // 没有 orientation 条件的查询不受方向影响；有的按「高 ≥ 宽 = 竖屏」求值
+    const wantsPortrait = /orientation:\s*portrait/.test(query);
+    const portrait = wantsPortrait ? height >= width : true;
     return {
-      matches,
+      matches: narrow && portrait,
       media: query,
       onchange: null,
       addEventListener: () => {},
@@ -55,6 +68,11 @@ afterEach(() => {
     writable: true,
     value: realInnerWidth,
   });
+  Object.defineProperty(window, 'innerHeight', {
+    configurable: true,
+    writable: true,
+    value: realInnerHeight,
+  });
 });
 
 beforeEach(() => {
@@ -70,11 +88,11 @@ function bodyChildren(): string[] {
 // ---------- 视口行为 ----------
 describe('窄屏 = 覆盖抽屉：进工作台先把画布让出来', () => {
   it.each([
-    ['390×844（手机竖屏）', 390],
-    ['844×390（横屏手机，高度很矮）', 844],
-    ['768×1024（竖屏平板）', 768],
-  ])('视口 %s：左右面板默认收起，画布是 body 里唯一的布局子元素', (_label, w) => {
-    setViewportWidth(w);
+    ['390×844（手机竖屏）', 390, 844],
+    ['844×390（横屏手机，高度很矮）', 844, 390],
+    ['768×1024（竖屏平板）', 768, 1024],
+  ])('视口 %s：左右面板默认收起，画布是 body 里唯一的布局子元素', (_label, w, h) => {
+    setViewport(w, h);
     renderApp();
     startJob('非门');
 
@@ -93,11 +111,11 @@ describe('窄屏 = 覆盖抽屉：进工作台先把画布让出来', () => {
   });
 
   it('窄屏：两颗手柄都能把抽屉拉出来、再收回去', async () => {
-    setViewportWidth(390);
+    setViewport(390, 844);
     renderApp();
     startJob('非门');
 
-    // 左侧：拉出元件库 → 画布上方多一层抽屉
+    // 左侧：拉出元件库 → 画布之上多一层抽屉（竖屏时它是底部抽屉，位置由 CSS 决定）
     fireEvent.click(screen.getByRole('button', { name: '展开元件库' }));
     expect(screen.getByText('三极管 NPN')).toBeTruthy();
     expect(document.querySelector('aside.palette')).toBeTruthy();
@@ -112,7 +130,7 @@ describe('窄屏 = 覆盖抽屉：进工作台先把画布让出来', () => {
     fireEvent.click(screen.getByRole('button', { name: '收起元件库' }));
     expect(screen.queryByText('三极管 NPN')).toBeNull();
 
-    // 右侧：拉出验收/属性抽屉
+    // 右侧：拉出验收/属性抽屉（右侧抽屉的行为：竖屏与横屏一致，仍是右侧覆盖抽屉）
     fireEvent.click(screen.getByRole('button', { name: '展开右侧面板' }));
     expect(document.querySelector('.side')).toBeTruthy();
     await waitFor(() => expect(screen.getAllByText('材料费').length).toBeGreaterThanOrEqual(1));
@@ -122,13 +140,59 @@ describe('窄屏 = 覆盖抽屉：进工作台先把画布让出来', () => {
   });
 });
 
+// ---------- 竖屏专项：地图减少列数 + 元件库挪到底部 ----------
+/** 地图前 6 个节点的内联 left 百分比去重 → 就是「每行列数」（两行的列位置相同） */
+function mapColumnsOfFirstRows(): number {
+  const nodes = [...document.querySelectorAll('.map-node-btn')];
+  const lefts = nodes.slice(0, 6).map((el) => (el as HTMLElement).style.left);
+  expect(lefts.length).toBe(6); // 至少两行
+  return new Set(lefts).size;
+}
+
+describe('竖屏：关卡地图减少列数（6 → 3），不再横向滚动', () => {
+  it.each([
+    ['390×844 竖屏', 390, 844, 3, 480],
+    ['360×640 竖屏', 360, 640, 3, 480],
+    ['430×932 竖屏', 430, 932, 3, 480],
+  ])('%s：每行 3 列、画布宽 480（viewBox）', (_label, w, h, cols, viewW) => {
+    setViewport(w, h);
+    renderApp();
+    fireEvent.click(screen.getByText('关卡模式'));
+
+    const svg = document.querySelector('.map-svg') as SVGElement;
+    expect(svg.getAttribute('viewBox')).toMatch(new RegExp(`^0 0 ${viewW} \\d+$`));
+    // 前 6 个节点跨两行：去重后的 x 位置个数 = 每行列数
+    expect(mapColumnsOfFirstRows()).toBe(cols);
+    // 相邻两行共用同一批列位置（蛇形折回），所以第二行不应引入新的 x
+    const lefts = [...document.querySelectorAll('.map-node-btn')]
+      .slice(0, 6)
+      .map((el) => (el as HTMLElement).style.left);
+    expect(new Set(lefts.slice(3)).size).toBe(cols);
+    expect([...new Set(lefts.slice(3))].sort()).toEqual([...new Set(lefts.slice(0, 3))].sort());
+  });
+
+  it.each([
+    ['844×390（横屏手机）', 844, 390, 6],
+    ['1280×800（桌面）', 1280, 800, 6],
+    ['1024×768（横屏平板）', 1024, 768, 6],
+  ])('%s：地图仍是 6 列 / 画布宽 960（逐字不变）', (_label, w, h, cols) => {
+    setViewport(w, h);
+    renderApp();
+    fireEvent.click(screen.getByText('关卡模式'));
+
+    const svg = document.querySelector('.map-svg') as SVGElement;
+    expect(svg.getAttribute('viewBox')).toMatch(/^0 0 960 \d+$/);
+    expect(mapColumnsOfFirstRows()).toBe(cols);
+  });
+});
+
 // ---------- 桌面防回归 ----------
 describe('桌面宽屏：结构与基线逐字一致', () => {
   it.each([
-    ['1024×768（横屏平板，断点之上）', 1024],
-    ['1440×900（桌面）', 1440],
-  ])('视口 %s：面板默认展开、顺序不变、开合按钮是「收起」语义', (_label, w) => {
-    setViewportWidth(w);
+    ['1024×768（横屏平板，断点之上）', 1024, 768],
+    ['1440×900（桌面）', 1440, 900],
+  ])('视口 %s：面板默认展开、顺序不变、开合按钮是「收起」语义', (_label, w, h) => {
+    setViewport(w, h);
     renderApp();
     startJob('非门');
 
@@ -146,7 +210,7 @@ describe('桌面宽屏：结构与基线逐字一致', () => {
   });
 
   it('视口 1024（断点之上）：窄屏那次自动收起不会误触发', () => {
-    setViewportWidth(1024);
+    setViewport(1024, 768);
     renderApp();
     startJob('非门');
     // 面板开合偏好没有被静默写成「收起」
@@ -199,6 +263,8 @@ function parseCss(source: string): CssParts {
 const CSS_SOURCE = readFileSync(resolve(process.cwd(), 'apps/studio/src/styles.css'), 'utf8');
 const { base: BASE_CSS, media: MEDIA_CSS } = parseCss(CSS_SOURCE);
 const NARROW_BLOCK = MEDIA_CSS.find((block) => block.query === NARROW_MEDIA_QUERY)?.body ?? '';
+const PORTRAIT_INDEX = MEDIA_CSS.findIndex((block) => block.query === PORTRAIT_MEDIA_QUERY);
+const PORTRAIT_BLOCK = PORTRAIT_INDEX >= 0 ? (MEDIA_CSS[PORTRAIT_INDEX]?.body ?? '') : '';
 
 describe('样式表契约：窄屏断点只管窄屏', () => {
   it('CSS 里没有任何会命中桌面宽屏的媒体查询，且窄屏断点与 TS 常量一致', () => {
@@ -212,6 +278,24 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
       }
     }
     expect(MEDIA_CSS.map((b) => b.query)).toContain(NARROW_MEDIA_QUERY);
+  });
+
+  it('每条媒体查询都带「宽 ≤ 断点」的上限：竖屏规则漏不到桌面竖屏窗口', () => {
+    // 只有 `(orientation: portrait)` 而没有宽度上限的查询会命中桌面竖屏窗口 → 必须禁止
+    for (const { query } of MEDIA_CSS) {
+      expect(query).toMatch(/max-width:\s*\d+px/);
+    }
+    // 没有任何 `min-width` / `orientation: landscape` 之类的「宽屏/横屏才生效」查询
+    expect(CSS_SOURCE).not.toMatch(/@media[^{]*min-width/);
+    expect(CSS_SOURCE).not.toMatch(/@media[^{]*orientation:\s*landscape/);
+  });
+
+  it('竖屏块排在窄屏块之后（层叠顺序：竖屏规则才能盖住窄屏规则）', () => {
+    expect(PORTRAIT_MEDIA_QUERY).toBe(`${NARROW_MEDIA_QUERY} and (orientation: portrait)`);
+    expect(PORTRAIT_INDEX).toBeGreaterThan(
+      MEDIA_CSS.findIndex((block) => block.query === NARROW_MEDIA_QUERY),
+    );
+    expect(PORTRAIT_BLOCK).not.toBe('');
   });
 
   it('窄屏块里真有关键规则：覆盖抽屉 / 顶栏横向滚动 / 44px 触屏目标 / 手柄文字标签', () => {
@@ -235,6 +319,28 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
     expect(rules.get('.hint-mouse')).toContain('display: none');
   });
 
+  it('竖屏块里真有关键规则：地图不横滑（靠减少列数）+ 元件库在底部', () => {
+    const rules = parseCss(PORTRAIT_BLOCK).base;
+    // ① 地图：去掉窄屏那条 720px 下限，地图区内不再横向滚动
+    expect(rules.get('.map-canvas')).toContain('min-width: 0');
+    expect(rules.get('.map-stage')).toContain('overflow-x: hidden');
+    expect(rules.get('.map-stage')).toContain('overflow-y: auto');
+    // ② 元件库：贴底、占满宽、高度按画布区比例限高（不盖光画布）
+    const palette = rules.get('.palette') ?? '';
+    expect(palette).toMatch(/top:\s*auto/);
+    expect(palette).toContain('bottom: 0');
+    expect(palette).toMatch(/right:\s*0/);
+    expect(palette).toMatch(/height:\s*min\(/);
+    expect(palette).toContain('border-top: 1px solid var(--line)');
+    // 手柄跟着挪到底部（收起时贴在画布左下角）
+    const strip = rules.get('.edge-strip.left') ?? '';
+    expect(strip).toMatch(/top:\s*auto/);
+    expect(strip).toMatch(/bottom:\s*calc\(/);
+    expect(rules.get('.edge-strip.left:not(.closed)')).toMatch(/bottom:\s*calc\(min\(/);
+    // 底部提示让开手柄
+    expect(rules.get('.hint')).toMatch(/bottom:\s*calc\(/);
+  });
+
   it('基础块（非媒体查询）里的桌面布局关键声明原样还在', () => {
     expect(BASE_CSS.get('.toolbar')).toContain('flex-wrap: wrap');
     expect(BASE_CSS.get('.body')).toContain('display: flex');
@@ -244,5 +350,8 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
     expect(BASE_CSS.get('.edge-strip')).toContain('width: 16px');
     expect(BASE_CSS.get('.edge-strip-label')).toContain('display: none');
     expect(BASE_CSS.get('.hint-mouse')).toContain('display: block');
+    // 地图的桌面默认：6 列几何由 WorldMap.tsx 决定，这里守住「基础块不设 min-width」
+    expect(BASE_CSS.get('.map-canvas')).not.toContain('min-width');
+    expect(BASE_CSS.get('.map-stage')).not.toContain('overflow-x: hidden');
   });
 });
