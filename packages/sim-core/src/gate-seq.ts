@@ -17,6 +17,7 @@ import {
   type GateLibrary,
   type GateNetlistDesign,
   makePinIndex,
+  needsSeqSpec,
   pinKey,
   readOutPorts,
 } from './gate-netlist.js';
@@ -98,7 +99,7 @@ export const stepGateNetlist = (
     if (inst.kind !== 'module') continue;
     const mod = inst.module ? library.get(inst.module) : undefined;
     if (!mod) return fail(`库里找不到模块 ${inst.module ?? '?'}`);
-    if (mod.isSequential && !mod.seq) {
+    if (needsSeqSpec(mod) && !mod.seq) {
       return fail(`时序模块【${mod.name}】没有声明时钟/数据端口（SeqSpec）`);
     }
   }
@@ -121,8 +122,10 @@ export const stepGateNetlist = (
       const mod = inst.module ? library.get(inst.module) : undefined;
       if (!mod) return fail('库里找不到模块', idx.netValues);
       const outs = mod.ports.filter((p) => p.dir === 'out');
-      if (mod.isSequential) {
-        // 时序器件：输出 = 当前状态（没记录过就是 Z，即"上电未定"）
+      if (needsSeqSpec(mod)) {
+        // 元件级时序器件（D 锁存器 / 主从 D 触发器）：输出 = 当前状态（没记录过就是 Z）
+        // 注意：身体是**模块**的时序积木（八位寄存器 / 数字输入寄存器）不走这条路 ——
+        // 它们直接递归下钻，所以内部状态、移位、保持逻辑都按电路原样算。
         outs.forEach((p) => {
           const bits = state.getPort(prefix + inst.id, p);
           for (let b = 0; b < widthOf(p); b++) {
@@ -191,7 +194,7 @@ export const stepGateNetlist = (
     if (inst.kind !== 'module') continue;
     const mod = inst.module ? library.get(inst.module) : undefined;
     const spec = mod?.seq;
-    if (!mod?.isSequential || !spec) continue;
+    if (!mod || !needsSeqSpec(mod) || !spec) continue;
     const clockNow = idx.readBit(inst.id, spec.clock, 0);
     const clockPrev = state.getClock(prefix + inst.id) ?? 'Z';
     const active = spec.mode === 'level' ? clockNow === 1 : clockPrev === 0 && clockNow === 1;

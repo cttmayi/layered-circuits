@@ -17,6 +17,7 @@ import {
   type GateSeqSpec,
   GateStateStore,
   type Logic,
+  needsSeqSpec,
   settleGateSteps,
   type TestVector,
   type VectorMismatch,
@@ -58,7 +59,7 @@ export const runGateVectors = (
     if (inst.kind !== 'module') continue;
     const mod = library.get(inst.module);
     if (!mod) return null;
-    if (mod.isSequential && !seqSpecs[mod.name]) return null;
+    if (needsSeqSpec(mod as never) && !seqSpecs[mod.name]) return null;
   }
 
   // ── 把真实库包成门级引擎要的最小接口（结构兼容，不改库）──

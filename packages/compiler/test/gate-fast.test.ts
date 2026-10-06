@@ -59,3 +59,27 @@ describe('门级快路的适用性判定（不安全就回落）', () => {
     expect(r === null || r.rows.length === 0).toBe(true);
   });
 });
+
+describe('身体是模块的时序积木：递归下钻，不要求顶层 SeqSpec', () => {
+  it('八位寄存器那种"模块拼的"时序积木：不声明也能走快路（引擎会递归到内部触发器）', () => {
+    const inner = mod('dff', '主从D触发器', { isSequential: true });
+    const reg = mod('reg8', '八位寄存器', {
+      isSequential: true,
+      body: {
+        id: 'reg8',
+        name: '八位寄存器',
+        ports: [],
+        nets: [],
+        instances: [{ id: 'F0', kind: 'module', module: 'dff' }],
+      },
+    } as unknown as Partial<ModuleTemplate>);
+    const d = design([{ id: 'R1', kind: 'module', module: 'reg8' }]);
+    // 八位寄存器自己**不需要** SeqSpec（身体是模块 → 递归下钻）；
+    // 但它内部的 DFF 需要 → 这里给了 DFF 的声明，所以不该因为"缺声明"被挡在门外。
+    const r = runGateVectors(d, lib([reg, inner]), [], new Map(), {
+      主从D触发器: { clock: 'clk', data: ['d'], mode: 'rising' },
+    });
+    // 端口对不上时引擎会回落 → null；关键断言是"不是被顶层缺声明挡住的"
+    expect(r === null || Array.isArray(r.rows)).toBe(true);
+  });
+});

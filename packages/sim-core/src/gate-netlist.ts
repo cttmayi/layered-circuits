@@ -103,6 +103,25 @@ export const gateFastPathCheck = (
 
 const widthOf = (p: { width?: number }): number => Math.max(1, p.width ?? 1);
 
+/**
+ * 这个时序模块是否**必须**由内容层声明 SeqSpec（时钟/数据端口）？
+ *
+ * 规则：只有"自己就是元件电路"的时序器件才需要 —— 因为门级引擎没法往下钻。
+ *  · D 锁存器 / 主从 D 触发器：身体是 npn/res 元件电路 → **需要** SeqSpec（当状态元件处理）；
+ *  · 八位寄存器 / 数字输入寄存器：身体是**模块**（主从D触发器 + 与门 + 非门）→ **不需要**，
+ *    直接递归下钻到门/触发器即可 —— 这比"顶层再声明一遍"更忠实，也顺带把内部的移位/保持
+ *    逻辑原样算对（数字输入寄存器的十位 = 旧个位 ∧ ¬fresh 就是这种）。
+ */
+export const needsSeqSpec = (mod: GateModuleInfo): boolean => {
+  if (mod.isSequential !== true) return false;
+  const body = mod.body;
+  const moduleOnly =
+    body !== undefined &&
+    body.instances.length > 0 &&
+    body.instances.every((i) => i.kind === 'module');
+  return !moduleOnly;
+};
+
 /** 一份设计里 pin → net 的索引（**含位**）与按位读值 */
 export interface GatePinIndex {
   pinToNet: Map<string, string>;
