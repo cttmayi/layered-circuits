@@ -1701,14 +1701,6 @@ export function App(): React.JSX.Element {
             </button>
           )}
         </div>
-        <div className="group">
-          <button type="button" onClick={() => setPanelOpen('library')} title="封装复用 / 存档">
-            组件库
-          </button>
-          <button type="button" onClick={() => setPanelOpen('wave')} title="端口波形">
-            波形
-          </button>
-        </div>
         <div className="spacer" />
         <label className="check">
           <input
