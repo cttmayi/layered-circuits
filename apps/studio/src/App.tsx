@@ -977,7 +977,8 @@ export function App(): React.JSX.Element {
     if (!pointersRef.current.has(event.pointerId)) return;
     const point = pointerScreen(event);
     pointersRef.current.delete(event.pointerId);
-    releaseHeldButton(); // 瞬时按钮端口：手指一抬就归 0
+    // 瞬时按钮端口：手指全抬起来才归 0（另一根手指还按着按钮时不能提前松手）
+    if (pointersRef.current.size === 0) releaseHeldButton();
     dispatchTouch({
       type: 'up',
       point,
