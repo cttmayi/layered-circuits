@@ -8,11 +8,17 @@
 
 import { findLevel } from '@lc/content';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDeviceSym, EMPTY_DOC, toDesign } from '../src/editor/model';
 import { docForLevel } from '../src/level/progress';
 import { FREE_STORAGE_KEY } from '../src/level/session';
+import { atWorld, stubCanvasSize, unstubCanvasSize } from './camera-probe';
 import { renderApp } from './helpers';
+
+vi.mock('../src/editor/render.ts', async (importOriginal) => {
+  const { withCameraProbe } = await import('./camera-probe');
+  return withCameraProbe(await importOriginal<typeof import('../src/editor/render.ts')>());
+});
 
 afterEach(() => {
   localStorage.clear();
@@ -81,18 +87,15 @@ describe('按钮 / 七段数码管器件', () => {
 });
 
 describe('沙盒：放置按钮器件并点击（瞬时按键自动弹回）', () => {
-  // jsdom 里容器尺寸量不到，工作台会退回 200×200；相机初始为 (340,220)、缩放 1
-  const CAMERA = { x: 340, y: 220 };
-  const SIZE = 200;
   const canvas = (): HTMLCanvasElement => document.querySelector('canvas') as HTMLCanvasElement;
-  const screenOf = (wx: number, wy: number): { clientX: number; clientY: number } => ({
-    clientX: wx - CAMERA.x + SIZE / 2,
-    clientY: wy - CAMERA.y + SIZE / 2,
-  });
+  /** 世界坐标 → client 坐标：用 App 当前相机（进关自适应后相机不是固定值了） */
+  const screenOf = atWorld;
+  afterEach(unstubCanvasSize);
 
   it('组件库放置 按钮 + 七段数码管 → 导出形态正确；按住 = 1、松开 = 0', {
     timeout: 30_000,
   }, async () => {
+    stubCanvasSize(1280, 754); // jsdom 兜底只有 200×200：给个真实画布尺寸，世界坐标才落在画布内
     renderApp();
     // 主菜单 → 自由搭建（沙盒不锁器件）
     fireEvent.click(screen.getByText('自由搭建'));

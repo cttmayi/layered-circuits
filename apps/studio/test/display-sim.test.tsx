@@ -17,7 +17,13 @@ import { App } from '../src/App';
 import { fromDesign, toDesign } from '../src/editor/model';
 import { docForLevel } from '../src/level/progress';
 import type { StudioRequestInput, StudioResponse } from '../src/sim/protocol';
+import { atWorld, stubCanvasSize } from './camera-probe';
 import { enableDebugUrl, seedTeachCleared } from './helpers';
+
+vi.mock('../src/editor/render.ts', async (importOriginal) => {
+  const { withCameraProbe } = await import('./camera-probe');
+  return withCameraProbe(await importOriginal<typeof import('../src/editor/render.ts')>());
+});
 
 /** 记录每个 simulate 请求与其（同步）响应 */
 const responses = vi.hoisted(() => [] as Array<{ req: StudioRequestInput; resp: StudioResponse }>);
@@ -64,15 +70,10 @@ function readSeg(resp: StudioResponse | undefined): number {
   return v;
 }
 
-const CAMERA = { x: 340, y: 220 };
-const SIZE = 200;
 const canvas = (): HTMLCanvasElement => document.querySelector('canvas') as HTMLCanvasElement;
+/** 世界坐标 → client 坐标：用 App 当前相机（进关自适应后相机不是固定值了） */
 function clickWorld(wx: number, wy: number): void {
-  fireEvent.mouseDown(canvas(), {
-    button: 0,
-    clientX: wx - CAMERA.x + SIZE / 2,
-    clientY: wy - CAMERA.y + SIZE / 2,
-  });
+  fireEvent.mouseDown(canvas(), { button: 0, ...atWorld(wx, wy) });
 }
 
 /** 进数码管关：清存档 → 教学关通关 → 前置关全通关 → render → 点关 */
@@ -97,6 +98,7 @@ describe('数码管关：点 bcd 输入 seg 跟随 + 重新计算', () => {
   beforeEach(() => {
     localStorage.clear();
     responses.length = 0;
+    stubCanvasSize(1280, 754); // jsdom 兜底只有 200×200：给个真实画布尺寸，世界坐标才落在画布内
   });
 
   it('一键出答案后点 bcd 0→1→2，seg 段码跟随', {

@@ -54,11 +54,13 @@ import {
 import {
   type Camera,
   drawScene,
+  footprintOf,
   type HoverTarget,
   hitTest,
   type Scene,
   screenToWorld,
 } from './editor/render';
+import { type Box, contentBoxOf, fitCamera, usableArea } from './layout/fit';
 import { type OverlayAnchor, placeFloatingBar, selectionAnchor } from './layout/overlay';
 import { useNarrowScreen, usePortraitNarrow } from './layout/viewport';
 import { addModule, dedupeLibrary, storeModule } from './level/library';
@@ -190,6 +192,14 @@ export function App(): React.JSX.Element {
   const [undoStack, setUndoStack] = useState<Doc[]>([]);
   const [redoStack, setRedoStack] = useState<Doc[]>([]);
   const [camera, setCamera] = useState<Camera>({ x: 340, y: 220, scale: 1 });
+  /**
+   * 进关自适应（口径 = 可见面积 175 格²，纯函数在 layout/fit.ts）：
+   *  - `userViewRef`：用户**手动平移/缩放过**就置 true —— 之后容器变化（旋屏/缩放窗口）与
+   *    抽屉开合都不再重新 fit，免得跟用户抢镜头；换关/重载/导入会复位。
+   *  - `fitBoxRef`：当前内容 bbox（世界单位，由元件足迹算），跟着 doc 同步。
+   */
+  const userViewRef = useRef(false);
+  const fitBoxRef = useRef<Box | null>(null);
   const [selection, setSelection] = useState<string[]>([]);
   const [selectedWires, setSelectedWires] = useState<string[]>([]);
   const [hover, setHover] = useState<HoverTarget | null>(null);
@@ -308,6 +318,58 @@ export function App(): React.JSX.Element {
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, [screen]);
+
+  // ---- 进关自适应（按可见面积）：① 内容 bbox 跟着 doc 同步 ----
+  // 只算元件足迹（导线只在引脚之间走、backdrop 是装饰），空关卡为 null。
+  useEffect(() => {
+    fitBoxRef.current = contentBoxOf(doc.syms, (sym) => footprintOf(sym, doc.library));
+  }, [doc]);
+
+  // ---- ② 换关/进关/回到工作台 = 换了内容 → 允许自适应（上一关的手动视图不该带过来） ----
+  // 注意只跟 levelId/gameMode/screen 走：doc 每次编辑都是新对象，跟着它会把
+  // 「用户已手动平移」的标记在拖元件时清掉，那样一旋屏就会抢镜头。
+  useEffect(() => {
+    // 这三个只是「触发条件」：换关/进关/回工作台时复位标记（同 size effect 里的 void screen 写法）
+    void levelId;
+    void gameMode;
+    void screen;
+    userViewRef.current = false;
+  }, [levelId, gameMode, screen]);
+
+  /**
+   * ---- ③ 真正 fit：进关、换关、容器尺寸变化（旋屏/窗口缩放）、抽屉开合 ----
+   * 只在「用户还没手动平移/缩放」时执行（否则跟用户抢镜头）。
+   * 可用区 = 画布可视区**扣掉**覆盖式面板：
+   *  - 竖屏：元件库/验收是**底部抽屉** → 扣高度；
+   *  - 窄屏横屏：左右两块都是覆盖抽屉 → 扣宽度；
+   *  - 桌面：面板是流内布局，`size`（量的是 .canvas-wrap）本来就不含它们，不用扣。
+   */
+  useEffect(() => {
+    if (screen !== 'bench' || userViewRef.current) return;
+    const rectOf = (el: HTMLElement | null): { w: number; h: number } | null =>
+      el && el.offsetWidth > 0 && el.offsetHeight > 0
+        ? { w: el.offsetWidth, h: el.offsetHeight }
+        : null;
+    const area = usableArea({
+      width: size.width,
+      height: size.height,
+      narrow,
+      portrait: portraitNarrow,
+      leftOpen,
+      rightOpen,
+      bottomSheet: rectOf(document.querySelector<HTMLElement>('.palette, .side')),
+      sidePanel: rectOf(document.querySelector<HTMLElement>('.side')),
+    });
+    const { camera: next } = fitCamera({
+      width: area.width,
+      height: area.height,
+      content: fitBoxRef.current,
+    });
+    // 值没变就不 setState：避免无谓重渲染（fit 每次都会算出同一组数字）
+    setCamera((prev) =>
+      prev.x === next.x && prev.y === next.y && prev.scale === next.scale ? prev : next,
+    );
+  }, [screen, size.width, size.height, narrow, portraitNarrow, leftOpen, rightOpen]);
 
   // ---- 浮动工具条要避让的范围（每次都重量，值没变就不 setState） ----
   /**
@@ -777,6 +839,8 @@ export function App(): React.JSX.Element {
     if (Math.abs(sx - drag.originX) + Math.abs(sy - drag.originY) > 3) drag.moved = true;
     // 真的在平移了 → 左下工具条淡出（阈值不过的轻微抖动不算）
     if (drag.moved) setCanvasBusy(true);
+    // 用户自己动过镜头了 → 之后旋屏/抽屉开合都不再重新 fit（换关时复位）
+    if (drag.moved) userViewRef.current = true;
     setCamera((prev) => ({
       ...prev,
       x: drag.cameraX - (sx - drag.originX) / prev.scale,
@@ -893,6 +957,8 @@ export function App(): React.JSX.Element {
     const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
     const scale = Math.min(2.6, Math.max(0.35, camera.scale * factor));
     const after = screenToWorld({ ...camera, scale }, size.width, size.height, sx, sy);
+    // 用户自己缩放过了 → 不再自动 fit（进关/换关时复位）
+    userViewRef.current = true;
     setCamera({ x: camera.x + (before.x - after.x), y: camera.y + (before.y - after.y), scale });
   };
 
@@ -1007,6 +1073,8 @@ export function App(): React.JSX.Element {
           break;
         }
         case 'pinch':
+          // 用户自己缩放过了 → 不再自动 fit（进关/换关时复位）
+          userViewRef.current = true;
           // 函数式更新：手指快速划动时多次 move 能连续叠加，不会丢帧跳变
           setCamera((prev) =>
             pinchCamera(

@@ -1,16 +1,20 @@
 // @vitest-environment jsdom
 /** 双击连线直接删除（替代「点选 + Delete」） */
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { atWorld, stubCanvasSize, unstubCanvasSize } from './camera-probe';
 import { renderApp, startJob } from './helpers';
 
-const CAMERA = { x: 340, y: 220 };
-const SIZE = 200;
+vi.mock('../src/editor/render.ts', async (importOriginal) => {
+  const { withCameraProbe } = await import('./camera-probe');
+  return withCameraProbe(await importOriginal<typeof import('../src/editor/render.ts')>());
+});
+
 const KEY = 'lc-studio-level-s1-not-v1';
 
-function screenOf(wx: number, wy: number): { clientX: number; clientY: number } {
-  return { clientX: wx - CAMERA.x + SIZE / 2, clientY: wy - CAMERA.y + SIZE / 2 };
-}
+/** 世界坐标 → client 坐标：用 App 当前相机（进关自适应后相机不是固定值了） */
+const screenOf = atWorld;
+afterEach(unstubCanvasSize);
 function clickWorld(wx: number, wy: number): void {
   fireEvent.mouseDown(document.querySelector('canvas') as HTMLCanvasElement, {
     button: 0,
@@ -26,7 +30,10 @@ function wire(ax: number, ay: number, bx: number, by: number): void {
   clickWorld(bx, by);
 }
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  stubCanvasSize(1280, 754); // jsdom 兜底只有 200×200：给个真实画布尺寸，世界坐标才落在画布内
+});
 
 describe('双击连线删除', () => {
   it('搭一条线 → 双击它 → 线消失', async () => {

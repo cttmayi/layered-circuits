@@ -10,54 +10,53 @@
  * 鼠标路径的旧用例在 delete-wire / loop / devices 等文件里继续覆盖。
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { atWorld, stubCanvasSize, unstubCanvasSize } from './camera-probe';
 import { renderApp, startJob } from './helpers';
 
-/** 关卡 s1-not 的初始相机与画布尺寸（与 delete-wire.test.tsx 同一组常量） */
-const CAMERA = { x: 340, y: 220 };
-const SIZE = 200;
+vi.mock('../src/editor/render.ts', async (importOriginal) => {
+  const { withCameraProbe } = await import('./camera-probe');
+  return withCameraProbe(await importOriginal<typeof import('../src/editor/render.ts')>());
+});
+
 const KEY = 'lc-studio-level-s1-not-v1';
+afterEach(unstubCanvasSize);
 
 function canvas(): HTMLCanvasElement {
   return document.querySelector('canvas') as HTMLCanvasElement;
 }
 
-/** 世界坐标 → 画布内坐标 → client 坐标（scale = 1 时） */
-function screenOf(wx: number, wy: number, scale = 1): { clientX: number; clientY: number } {
-  return {
-    clientX: (wx - CAMERA.x) * scale + SIZE / 2,
-    clientY: (wy - CAMERA.y) * scale + SIZE / 2,
-  };
-}
+/** 世界坐标 → client 坐标：用 App **当前**相机（进关自适应后相机不是固定值） */
+const screenOf = atWorld;
 
-function down(wx: number, wy: number, id: number, scale = 1): void {
+function down(wx: number, wy: number, id: number): void {
   fireEvent.pointerDown(canvas(), {
     pointerType: 'touch',
     pointerId: id,
     isPrimary: id === 1,
     button: 0,
     buttons: 1,
-    ...screenOf(wx, wy, scale),
+    ...screenOf(wx, wy),
   });
 }
-function move(wx: number, wy: number, id: number, scale = 1): void {
+function move(wx: number, wy: number, id: number): void {
   fireEvent.pointerMove(canvas(), {
     pointerType: 'touch',
     pointerId: id,
     isPrimary: id === 1,
     button: -1,
     buttons: 1,
-    ...screenOf(wx, wy, scale),
+    ...screenOf(wx, wy),
   });
 }
-function up(wx: number, wy: number, id: number, scale = 1): void {
+function up(wx: number, wy: number, id: number): void {
   fireEvent.pointerUp(canvas(), {
     pointerType: 'touch',
     pointerId: id,
     isPrimary: id === 1,
     button: 0,
     buttons: 0,
-    ...screenOf(wx, wy, scale),
+    ...screenOf(wx, wy),
   });
 }
 
@@ -68,7 +67,7 @@ function tap(wx: number, wy: number): void {
   down(wx, wy, id);
   up(wx, wy, id);
 }
-/** 单指拖动：从 (ax, ay) 拖到 (bx, by)（屏幕位移 = 世界位移，scale = 1） */
+/** 单指拖动：从 (ax, ay) 拖到 (bx, by)（都是世界坐标，屏幕位移按当前相机换算） */
 function drag(ax: number, ay: number, bx: number, by: number): void {
   const id = nextId++;
   down(ax, ay, id);
@@ -112,7 +111,10 @@ async function place(label: string, wx: number, wy: number): Promise<void> {
   up(wx, wy, id);
 }
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  stubCanvasSize(1280, 754); // jsdom 兜底只有 200×200：给个真实画布尺寸，世界坐标才落在画布内
+});
 
 describe('触屏手势：画布接线', () => {
   it('单指拖动 = 平移：命中的元件不会被拖走，也不会拉出线', async () => {
@@ -200,7 +202,7 @@ describe('触屏手势：画布接线', () => {
     await place('VCC 电源', 690, 80);
     await waitPlaced(2);
 
-    // 两指从画布正中向两侧拉开一倍（中点不动 → 相机位置不变、scale 1 → 2）
+    // 两指拉开一倍 → 缩放 ×2（进关自适应后的 scale 不确定，所以下面按"当前相机"点引脚）
     const f1 = nextId++;
     const f2 = nextId++;
     down(290, 220, f1);
@@ -210,13 +212,13 @@ describe('触屏手势：画布接线', () => {
     up(240, 220, f1);
     up(440, 220, f2);
 
-    // 缩放后引脚在屏幕上的位置变了：按 scale = 2 的映射轻点，仍应命中两个引脚并连成一条线
+    // 缩放后引脚在屏幕上的位置变了：按**缩放后的相机**轻点，仍应命中两个引脚并连成一条线
     const id1 = nextId++;
-    down(690, 158, id1, 2);
-    up(690, 158, id1, 2);
+    down(690, 158, id1);
+    up(690, 158, id1);
     const id2 = nextId++;
-    down(690, 94, id2, 2);
-    up(690, 94, id2, 2);
+    down(690, 94, id2);
+    up(690, 94, id2);
     await waitWires(1);
   });
 });

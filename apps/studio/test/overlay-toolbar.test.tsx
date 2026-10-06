@@ -14,23 +14,26 @@
  * 这一份守的是**行为与结构**：按钮在哪个容器里、点了真的生效、没选中时真的不渲染。
  */
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Doc } from '../src/editor/model';
 import type { Camera } from '../src/editor/render';
 import { placeFloatingBar, selectionAnchor } from '../src/layout/overlay';
+import { atWorld, stubCanvasSize, unstubCanvasSize } from './camera-probe';
 import { renderApp, startJob } from './helpers';
 
-const CAMERA = { x: 340, y: 220 };
-const SIZE = 200; // jsdom 里画布被 Math.max(200, rect.height) 兜到 200×200
+vi.mock('../src/editor/render.ts', async (importOriginal) => {
+  const { withCameraProbe } = await import('./camera-probe');
+  return withCameraProbe(await importOriginal<typeof import('../src/editor/render.ts')>());
+});
+
 const KEY = 'lc-studio-level-s1-not-v1';
 
 function canvas(): HTMLCanvasElement {
   return document.querySelector('canvas') as HTMLCanvasElement;
 }
-/** 世界坐标 → client 坐标（scale = 1） */
-function screenOf(wx: number, wy: number): { clientX: number; clientY: number } {
-  return { clientX: wx - CAMERA.x + SIZE / 2, clientY: wy - CAMERA.y + SIZE / 2 };
-}
+/** 世界坐标 → client 坐标：用 App 当前相机（进关自适应后相机不是固定值了） */
+const screenOf = atWorld;
+afterEach(unstubCanvasSize);
 function clickWorld(wx: number, wy: number): void {
   fireEvent.mouseDown(canvas(), { button: 0, ...screenOf(wx, wy) });
 }
@@ -66,7 +69,10 @@ const redoBtn = (): HTMLElement => screen.getByRole('button', { name: '重做' }
 const rotateBtn = (): HTMLElement | null => screen.queryByRole('button', { name: '旋转 (R)' });
 const deleteBtn = (): HTMLElement | null => screen.queryByRole('button', { name: '删除' });
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  stubCanvasSize(1280, 754); // jsdom 兜底只有 200×200：给个真实画布尺寸，世界坐标才落在画布内
+});
 
 describe('画布浮动工具条：撤销 / 重做常驻左下角', () => {
   it('两个按钮在画布的浮动条里，不在顶栏里', () => {
