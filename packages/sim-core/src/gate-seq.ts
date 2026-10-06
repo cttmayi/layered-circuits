@@ -155,11 +155,20 @@ export const stepGateNetlist = (
         // 元件级时序器件（D 锁存器 / 主从 D 触发器）：输出 = 当前状态（没记录过就是 Z）
         // 注意：身体是**模块**的时序积木（八位寄存器 / 数字输入寄存器）不走这条路 ——
         // 它们直接递归下钻，所以内部状态、移位、保持逻辑都按电路原样算。
-        const initial: Bit = mod.seq?.initial === '1' ? B1 : B0;
+        const base: Bit = mod.seq?.initial === '1' ? B1 : B0;
+        const invertedTargets = new Set<string>();
+        for (const targets of Object.values(mod.seq?.map ?? {})) {
+          for (const t of Array.isArray(targets) ? targets : [targets]) {
+            if (t.startsWith('!')) invertedTargets.add(t.slice(1));
+          }
+        }
         outs.forEach((p) => {
+          // **反相输出口**（如 qn）的上电初值必须是初值的互补 ——
+          // 实测：s2-dff 首个向量元件级给 qn=0，我原先给 1（与 q 同值）而多出 1 行差异。
+          const init: Bit = invertedTargets.has(p.name) ? (base === B1 ? B0 : B1) : base;
           const bits = state
             .getPort(prefix + inst.id, p)
-            .map((_v, b) => state.get(prefix + inst.id, p.name, b) ?? initial);
+            .map((_v, b) => state.get(prefix + inst.id, p.name, b) ?? init);
           for (let b = 0; b < widthOf(p); b++) {
             const netId = idx.pinToNet.get(pinKey(inst.id, p.name, b));
             if (netId !== undefined) push(netId, bits[b] ?? 'Z');
