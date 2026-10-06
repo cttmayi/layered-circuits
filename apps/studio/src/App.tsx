@@ -1713,73 +1713,73 @@ export function App(): React.JSX.Element {
           </div>
           {gameMode === 'level' ? (
             <button
-            type="button"
-            className="back-btn"
-            onClick={goToMap}
-            title="回到关卡地图（草图已自动保存）"
-          >
-            ← 返回地图
-          </button>
-        ) : gameMode === 'teach' ? (
-          <button
-            type="button"
-            className="back-btn"
-            onClick={goToTeach}
-            title="回到知识卡片列表（草图已自动保存）"
-          >
-            ← 返回知识卡片
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="back-btn"
-            onClick={goToMenu}
-            title="回到主菜单（草图已自动保存）"
-          >
-            ← 主菜单
-          </button>
-        )}
-        {gameMode !== 'free' && (
-          <div className="group">
+              type="button"
+              className="back-btn"
+              onClick={goToMap}
+              title="回到关卡地图（草图已自动保存）"
+            >
+              ← 返回地图
+            </button>
+          ) : gameMode === 'teach' ? (
             <button
               type="button"
-              className="primary"
-              onClick={() => void runJudge()}
-              disabled={judging}
+              className="back-btn"
+              onClick={goToTeach}
+              title="回到知识卡片列表（草图已自动保存）"
             >
-              {currentLevel?.classroom
-                ? judging
-                  ? '对照中…'
-                  : '对照答案'
-                : judging
-                  ? '验收中…'
-                  : '交付验收'}
-            </button>
-          </div>
-        )}
-        <div className="group"></div>
-        {/* 撤销/重做/旋转/删除 四个按钮已搬到画布上的浮动工具条（见 .canvas-wrap 里的 .ovl-tools
-            与 .ovl-sel）：手机与桌面都不再占顶栏位置，快捷键 Ctrl+Z / Ctrl+Shift+Z / R / Delete 不变 */}
-        <div className="group">
-          {gameMode === 'free' ? (
-            <button type="button" onClick={() => loadDoc(notGateDemo())}>
-              载入非门示例
+              ← 返回知识卡片
             </button>
           ) : (
             <button
               type="button"
-              onClick={reloadLevel}
-              title="清空画布，回到本关初始画布（组件库保留）"
+              className="back-btn"
+              onClick={goToMenu}
+              title="回到主菜单（草图已自动保存）"
             >
-              重载本关
+              ← 主菜单
             </button>
           )}
-          {gameMode === 'free' && (
-            <button type="button" className="primary" onClick={() => void wrapSelection()}>
-              封装为模块
-            </button>
+          {gameMode !== 'free' && (
+            <div className="group">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void runJudge()}
+                disabled={judging}
+              >
+                {currentLevel?.classroom
+                  ? judging
+                    ? '对照中…'
+                    : '对照答案'
+                  : judging
+                    ? '验收中…'
+                    : '交付验收'}
+              </button>
+            </div>
           )}
-        </div>
+          <div className="group"></div>
+          {/* 撤销/重做/旋转/删除 四个按钮已搬到画布上的浮动工具条（见 .canvas-wrap 里的 .ovl-tools
+            与 .ovl-sel）：手机与桌面都不再占顶栏位置，快捷键 Ctrl+Z / Ctrl+Shift+Z / R / Delete 不变 */}
+          <div className="group">
+            {gameMode === 'free' ? (
+              <button type="button" onClick={() => loadDoc(notGateDemo())}>
+                载入非门示例
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={reloadLevel}
+                title="清空画布，回到本关初始画布（组件库保留）"
+              >
+                重载本关
+              </button>
+            )}
+            {gameMode === 'free' && (
+              <button type="button" className="primary" onClick={() => void wrapSelection()}>
+                封装为模块
+              </button>
+            )}
+          </div>
           <div className="spacer" />
         </div>
         {/* 第二行：调试模式那一组（默认就在第二行，不需要用户点什么才换行）。
