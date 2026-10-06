@@ -4,6 +4,27 @@ import { UNIT_COST, UNIT_DELAY_PS } from '@lc/schema';
 import { type ReactNode, useState } from 'react';
 import type { PlaceKind, StoredModule, UnitKind } from '../editor/model';
 import { drawIcon } from '../editor/render';
+import { usePortraitNarrow } from '../layout/viewport';
+
+/**
+ * 卡片上的「其余信息」（价格 / 说明 / 引脚数 / 延迟 / 锁定原因）。
+ *
+ * 竖屏下元件库是贴着画布底部的**精简形态**：卡片只留名字，这些信息一律不渲染 ——
+ * 不是靠 CSS 藏起来，而是根本不进 DOM（既省掉一半高度，也让「只显示名字」这条
+ * 能在 jsdom 里被测到，不只靠样式表文本）。
+ * 桌面与横屏手机 compact = false，这里只是一个 Fragment：不产生任何 DOM 节点，
+ * 原来的节点树逐字节不变。
+ */
+function CardExtra({
+  compact,
+  children,
+}: {
+  compact: boolean;
+  children: ReactNode;
+}): React.JSX.Element | null {
+  if (compact) return null;
+  return <>{children}</>;
+}
 
 /**
  * 模块封装时实测的关键路径（ps）—— 存在模板里（`StoredModule.template` 是完整模板的纯 JSON），
@@ -194,6 +215,8 @@ export function Palette({
 }: PaletteProps): React.JSX.Element {
   const [openSections, toggleSection] = useOpenSections();
   const [hideLocked, toggleHideLocked] = useHideLocked();
+  /** 竖屏窄屏 = 底部精简形态：卡片只留名字，且不渲染顶部那个「隐藏本关不可用」开关 */
+  const compact = usePortraitNarrow();
   const unitAllowed = (unit: UnitKind): boolean => !level || level.allowedUnits.includes(unit);
   const modulesAllowed = level?.moduleAccess !== 'none';
   /** 模块关卡的可用性：白名单 / 复古关禁用（与判定里的策略保持一致） */
@@ -270,7 +293,8 @@ export function Palette({
   return (
     <aside className="palette">
       {header}
-      {level && (
+      {/* 「隐藏本关不可用」是过滤器：竖屏底部精简形态不需要它（开关本身是宽屏/横屏才有的） */}
+      {level && !compact && (
         <label className="palette-filter">
           <input type="checkbox" checked={hideLocked} onChange={toggleHideLocked} />
           <span>隐藏本关不可用</span>
@@ -306,18 +330,27 @@ export function Palette({
               >
                 <span className="palette-row">
                   <span className="palette-name">
-                    {item.name} {locked && <em className="locked">本关不可用</em>}
+                    {item.name}{' '}
+                    <CardExtra compact={compact}>
+                      {locked && <em className="locked">本关不可用</em>}
+                    </CardExtra>
                   </span>
-                  <span className="palette-cost">价格 {UNIT_COST[item.unit]}</span>
+                  <CardExtra compact={compact}>
+                    <span className="palette-cost">价格 {UNIT_COST[item.unit]}</span>
+                  </CardExtra>
                 </span>
-                <span className="palette-row">
-                  <span className="palette-note">{locked ? lockReason(item.unit) : item.note}</span>
-                  {mode !== 'logic' && (
-                    <span className="palette-delay" title="在时序仿真里的信号延迟">
-                      延迟 {((UNIT_DELAY_PS[item.unit] ?? 0) / 1000).toFixed(1)} ns
+                <CardExtra compact={compact}>
+                  <span className="palette-row">
+                    <span className="palette-note">
+                      {locked ? lockReason(item.unit) : item.note}
                     </span>
-                  )}
-                </span>
+                    {mode !== 'logic' && (
+                      <span className="palette-delay" title="在时序仿真里的信号延迟">
+                        延迟 {((UNIT_DELAY_PS[item.unit] ?? 0) / 1000).toFixed(1)} ns
+                      </span>
+                    )}
+                  </span>
+                </CardExtra>
               </button>
             );
           })}
@@ -359,9 +392,14 @@ export function Palette({
                 onClick={() => pick(kind)}
               >
                 <span className="palette-name">
-                  {name} {locked && <em className="locked">本关不可用</em>}
+                  {name}{' '}
+                  <CardExtra compact={compact}>
+                    {locked && <em className="locked">本关不可用</em>}
+                  </CardExtra>
                 </span>
-                <span className="palette-note">{locked ? portLockReason : note}</span>
+                <CardExtra compact={compact}>
+                  <span className="palette-note">{locked ? portLockReason : note}</span>
+                </CardExtra>
               </button>
             );
           })}
@@ -399,33 +437,40 @@ export function Palette({
               >
                 <span className="palette-row">
                   <span className="palette-name">
-                    {gate.name} {gate.isSequential && <em>时序</em>}
+                    {gate.name}{' '}
+                    <CardExtra compact={compact}>{gate.isSequential && <em>时序</em>}</CardExtra>
                   </span>
-                  <span className="palette-cost">成本 {gate.costHalf / 2}</span>
+                  <CardExtra compact={compact}>
+                    <span className="palette-cost">成本 {gate.costHalf / 2}</span>
+                  </CardExtra>
                 </span>
                 {/* 第二行：左边入/出，右边延迟（= 封装时实测的关键路径，任一输入 → 输出口最长路径）。
                   延迟并进这一行、不自己占一行，卡片始终两行高、加延迟不会变高 */}
-                <span className="palette-row">
-                  <span className="palette-note">
-                    {gate.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
-                    {gate.ports.filter((p) => p.dir === 'out').length} 出
-                  </span>
-                  {mode !== 'logic' && (
-                    <span
-                      className="palette-delay"
-                      title={
-                        moduleCriticalPathPs(gate) > 0
-                          ? '封装时实测：任一输入到输出口的最长路径'
-                          : '封装时未记录时序（早期模块，重新封装即可得到）'
-                      }
-                    >
-                      {moduleCriticalPathPs(gate) > 0
-                        ? `延迟 ${(moduleCriticalPathPs(gate) / 1000).toFixed(1)} ns`
-                        : '延迟 —'}
+                <CardExtra compact={compact}>
+                  <span className="palette-row">
+                    <span className="palette-note">
+                      {gate.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
+                      {gate.ports.filter((p) => p.dir === 'out').length} 出
                     </span>
-                  )}
-                </span>
-                {locked && <span className="palette-lock">{moduleLockReason(gate.name)}</span>}
+                    {mode !== 'logic' && (
+                      <span
+                        className="palette-delay"
+                        title={
+                          moduleCriticalPathPs(gate) > 0
+                            ? '封装时实测：任一输入到输出口的最长路径'
+                            : '封装时未记录时序（早期模块，重新封装即可得到）'
+                        }
+                      >
+                        {moduleCriticalPathPs(gate) > 0
+                          ? `延迟 ${(moduleCriticalPathPs(gate) / 1000).toFixed(1)} ns`
+                          : '延迟 —'}
+                      </span>
+                    )}
+                  </span>
+                </CardExtra>
+                <CardExtra compact={compact}>
+                  {locked && <span className="palette-lock">{moduleLockReason(gate.name)}</span>}
+                </CardExtra>
               </button>
             );
           })}
@@ -467,33 +512,40 @@ export function Palette({
             >
               <span className="palette-row">
                 <span className="palette-name">
-                  {mod.name} {mod.isSequential && <em>时序</em>}
+                  {mod.name}{' '}
+                  <CardExtra compact={compact}>{mod.isSequential && <em>时序</em>}</CardExtra>
                 </span>
-                <span className="palette-cost">成本 {mod.costHalf / 2}</span>
+                <CardExtra compact={compact}>
+                  <span className="palette-cost">成本 {mod.costHalf / 2}</span>
+                </CardExtra>
               </span>
               {/* 第二行：左边入/出，右边延迟（= 封装时实测的关键路径，任一输入 → 输出口最长路径）。
                   延迟并进这一行、不自己占一行，卡片始终两行高、加延迟不会变高 */}
-              <span className="palette-row">
-                <span className="palette-note">
-                  {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
-                  {mod.ports.filter((p) => p.dir === 'out').length} 出
-                </span>
-                {mode !== 'logic' && (
-                  <span
-                    className="palette-delay"
-                    title={
-                      moduleCriticalPathPs(mod) > 0
-                        ? '封装时实测：任一输入到输出口的最长路径'
-                        : '封装时未记录时序（早期模块，重新封装即可得到）'
-                    }
-                  >
-                    {moduleCriticalPathPs(mod) > 0
-                      ? `延迟 ${(moduleCriticalPathPs(mod) / 1000).toFixed(1)} ns`
-                      : '延迟 —'}
+              <CardExtra compact={compact}>
+                <span className="palette-row">
+                  <span className="palette-note">
+                    {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
+                    {mod.ports.filter((p) => p.dir === 'out').length} 出
                   </span>
-                )}
-              </span>
-              {locked && <span className="palette-lock">{moduleLockReason(mod.name)}</span>}
+                  {mode !== 'logic' && (
+                    <span
+                      className="palette-delay"
+                      title={
+                        moduleCriticalPathPs(mod) > 0
+                          ? '封装时实测：任一输入到输出口的最长路径'
+                          : '封装时未记录时序（早期模块，重新封装即可得到）'
+                      }
+                    >
+                      {moduleCriticalPathPs(mod) > 0
+                        ? `延迟 ${(moduleCriticalPathPs(mod) / 1000).toFixed(1)} ns`
+                        : '延迟 —'}
+                    </span>
+                  )}
+                </span>
+              </CardExtra>
+              <CardExtra compact={compact}>
+                {locked && <span className="palette-lock">{moduleLockReason(mod.name)}</span>}
+              </CardExtra>
             </button>
           );
         })}

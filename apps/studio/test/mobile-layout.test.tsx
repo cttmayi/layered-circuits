@@ -186,6 +186,86 @@ describe('竖屏：关卡地图减少列数（6 → 3），不再横向滚动', 
   });
 });
 
+// ---------- 竖屏底部元件库：精简形态（只有名字）+ 可横滑 + 不出现筛选开关 ----------
+/** 打开元件库（窄屏默认收起，要用手柄拉开；桌面/横屏平板默认就开着） */
+function openPalette(): void {
+  if (!document.querySelector('aside.palette')) {
+    fireEvent.click(screen.getByRole('button', { name: '展开元件库' }));
+  }
+}
+
+/** 卡片上「名字以外」的信息节点（价格 / 说明 / 引脚数 / 延迟 / 锁定原因 / 状态标签） */
+const EXTRA_INFO = '.palette-cost, .palette-note, .palette-delay, .palette-lock, .palette-name em';
+
+describe('竖屏底部元件库：卡片只留名字', () => {
+  it.each([
+    ['390×844', 390, 844],
+    ['360×640', 360, 640],
+    ['430×932', 430, 932],
+  ])('%s：卡片只有名字，价格/说明/引脚数/延迟/状态都不进 DOM', (_label, w, h) => {
+    setViewport(w, h);
+    renderApp();
+    startJob('非门');
+    openPalette();
+
+    // 名字在、点得到（按钮还带着原来那个 title 提示，只是不再显示成文字）
+    expect(screen.getByText('三极管 NPN')).toBeTruthy();
+    expect(screen.getByText('电阻')).toBeTruthy();
+    // 价格 / 说明 / 引脚数 / 延迟 / 状态标签：一个都没有
+    expect(document.querySelectorAll(EXTRA_INFO).length).toBe(0);
+    expect(document.body.textContent).not.toMatch(/价格|成本|延迟/);
+    expect(document.body.textContent).not.toMatch(/本关不可用/);
+
+    const cards = [...document.querySelectorAll('.palette-item')];
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      // 卡片文本 == 它的名字（只留名字这一项）
+      const name = card.querySelector('.palette-name')?.textContent?.trim() ?? '';
+      expect(name.length).toBeGreaterThan(0);
+      expect((card.textContent ?? '').trim()).toBe(name);
+    }
+  });
+
+  it.each([
+    ['390×844', 390, 844],
+    ['360×640', 360, 640],
+    ['430×932', 430, 932],
+  ])('%s：「隐藏本关不可用」开关不渲染', (_label, w, h) => {
+    setViewport(w, h);
+    renderApp();
+    startJob('非门');
+    openPalette();
+    expect(screen.queryByText('隐藏本关不可用')).toBeNull();
+    expect(document.querySelector('.palette-filter')).toBeNull();
+    expect(document.querySelector('.palette-filter input')).toBeNull();
+  });
+});
+
+describe('横屏 / 桌面：元件库照旧（卡片信息 + 筛选开关都在）', () => {
+  it.each([
+    ['844×390（横屏手机）', 844, 390],
+    ['1024×768（横屏平板）', 1024, 768],
+    ['1280×800（桌面）', 1280, 800],
+  ])('%s：开关在、卡片信息在', (_label, w, h) => {
+    setViewport(w, h);
+    renderApp();
+    startJob('非门');
+    openPalette();
+
+    // 「隐藏本关不可用」开关照旧
+    expect(screen.getByText('隐藏本关不可用')).toBeTruthy();
+    const filter = document.querySelector('.palette-filter');
+    expect(filter).toBeTruthy();
+    expect(filter?.querySelector('input[type="checkbox"]')).toBeTruthy();
+    // 价格 / 说明 / 延迟这些信息照旧
+    expect(document.querySelectorAll('.palette-cost').length).toBeGreaterThan(0);
+    expect(document.querySelectorAll('.palette-note').length).toBeGreaterThan(0);
+    expect(document.body.textContent).toMatch(/价格/);
+    // 名字也照旧
+    expect(screen.getByText('三极管 NPN')).toBeTruthy();
+  });
+});
+
 // ---------- 桌面防回归 ----------
 describe('桌面宽屏：结构与基线逐字一致', () => {
   it.each([
@@ -341,6 +421,25 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
     expect(rules.get('.hint')).toMatch(/bottom:\s*calc\(/);
   });
 
+  it('竖屏块里的精简卡片：一行横排 + 固定宽度 + 可横滑 + 触屏目标 ≥44px', () => {
+    const rules = parseCss(PORTRAIT_BLOCK).base;
+    const strip = rules.get('.palette-section-body') ?? '';
+    expect(strip).toContain('display: flex');
+    expect(strip).toMatch(/flex-flow:\s*row nowrap/);
+    expect(strip).toContain('overflow-x: auto'); // 横滑只开在这一处
+    expect(strip).toContain('overflow-y: hidden');
+    const item = rules.get('.palette-item') ?? '';
+    expect(item).toMatch(/flex:\s*0 0 auto/);
+    expect(item).toMatch(/width:\s*104px/);
+    expect(item).toMatch(/min-width:\s*104px/);
+    expect(item).toMatch(/min-height:\s*48px/); // ≥44px
+    // 名字放不下就折行，不靠截断
+    const name = rules.get('.palette-row .palette-name') ?? '';
+    expect(name).toContain('white-space: normal');
+    expect(name).toMatch(/text-overflow:\s*clip/);
+    expect(name).toContain('overflow-wrap: anywhere');
+  });
+
   it('基础块（非媒体查询）里的桌面布局关键声明原样还在', () => {
     expect(BASE_CSS.get('.toolbar')).toContain('flex-wrap: wrap');
     expect(BASE_CSS.get('.body')).toContain('display: flex');
@@ -353,5 +452,12 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
     // 地图的桌面默认：6 列几何由 WorldMap.tsx 决定，这里守住「基础块不设 min-width」
     expect(BASE_CSS.get('.map-canvas')).not.toContain('min-width');
     expect(BASE_CSS.get('.map-stage')).not.toContain('overflow-x: hidden');
+    // 桌面/横屏的元件库仍是竖排列表、卡片仍是整行宽、价格说明照旧显示
+    const baseBody = BASE_CSS.get('.palette-section-body') ?? '';
+    expect(baseBody).not.toContain('overflow-x: auto');
+    expect(baseBody).not.toContain('display: flex');
+    expect(BASE_CSS.get('.palette-item')).toContain('width: 100%');
+    expect(BASE_CSS.get('.palette-cost')).toContain('color: var(--ok)');
+    expect(BASE_CSS.get('.palette-note')).toContain('white-space: nowrap');
   });
 });

@@ -2511,6 +2511,55 @@ body,
     animation: lc-sheet-up 0.18s ease;
   }
 
+  /* ---- ③ 底部形态的卡片：只留名字，一行横排、固定卡片宽度、整行可横滑 ----
+     ⚠️ 横滑只开在**这一处**（元件库分组条）；关卡地图仍然不许横滑，见上面 ①。 */
+  .palette-section-body {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: stretch;
+    gap: 8px;
+    overflow-x: auto; /* 卡片一行横排，滑不完就横滑（分组各一条） */
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch; /* iOS 惯性滑动 */
+    scroll-snap-type: x proximity;
+    padding: 7px 0 8px;
+  }
+
+  .palette-item {
+    flex: 0 0 auto; /* 固定宽度，不被压缩 */
+    width: 104px;
+    min-width: 104px;
+    min-height: 48px; /* 触屏目标 ≥44px（含高度） */
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    scroll-snap-align: start;
+    padding: 8px 6px;
+  }
+
+  /* 名字原点居中：底部形态卡片里只有名字这一项 */
+  .palette-section-body .palette-row {
+    justify-content: center;
+    width: 100%;
+  }
+
+  /* 名字不截断到看不懂：放不下就折行（最长也就「三极管 NPN」这种，最多两行） */
+  .palette-row .palette-name {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+  }
+
+  /* 空分组提示（「本关没有可用元件。」）在横排里别被挤成窄条，垂直居中 */
+  .palette-empty {
+    flex: 1 0 auto;
+    display: flex;
+    align-items: center;
+    text-align: left;
+  }
+
   /* 开合手柄挪到底部：收起时浮在画布左下角；展开时贴在抽屉左上角（点它收起） */
   .edge-strip.left {
     top: auto;
