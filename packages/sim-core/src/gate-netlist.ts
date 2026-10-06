@@ -1,19 +1,19 @@
 /**
- * 逻辑版门级引擎第 2 步：**按连线把门连起来求值**。
+ * 逻辑版门级引擎第 2 步：**按连线把门连起来求值**（支持总线：按位）。
  *
- * 分工：`gate-logic.ts` 只管"一个门算什么值"，这里管"值怎么在门之间流"。
+ * 分工：`gate-logic.ts` 只管"一个门的一位算什么值"，这里管"值怎么在门之间流、总线怎么按位走"。
  *
  * 规矩（与 docs/design-gates.md 第 9 节一致）：
- *  - 只处理**纯模块**设计（顶层出现元件 `unit` 就直接回落，调用方走原来的元件级求值）；
- *  - 7 个基础门是原子：按名字用真值函数算，**不展开它们的元件身体**；
- *  - 复合模块 = 它的 body 递归求值（body 也是 Design，里面又只有门 → 递归到底还是 7 个门）；
- *  - 时序模块（锁存器/DFF/寄存器）在无延迟下是代数环，这一层**不支持**，如实回落
- *    （第 3 步会加「状态 + 时钟沿」模型）；
+ *  - 只处理**纯模块**设计（顶层出现元件 `unit` 就回落，调用方走原来的元件级求值）；
+ *  - 7 个基础门是原子：按名字用真值函数**逐位**算，**不展开它们的元件身体**；
+ *  - 复合模块 = 它的 body 递归求值（body 里又只有门 → 递归到底还是 7 个门）；
+ *  - **总线按位**：端口有 width，每个位各自绑一个 net（见 schema 的 Port.nets[i]）；
+ *    基础门逐位算（同一位上取各输入端口该位的值），复合模块整组端口传下去；
+ *  - 时序模块由 gate-seq.ts 处理（这里遇到就回落）；
  *  - 值为 4 值（0/1/X/Z），同节点多驱动用 mergeDrivers 合并，**不比强弱**；
- *  - 迭代到稳定为止；迭代上限内仍在变化的节点判 X（振荡），并给出说明。
+ *  - 迭代到稳定为止；上限内仍在变化的节点判 X。
  *
- * 为了不把 sim-core 绑到 @lc/schema 上，这里只要求**结构兼容**的最小接口；
- * 真实的 Design / ModuleLibrary 天然满足（见 apps/studio 的接线）。
+ * 为了不把 sim-core 绑到 @lc/schema 上，这里只要求**结构兼容**的最小接口。
  */
 import { type Bit, evalGate, isGateName, mergeDrivers } from './gate-logic.js';
 
@@ -48,17 +48,20 @@ export interface GateNetlistDesign {
   ports: readonly GatePort[];
 }
 
+/** 时序器件语义（见 gate-seq.ts 的 SeqSpec） */
+export interface GateSeqSpec {
+  clock: string;
+  data: readonly string[];
+  mode: 'level' | 'rising';
+  map?: Readonly<Record<string, string>>;
+}
+
 export interface GateModuleInfo {
   name: string;
   isSequential?: boolean;
-  /** 时序器件语义（时钟/数据端口、电平型或边沿型）；见 gate-seq.ts 的 SeqSpec */
-  seq?: {
-    clock: string;
-    data: readonly string[];
-    mode: 'level' | 'rising';
-    map?: Readonly<Record<string, string>>;
-  };
-  ports: readonly { name: string; dir: 'in' | 'out' }[];
+  seq?: GateSeqSpec;
+  /** width 缺省 1 */
+  ports: readonly { name: string; dir: 'in' | 'out'; width?: number }[];
   /** 复合模块的内部电路；7 个基础门不需要（按真值函数算） */
   body?: GateNetlistDesign;
 }
@@ -69,23 +72,18 @@ export interface GateLibrary {
 
 export interface GateEvalOutcome {
   ok: boolean;
-  /** ok === false 时说明为什么回落 */
   reason?: string;
-  /** net id → 值 */
   nets: Map<string, Bit>;
-  /** 端口名 → 每一位的值 */
   outPorts: Map<string, Bit[]>;
-  /** 迭代到稳定的轮数 */
   rounds: number;
-  /** 振荡被判 X 的 net id */
   unstable: string[];
 }
 
 const MAX_ROUNDS = 64;
 
-const pinKey = (inst: string, pin: string, bit = 0): string => `${inst}/${pin}/${bit}`;
+export const pinKey = (inst: string, pin: string, bit = 0): string => `${inst}/${pin}/${bit}`;
 
-/** 门级快路能不能处理这份设计；不能则给出人话原因 */
+/** 门槛：只有元件、缺模块、含时序模块才回落（时序是否可用由 gate-seq 决定） */
 export const gateFastPathCheck = (
   design: GateNetlistDesign,
   library: GateLibrary,
@@ -102,9 +100,73 @@ export const gateFastPathCheck = (
   return { ok: true };
 };
 
+const widthOf = (p: { width?: number }): number => Math.max(1, p.width ?? 1);
+
+/** 一份设计里 pin → net 的索引（**含位**）与按位读值 */
+export interface GatePinIndex {
+  pinToNet: Map<string, string>;
+  netValues: Map<string, Bit>;
+  readBit: (inst: string, pin: string, bit?: number) => Bit;
+  readPort: (inst: string, port: { name: string; width?: number }) => Bit[];
+  writeTo: (inst: string, port: { name: string; width?: number }, values: readonly Bit[]) => void;
+}
+
+export const makePinIndex = (design: GateNetlistDesign): GatePinIndex => {
+  const pinToNet = new Map<string, string>();
+  for (const net of design.nets) {
+    for (const ref of net.pins) pinToNet.set(pinKey(ref.inst, ref.pin, ref.bit ?? 0), net.id);
+  }
+  const netValues = new Map<string, Bit>();
+  const readBit = (inst: string, pin: string, bit = 0): Bit => {
+    const netId = pinToNet.get(pinKey(inst, pin, bit));
+    if (netId === undefined) return 'Z'; // 没接 → 悬空
+    return netValues.get(netId) ?? 'Z';
+  };
+  const readPort = (inst: string, port: { name: string; width?: number }): Bit[] =>
+    Array.from({ length: widthOf(port) }, (_, b) => readBit(inst, port.name, b));
+  const writeTo = (
+    inst: string,
+    port: { name: string; width?: number },
+    values: readonly Bit[],
+  ): void => {
+    Array.from({ length: widthOf(port) }, (_, b) => {
+      const netId = pinToNet.get(pinKey(inst, port.name, b));
+      if (netId !== undefined) netValues.set(netId, values[b] ?? 'X');
+      return b;
+    });
+  };
+  return { pinToNet, netValues, readBit, readPort, writeTo };
+};
+
+/** 把输入端口的值放进它们绑的 net（按位） */
+export const bindInputs = (
+  design: GateNetlistDesign,
+  idx: GatePinIndex,
+  inputs: ReadonlyMap<string, Bit[]>,
+): void => {
+  for (const port of design.ports) {
+    if (port.dir !== 'in') continue;
+    const vals = inputs.get(port.name) ?? [];
+    for (const [i, netId] of port.nets.entries()) idx.netValues.set(netId, vals[i] ?? 'Z');
+  }
+};
+
+/** 求一份设计的输出端口（按位） */
+export const readOutPorts = (design: GateNetlistDesign, idx: GatePinIndex): Map<string, Bit[]> => {
+  const out = new Map<string, Bit[]>();
+  for (const port of design.ports) {
+    if (port.dir !== 'out') continue;
+    out.set(
+      port.name,
+      port.nets.map((netId) => idx.netValues.get(netId) ?? 'Z'),
+    );
+  }
+  return out;
+};
+
 /**
- * 求值。`inputs` 是端口名 → 各位的值（缺省按 Z）。
- * 端口按 Design.ports[].nets 定位到 net，所以不需要端口元件。
+ * 纯组合求值（含时序模块就回落）。
+ * `inputs` 是端口名 → 各位的值（缺省按 Z）。
  */
 export const evalGateNetlist = (
   design: GateNetlistDesign,
@@ -122,32 +184,12 @@ export const evalGateNetlist = (
       unstable: [],
     };
   }
+  const idx = makePinIndex(design);
+  bindInputs(design, idx, inputs);
 
-  // pin → net，net → 驱动它的 (实例, 输出引脚)
-  const pinToNet = new Map<string, string>();
-  for (const net of design.nets) {
-    for (const ref of net.pins) pinToNet.set(pinKey(ref.inst, ref.pin), net.id);
-  }
-  const netValues = new Map<string, Bit>();
-  // 输入端口：值放进它绑的 net
-  for (const port of design.ports) {
-    if (port.dir !== 'in') continue;
-    const vals = inputs.get(port.name) ?? [];
-    port.nets.forEach((netId, i) => {
-      netValues.set(netId, vals[i] ?? 'Z');
-    });
-  }
-
-  const readNet = (inst: string, pin: string): Bit => {
-    const netId = pinToNet.get(pinKey(inst, pin));
-    if (netId === undefined) return 'Z'; // 没连 → 悬空
-    return netValues.get(netId) ?? 'Z';
-  };
-
-  let rounds = 0;
   let settled = false;
-  for (; rounds < MAX_ROUNDS; rounds++) {
-    // 本轮每个 net 上的全部驱动（含各模块的输出引脚）
+  let rounds = 0;
+  for (; rounds < MAX_ROUNDS && !settled; rounds++) {
     const drivers = new Map<string, Bit[]>();
     const push = (netId: string, v: Bit): void => {
       const list = drivers.get(netId);
@@ -162,77 +204,74 @@ export const evalGateNetlist = (
         return {
           ok: false,
           reason: '库里找不到模块',
-          nets: netValues,
+          nets: idx.netValues,
           outPorts: new Map(),
           rounds,
           unstable: [],
         };
-      const inVals = mod.ports.filter((p) => p.dir === 'in').map((p) => readNet(inst.id, p.name));
-      let outVals: Bit[];
+      const outs = mod.ports.filter((p) => p.dir === 'out');
+      const ins = mod.ports.filter((p) => p.dir === 'in');
+      const inBits = ins.map((p) => idx.readPort(inst.id, p));
+      let outBits: Bit[][];
       if (isGateName(mod.name)) {
-        outVals = [evalGate(mod.name, inVals)]; // 基础门：原子，不展开
+        const gateName = mod.name; // 闭包里 narrowing 会失效，先固定成 const
+        // 基础门：原子，逐位算（同一位上取各输入端口该位的值）
+        const w = Math.max(1, ...outs.map((p) => widthOf(p)));
+        outBits = outs.map(() =>
+          Array.from({ length: w }, (_, b) =>
+            evalGate(
+              gateName,
+              inBits.map((v) => v[b] ?? 'X'),
+            ),
+          ),
+        );
       } else {
-        if (!mod.body)
+        if (!mod.body) {
           return {
             ok: false,
             reason: `复合模块【${mod.name}】没有内部电路`,
-            nets: netValues,
+            nets: idx.netValues,
             outPorts: new Map(),
             rounds,
             unstable: [],
           };
+        }
         const inMap = new Map<string, Bit[]>();
-        mod.ports
-          .filter((p) => p.dir === 'in')
-          .forEach((p, i) => {
-            inMap.set(p.name, [inVals[i] ?? 'X']);
-          });
+        ins.forEach((p, i) => {
+          inMap.set(p.name, inBits[i] ?? []);
+        });
         const inner = evalGateNetlist(mod.body, library, inMap);
         if (!inner.ok) return { ...inner, rounds, unstable: [] };
-        const outs = mod.ports.filter((p) => p.dir === 'out');
-        outVals = outs.map((p) => inner.outPorts.get(p.name)?.[0] ?? 'X');
+        outBits = outs.map((p) => inner.outPorts.get(p.name) ?? []);
       }
-      mod.ports
-        .filter((p) => p.dir === 'out')
-        .forEach((p, i) => {
-          const netId = pinToNet.get(pinKey(inst.id, p.name));
-          if (netId !== undefined) push(netId, outVals[i] ?? 'X');
-        });
+      outs.forEach((p, i) => {
+        for (let b = 0; b < widthOf(p); b++) {
+          const netId = idx.pinToNet.get(pinKey(inst.id, p.name, b));
+          if (netId !== undefined) push(netId, outBits[i]?.[b] ?? 'X');
+        }
+      });
     }
 
     let changed = false;
     for (const net of design.nets) {
-      const merged = mergeDrivers(drivers.get(net.id) ?? []);
-      const prev = netValues.get(net.id) ?? 'Z';
-      // 没有任何驱动的 net 保持原值（输入端口就是这种情况）
-      const next = (drivers.get(net.id) ?? []).length === 0 ? prev : merged;
-      if (next !== prev) {
-        netValues.set(net.id, next);
+      const list = drivers.get(net.id) ?? [];
+      if (list.length === 0) continue; // 输入端口自己的 net，保持
+      const merged = mergeDrivers(list);
+      const prev = idx.netValues.get(net.id) ?? 'Z';
+      if (merged !== prev) {
+        idx.netValues.set(net.id, merged);
         changed = true;
       }
     }
-    if (!changed) {
-      settled = true;
-      break;
-    }
+    settled = !changed;
   }
 
   const unstable: string[] = [];
   if (!settled) {
-    // 迭代上限内还在动 → 这些 net 判 X（振荡），如实标注
     for (const net of design.nets) {
-      if (netValues.has(net.id)) unstable.push(net.id);
+      if (idx.netValues.has(net.id)) unstable.push(net.id);
     }
-    for (const id of unstable) netValues.set(id, 'X');
+    for (const id of unstable) idx.netValues.set(id, 'X');
   }
-
-  const outPorts = new Map<string, Bit[]>();
-  for (const port of design.ports) {
-    if (port.dir !== 'out') continue;
-    outPorts.set(
-      port.name,
-      port.nets.map((netId) => netValues.get(netId) ?? 'Z'),
-    );
-  }
-  return { ok: true, nets: netValues, outPorts, rounds, unstable };
+  return { ok: true, nets: idx.netValues, outPorts: readOutPorts(design, idx), rounds, unstable };
 };

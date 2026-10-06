@@ -100,8 +100,8 @@ describe('时序器件 = 状态元件', () => {
       st,
     );
     expect(r.clocked).toBe(true);
-    expect(r.updates).toEqual(['L1/q=1']);
-    expect(st.get('L1', 'q')).toBe(1);
+    expect(r.updates).toEqual(['L1/q#0=1']); // 状态按位记录，字符串带位号
+    expect(st.get('L1', 'q', 0)).toBe(1);
     expect(st.snapshot()['L1/__clk']).toBe(1);
   });
 
@@ -132,7 +132,7 @@ describe('时序器件 = 状态元件', () => {
     const st = new GateStateStore();
     expect(step(l, d, st, 1, 1)).toBe(1); // 写入
     expect(step(l, d, st, 0, 0)).toBe(1); // 保持（内部状态没丢）
-    expect(st.get('L1/L9', 'q')).toBe(1); // 状态槽带实例路径前缀
+    expect(st.get('L1/L9', 'q', 0)).toBe(1); // 状态槽带实例路径前缀
   });
 
   it('时序模块没声明时钟/数据端口 → 如实回落，不猜端口', () => {
