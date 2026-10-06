@@ -133,7 +133,41 @@ export function freshDocFor(mode: GameMode, levelId: string, library: StoredModu
 }
 
 /** 取某一关/自由模式/教学模式的画布：优先玩家自己的存档，否则初始画布 */
+/**
+ * 把「本关提供的门」（teaching 积木，且本关开放模块库）补回画布库。
+ *
+ * 为什么需要单独补：docFor 内部会按"存档引用到哪些模块"剪库（resolveMissingModules），
+ * 没人引用过的门会被剪掉 —— 但左侧菜单要列出它们，玩家也要能直接把门摆上画布。
+ * 复合积木（二进制→BCD 等）同样在库里（复合门的身体会引用更底层的门，编译需要），
+ * 只是菜单按 BASIC_GATES 过滤，不列给玩家。
+ */
+function withProvidedGates(
+  doc: Doc,
+  mode: GameMode,
+  levelId: string,
+  library: readonly StoredModule[],
+): Doc {
+  if (mode !== 'level') return doc;
+  const level = findLevel(levelId);
+  if (!level || level.moduleAccess === 'none') return doc;
+  const gates = library.filter((m) => m.teaching === true);
+  if (gates.length === 0) return doc;
+  const seen = new Set(doc.library.map((m) => m.hash));
+  const merged = [...doc.library];
+  for (const gate of gates) {
+    if (!seen.has(gate.hash)) {
+      merged.push(gate);
+      seen.add(gate.hash);
+    }
+  }
+  return { ...doc, library: merged };
+}
+
 export function docFor(mode: GameMode, levelId: string, library: StoredModule[]): Doc {
+  return withProvidedGates(docForInner(mode, levelId, library), mode, levelId, library);
+}
+
+function docForInner(mode: GameMode, levelId: string, library: StoredModule[]): Doc {
   const stored = readStoredDoc(storageKeyFor(mode, levelId));
   if (mode === 'free') {
     return stored ? { ...stored, library } : { ...notGateDemo(), library };
