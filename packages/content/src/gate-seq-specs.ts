@@ -33,3 +33,16 @@ export const GATE_SEQ_SPECS: Readonly<Record<string, GateSeqSpec>> = {
 /** 有声明就能走门级时序引擎；没有就回落（见文件头）*/
 export const seqSpecOf = (moduleName: string): GateSeqSpec | undefined =>
   GATE_SEQ_SPECS[moduleName];
+
+/**
+ * 门级快路的**开关白名单**：只有在这里列出的关卡才会走门级引擎，其它一律回落原引擎。
+ *
+ * 为什么需要白名单（而不是"条件满足就走"）：实测发现条件满足 ≠ 结论正确。
+ * apps/studio/test/gate-fast-judge.test.ts 的护栏量到：
+ *   · s3-half-adder：元件级 2ms(pass=true) / 带快路 1ms(pass=true) → 一致，可以启用；
+ *   · s3-calc     ：元件级 108ms(pass=true) / 带快路 4928ms(**pass=false**) → **结论不一致**，
+ *     而且慢 45 倍。在查清原因并修好之前，它**不许**走快路 —— 宁可不快，不能算错。
+ */
+export const GATE_FAST_LEVELS: readonly string[] = ['s3-half-adder'];
+
+export const gateFastEnabledFor = (levelId: string): boolean => GATE_FAST_LEVELS.includes(levelId);

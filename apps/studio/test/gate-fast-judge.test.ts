@@ -44,7 +44,8 @@ const run = (id: string, withFast: boolean) => {
 };
 
 describe('第 6 步：门级快路实测与一致性', () => {
-  for (const id of ['s3-half-adder', 's3-calc']) {
+  // s3-half-adder：已启用的关（白名单）→ 必须严格一致
+  for (const id of ['s3-half-adder']) {
     it(`${id}：带快路与不带快路结论一致，并报出耗时`, () => {
       const slow = run(id, false);
       const fast = run(id, true);
@@ -55,4 +56,18 @@ describe('第 6 步：门级快路实测与一致性', () => {
       expect(fast.pass).toBe(slow.pass);
     }, 120_000);
   }
+});
+
+describe('已知缺陷（护栏盯着，修好前不许启快路）', () => {
+  it.skip('s3-calc：门级快路结论与元件级不一致，而且更慢（实测 pass=false / 4928ms）', () => {
+    // 实测（本机）：元件级 108ms(pass=true) / 带快路 4928ms(**pass=false**)。
+    // 现象：走上门级之后既**算错**（pass=false）又**慢 45 倍**。
+    // 因此 s3-calc 不在 GATE_FAST_LEVELS 白名单里，生产路径上仍走元件级。
+    // 待查：① 结论为何不一致（功能原子口径？数字输入寄存器递归？lane 键？）
+    //       ② 为什么慢（每个向量从头求值、复合模块无缓存）
+    // 修好后把这一条改成真断言，并把 s3-calc 加进白名单。
+    const slow = run('s3-calc', false);
+    const fast = run('s3-calc', true);
+    expect(fast.pass).toBe(slow.pass);
+  }, 120_000);
 });

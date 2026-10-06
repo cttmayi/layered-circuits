@@ -117,3 +117,26 @@ export const evalGate = (name: GateName, inputs: readonly Bit[]): Bit => {
 
 /** 把 Bit 转成调试/断言用的字符 */
 export const bitToText = (b: Bit): string => (b === 'X' ? 'X' : b === 'Z' ? 'Z' : String(b));
+
+/**
+ * **功能原子**：身体是元件电路（门级引擎没法往下钻），但功能是确定的 → 按真值函数算。
+ *
+ * 这些是 teachings.ts 里"基础门（元件级封装）"那一档的成员，实测确认：
+ *  · 全加器     —— 身体里是 res/dio/npn 元件；端口 a/b/cin → s/cout；
+ *  · 多输入或门 —— 身体里是 res + 多个 dio（二极管或）；功能就是"多输入或"。
+ * 把它们的元件身体展开没有意义（那正是"逻辑版不该用元件算"要避免的事），
+ * 所以在这一层给出等价的门级定义。
+ */
+export const FUNCTION_ATOMS: readonly string[] = ['全加器', '多输入或门'];
+
+export const isFunctionAtom = (name: string): boolean => FUNCTION_ATOMS.includes(name);
+
+/** 全加器：s = a⊕b⊕cin；cout = 多数(a,b,cin)（Kleene 逻辑下 a=1,b=1,c=X 仍得 1）*/
+export const evalFullAdder = (a: Bit, b: Bit, cin: Bit): { s: Bit; cout: Bit } => ({
+  s: xorBit(xorBit(a, b), cin),
+  cout: orBit(orBit(andBit(a, b), andBit(b, cin)), andBit(a, cin)),
+});
+
+/** 多输入或：把输入折叠成或（Kleene：任一为 1 即 1，全 0 才 0）*/
+export const evalMultiOr = (inputs: readonly Bit[]): Bit =>
+  inputs.reduce<Bit>((acc, v) => orBit(acc, v), B0);

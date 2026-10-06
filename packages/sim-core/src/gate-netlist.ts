@@ -15,7 +15,15 @@
  *
  * 为了不把 sim-core 绑到 @lc/schema 上，这里只要求**结构兼容**的最小接口。
  */
-import { type Bit, evalGate, isGateName, mergeDrivers } from './gate-logic.js';
+import {
+  type Bit,
+  evalFullAdder,
+  evalGate,
+  evalMultiOr,
+  isFunctionAtom,
+  isGateName,
+  mergeDrivers,
+} from './gate-logic.js';
 
 export interface GatePin {
   inst: string;
@@ -102,6 +110,34 @@ export const gateFastPathCheck = (
 };
 
 const widthOf = (p: { width?: number }): number => Math.max(1, p.width ?? 1);
+
+/**
+ * 功能原子的输出（全加器 / 多输入或门）：按真值函数算，**不展开元件身体**。
+ * 返回按"输出端口顺序"排列的各位值；不是功能原子就返回 null（调用方去递归）。
+ */
+export const evalAtomOutputs = (
+  modName: string,
+  ins: readonly { name: string; width?: number }[],
+  outs: readonly { name: string; width?: number }[],
+  inBits: readonly Bit[][],
+): Bit[][] | null => {
+  const byName = (n: string): Bit[] | undefined => {
+    const i = ins.findIndex((p) => p.name === n);
+    return i >= 0 ? inBits[i] : undefined;
+  };
+  if (modName === '全加器') {
+    const a = byName('a') ?? inBits[0] ?? [];
+    const b = byName('b') ?? inBits[1] ?? [];
+    const cin = byName('cin') ?? inBits[2] ?? [];
+    const { s, cout } = evalFullAdder(a[0] ?? 'X', b[0] ?? 'X', cin[0] ?? 'X');
+    return outs.map((p) => [p.name === 'cout' ? cout : s]);
+  }
+  if (modName === '多输入或门') {
+    const inputs = inBits.map((v) => v[0] ?? 'X');
+    return outs.map(() => [evalMultiOr(inputs)]);
+  }
+  return null;
+};
 
 /**
  * 这个时序模块是否**必须**由内容层声明 SeqSpec（时钟/数据端口）？
@@ -233,7 +269,15 @@ export const evalGateNetlist = (
       const ins = mod.ports.filter((p) => p.dir === 'in');
       const inBits = ins.map((p) => idx.readPort(inst.id, p));
       let outBits: Bit[][];
-      if (isGateName(mod.name)) {
+      const atomOut = isFunctionAtom(mod.name)
+        ? evalAtomOutputs(mod.name, ins, outs, inBits)
+        : null;
+
+      if (atomOut) {
+        // 功能原子（全加器 / 多输入或门）：按真值函数算，**不展开元件身体**
+
+        outBits = atomOut;
+      } else if (isGateName(mod.name)) {
         const gateName = mod.name; // 闭包里 narrowing 会失效，先固定成 const
         // 基础门：原子，逐位算（同一位上取各输入端口该位的值）
         const w = Math.max(1, ...outs.map((p) => widthOf(p)));

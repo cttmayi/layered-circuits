@@ -12,7 +12,7 @@ import {
   judgeDesign,
   wrapModule,
 } from '@lc/compiler';
-import { GATE_SEQ_SPECS } from '@lc/content';
+import { GATE_SEQ_SPECS, gateFastEnabledFor } from '@lc/content';
 import {
   costHalfOf,
   familySpecOf,
@@ -87,7 +87,8 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       const spec = familySpecOf(level, req.family ?? 'rtl');
       const result = judgeDesign(req.design, level, {
         library,
-        gateSeqSpecs: GATE_SEQ_SPECS,
+        // 门级快路**按关白名单**启用：只在护栏证明结论一致的关上走（见 gate-seq-specs.ts）
+        ...(gateFastEnabledFor(level.id) ? { gateSeqSpecs: GATE_SEQ_SPECS } : {}),
         hardcore: req.hardcore,
         mode: req.mode,
         family: spec.family,

@@ -11,9 +11,17 @@
  *
  * 状态**按位**保存，并**穿透复合模块递归**（模块内部的触发器用 `外层/内层` 前缀各自占槽）。
  */
-import { type Bit, evalGate, isGateName, mergeDrivers, notBit } from './gate-logic.js';
+import {
+  type Bit,
+  evalGate,
+  isFunctionAtom,
+  isGateName,
+  mergeDrivers,
+  notBit,
+} from './gate-logic.js';
 import {
   bindInputs,
+  evalAtomOutputs,
   type GateLibrary,
   type GateNetlistDesign,
   makePinIndex,
@@ -138,7 +146,15 @@ export const stepGateNetlist = (
       const ins = mod.ports.filter((p) => p.dir === 'in');
       const inBits = ins.map((p) => idx.readPort(inst.id, p));
       let outBits: Bit[][];
-      if (isGateName(mod.name)) {
+      const atomOut = isFunctionAtom(mod.name)
+        ? evalAtomOutputs(mod.name, ins, outs, inBits)
+        : null;
+
+      if (atomOut) {
+        // 功能原子（全加器 / 多输入或门）：按真值函数算，**不展开元件身体**
+
+        outBits = atomOut;
+      } else if (isGateName(mod.name)) {
         const gateName = mod.name; // 闭包里 narrowing 会失效，先固定成 const
         const w = Math.max(1, ...outs.map((p) => widthOf(p)));
         outBits = outs.map(() =>
