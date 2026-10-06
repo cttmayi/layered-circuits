@@ -56,8 +56,8 @@ judge 会**静默回落到元件级引擎**——读数看起来"和元件级完
 pnpm lc-expect --audit     # 打印全表：每关 → 能否吃快路 / 原因
 ```
 
-当前：**18 关 ✅ 已放行 / s3-calc（时钟来自 10 级反相延迟链 + 向量带 settlePs，零延迟模型不适用）/
-s3-or-chain（无门版参考解）**。这张表由 `packages/content/src/gate-fast-audit.ts` 生成，
+当前：**18 关 ✅ 已放行 / `s3-calc`（时钟来自【运算控制】内部的延迟链环形振荡器 —— 零延迟模型塌掉了"沿"，
+向量还带 `settlePs`）/ `s3-or-chain`（无门版参考解）**。这张表由 `packages/content/src/gate-fast-audit.ts` 生成，
 命令行、审计测试、白名单前置条件护栏（每次 `pnpm check`）三个出口共用。
 
 **硬规定**：新增 logic 关卡要吃门级快路，**必须通过前置条件护栏**

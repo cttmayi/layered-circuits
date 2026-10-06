@@ -27,8 +27,9 @@ import { teachingModulesFor, teachingSolutionOf } from './teachings.js';
  */
 export const GATE_FAST_BLOCKED_CAUSES: Readonly<Record<string, string>> = {
   's3-calc':
-    '时钟来自【运算控制】内部 10 级反相延迟链（延迟本身就是功能，向量按键行还带 settlePs 1µs）：' +
-    '零延迟求值把这条环路塌成**静态电平**、产生不出"沿"，而八位寄存器靠沿写入 → 门级会有若干行读到旧值',
+    '时钟来自【运算控制】内部的**延迟链环形振荡器**（10 级反相链自己振出写入脉冲，延迟本身就是功能，' +
+    '向量按键行还带 settlePs 1µs）：零延迟求值把这条环路塌成**静态电平**、**塌掉了"沿"**，' +
+    '而八位寄存器靠沿写入 → 门级会有若干行读到旧值',
   's3-or-chain':
     '没有门版参考解（teachingSolutionOf(id, "rtl") 返回空）→ 门级结论无从比较，也就无从放行',
 };

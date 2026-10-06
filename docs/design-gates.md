@@ -365,8 +365,9 @@ D judgeDesign(timing, 门级):  pass=true  row1=0x3f     ← 门级没跑，元�
 3. **行数相同**；
 4. **门版参考解自身通过**（`teachingSolutionOf(id,'rtl')` 存在，且它在元件级口径下 `pass=true`）。
 
-这四条由 `apps/studio/test/gate-fast-whitelist-precondition.test.ts` **自动核对**，
-每次 `pnpm check` 都会跑；不通过它就会红。
+这四条由 `apps/studio/test/gate-fast-whitelist-precondition.test.ts`（**唯一那道前置条件护栏**）
+**自动核对**，每次 `pnpm check` 都会跑，跑完还会把上面那张全表打印出来；不通过它就会红。
+**没有第二条路**：不通过 → 这一关就留在元件级，不许改期望值去将就门级。
 
 > **⛔ 不许为了加速改期望值**：关卡 `vectors[].expect` 是**教学答案**。
 > 若门级算出的读数与期望值不同，正确的处理是**这一关回落元件级**（判定仍正确、只是不加速），
@@ -401,8 +402,9 @@ pnpm check                                               # 白名单前置条件
 ⛔ 回落元件级（2 关，判定仍正确、只是不加速）：
    s3-or-chain：没有门版参考解（teachingSolutionOf(id, "rtl") 返回空）→ 门级结论无从比较，也就无从放行
         证据｜teachingSolutionOf(id, "rtl") 为空
-   s3-calc：时钟来自【运算控制】内部 10 级反相延迟链（延迟本身就是功能，向量按键行还带 settlePs 1µs）：
-           零延迟求值把这条环路塌成静态电平、产生不出"沿"，而八位寄存器靠沿写入 → 门级会有若干行读到旧值
+   s3-calc：时钟来自【运算控制】内部的**延迟链环形振荡器**（10 级反相链自己振出写入脉冲，延迟本身就是
+           功能，向量按键行还带 settlePs 1µs）：零延迟求值把这条环路塌成**静态电平**、**塌掉了"沿"**，
+           而八位寄存器靠沿写入 → 门级会有若干行读到旧值
         证据｜实测：门级 pass=true→false，逐行数值差异 58/67
 ```
 
