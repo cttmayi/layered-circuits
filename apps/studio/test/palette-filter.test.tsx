@@ -129,3 +129,20 @@ describe('模块卡片的延迟显示', () => {
     expect(card?.children.length, '元件卡片也应保持两行').toBe(2);
   });
 });
+
+describe('逻辑版（抹平延迟）下的卡片', () => {
+  it('不显示任何延迟，但卡片仍是两行', () => {
+    render(
+      <Palette
+        placing={null}
+        onPick={() => {}}
+        library={[fakeModule(6500)]}
+        level={moduleLevel()}
+        mode="logic"
+      />,
+    );
+    expect(screen.queryByText(/延迟/)).toBeNull();
+    const card = screen.getByText('半加器').closest('button');
+    expect(card?.children.length, '逻辑版下卡片也保持两行').toBe(2);
+  });
+});

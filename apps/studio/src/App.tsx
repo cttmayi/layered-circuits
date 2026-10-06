@@ -1424,6 +1424,7 @@ export function App(): React.JSX.Element {
       <div className="body">
         {leftOpen && (
           <Palette
+            mode={simMode}
             placing={placing}
             onPick={setPlacing}
             library={doc.library}
@@ -1547,9 +1548,12 @@ export function App(): React.JSX.Element {
 
         {rightOpen && (
           <div className="side">
-            {currentLevel && <LevelCard level={currentLevel} costHalf={snapshot?.cost.half ?? 0} />}
+            {currentLevel && (
+              <LevelCard level={currentLevel} costHalf={snapshot?.cost.half ?? 0} mode={simMode} />
+            )}
             {currentLevel && (
               <JudgePanel
+                mode={simMode}
                 level={judgedLevel ?? currentLevel}
                 result={judgeResult}
                 record={levelRecord}

@@ -6,6 +6,8 @@ import { SegmentTaskDiagram } from './SegmentDiagram';
 
 export interface LevelCardProps {
   level: Level;
+  /** 判定/仿真口径：逻辑版抹平延迟，因此不显示任何延迟数字（默认时序版） */
+  mode?: 'logic' | 'timing';
   /** 当前电路成本（半单位） */
   costHalf: number;
 }
@@ -14,7 +16,7 @@ const CELL: Record<string, string> = { 0: 'lo', 1: 'hi', X: 'bad', Z: 'dim' };
 
 /** 左侧「任务卡」：直接说清任务（+ 图），高频参考；真值表/教学/提示放「任务详情」弹窗。
  * 不做场景话术（委托方/客户叙事一律不出现），任务表达 = 需求 + 图 + 约束。 */
-export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Element {
+export function LevelCard({ level, costHalf, mode = 'timing' }: LevelCardProps): React.JSX.Element {
   const [showTask, setShowTask] = useState(false);
   const contract = contractOf(level);
   const budget = level.budgetHalf;
@@ -101,7 +103,8 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
                 <p>
                   元件成本{' '}
                   {contract.costCap === null ? '按最省结算' : `≤ ${contract.costCap.toFixed(1)} 元`}
-                  {contract.timingCap !== null &&
+                  {mode !== 'logic' &&
+                    contract.timingCap !== null &&
                     ` · 传播延迟 ≤ ${contract.timingCap.toFixed(1)} ns`}
                 </p>
               </>
@@ -110,7 +113,7 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
               <>
                 <h4>真值表</h4>
                 {truthTable}
-                {level.timingBudgetPs !== undefined && (
+                {mode !== 'logic' && level.timingBudgetPs !== undefined && (
                   <p className="dim small">
                     交付还要求传播延迟 ≤ {(level.timingBudgetPs / 1000).toFixed(2)} ns
                   </p>
@@ -128,7 +131,7 @@ export function LevelCard({ level, costHalf }: LevelCardProps): React.JSX.Elemen
               {contract.costCap === null ? '按最省结算' : `≤ ${contract.costCap.toFixed(1)} 元`}
             </strong>
           </li>
-          {contract.timingCap !== null && (
+          {mode !== 'logic' && contract.timingCap !== null && (
             <li>
               <span className="contract-key">传播延迟</span>
               <strong className="contract-val">≤ {contract.timingCap.toFixed(1)} ns</strong>

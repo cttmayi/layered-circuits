@@ -23,6 +23,8 @@ export interface PaletteProps {
   level: Level | null;
   /** 面板顶部的附加内容（关卡模式下放本关目标卡片） */
   header?: React.ReactNode;
+  /** 判定/仿真口径：逻辑版抹平延迟，卡片上就不显示延迟（默认时序版） */
+  mode?: 'logic' | 'timing';
 }
 
 /** 拖拽编码：把「放什么」写进 dataTransfer */
@@ -186,6 +188,7 @@ export function Palette({
   library,
   level,
   header,
+  mode = 'timing',
 }: PaletteProps): React.JSX.Element {
   const [openSections, toggleSection] = useOpenSections();
   const [hideLocked, toggleHideLocked] = useHideLocked();
@@ -293,9 +296,11 @@ export function Palette({
               </span>
               <span className="palette-row">
                 <span className="palette-note">{locked ? lockReason(item.unit) : item.note}</span>
-                <span className="palette-delay" title="在时序仿真里的信号延迟">
-                  延迟 {((UNIT_DELAY_PS[item.unit] ?? 0) / 1000).toFixed(1)} ns
-                </span>
+                {mode !== 'logic' && (
+                  <span className="palette-delay" title="在时序仿真里的信号延迟">
+                    延迟 {((UNIT_DELAY_PS[item.unit] ?? 0) / 1000).toFixed(1)} ns
+                  </span>
+                )}
               </span>
             </button>
           );
@@ -391,18 +396,20 @@ export function Palette({
                   {mod.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
                   {mod.ports.filter((p) => p.dir === 'out').length} 出
                 </span>
-                <span
-                  className="palette-delay"
-                  title={
-                    moduleCriticalPathPs(mod) > 0
-                      ? '封装时实测：任一输入到输出口的最长路径'
-                      : '封装时未记录时序（早期模块，重新封装即可得到）'
-                  }
-                >
-                  {moduleCriticalPathPs(mod) > 0
-                    ? `延迟 ${(moduleCriticalPathPs(mod) / 1000).toFixed(1)} ns`
-                    : '延迟 —'}
-                </span>
+                {mode !== 'logic' && (
+                  <span
+                    className="palette-delay"
+                    title={
+                      moduleCriticalPathPs(mod) > 0
+                        ? '封装时实测：任一输入到输出口的最长路径'
+                        : '封装时未记录时序（早期模块，重新封装即可得到）'
+                    }
+                  >
+                    {moduleCriticalPathPs(mod) > 0
+                      ? `延迟 ${(moduleCriticalPathPs(mod) / 1000).toFixed(1)} ns`
+                      : '延迟 —'}
+                  </span>
+                )}
               </span>
               {locked && <span className="palette-lock">{moduleLockReason(mod.name)}</span>}
             </button>

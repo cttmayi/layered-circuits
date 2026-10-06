@@ -5,6 +5,8 @@ import { type BusValue, columnsFromKeys, groupBusRow, portLabel } from './busDis
 
 export interface JudgePanelProps {
   level: Level;
+  /** 判定口径：逻辑版没有延迟数字可显示（默认时序版） */
+  mode?: 'logic' | 'timing';
   result: JudgeResult | null;
   record: LevelRecord | undefined;
   attempts: number;
@@ -19,6 +21,7 @@ export function JudgePanel({
   result,
   record,
   attempts,
+  mode = 'timing',
 }: JudgePanelProps): React.JSX.Element {
   const outputNames = [...new Set(level.vectors.flatMap((v) => Object.keys(v.expect ?? {})))];
   const widthOf = new Map(level.ports.map((p) => [p.name, p.width]));
@@ -75,7 +78,7 @@ export function JudgePanel({
                   {!isCard && result.overBudget && <span className="bad"> 超支</span>}
                 </td>
               </tr>
-              {!level.classroom && (
+              {!level.classroom && mode !== 'logic' && (
                 <tr>
                   <td>传播延迟</td>
                   <td className="num">
@@ -90,6 +93,7 @@ export function JudgePanel({
                 </tr>
               )}
               {!level.classroom &&
+                mode !== 'logic' &&
                 result.timing.portDelayPs !== null &&
                 Object.keys(result.timing.portDelayPs).length > 0 && (
                   <tr>
