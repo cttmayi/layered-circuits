@@ -20,12 +20,14 @@ export const GATE_SEQ_SPECS: Readonly<Record<string, GateSeqSpec>> = {
     clock: 'en',
     data: ['d'],
     mode: 'level',
+    initial: '1', // 实测：元件级里交叉耦合锁存电路收敛到 Q=1
     map: { d: ['q', '!qn'] },
   },
   主从D触发器: {
     clock: 'clk',
     data: ['d'],
     mode: 'rising',
+    initial: '1', // 同上：主从 D 触发器上电也是 Q=1
     map: { d: ['q', '!qn'] },
   },
 };
@@ -58,9 +60,10 @@ export const GATE_FAST_LEVELS: readonly string[] = [
   's3-seg-fg',
   's3-display2',
   's3-encoder',
+  's3-reg-8',
+  's3-digit-entry',
   // 暂不放行（对照表里仍有差异，宁可不快不能算错）：
   //   s2-sr-latch / s2-btn-latch / s2-d-latch / s2-dff（电平型锁存器与首个向量的差异）
-  //   s3-reg-8 / s3-digit-entry（各 1 行差异）
   //   s3-calc（结论不一致 + 慢 100 倍以上）
   //   s3-or-chain（没有门版参考解）
 ];

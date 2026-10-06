@@ -62,6 +62,13 @@ export interface GateSeqSpec {
   clock: string;
   data: readonly string[];
   mode: 'level' | 'rising';
+  /**
+   * 时序器件的**上电初值**（缺省 '0'）。
+   * 实测：元件级引擎里交叉耦合的锁存电路会**收敛到 Q=1**（双极锁存电路的固有偏置），
+   * 所以 D 锁存器 / 主从 D 触发器这种"元件电路"的时序积木要声明 '1'，
+   * 否则首个向量就会与元件级口径不符（s2-dff / s3-reg-8 / s2-d-latch 都栽在这里）。
+   */
+  initial?: '0' | '1';
   /** 数据端口 → 输出端口（可多个；端口名带前导 `!` 表示反相输出，如 qn）*/
   map?: Readonly<Record<string, string | readonly string[]>>;
 }

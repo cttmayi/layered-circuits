@@ -13,6 +13,7 @@
  */
 import {
   B0,
+  B1,
   type Bit,
   evalGate,
   isFunctionAtom,
@@ -135,8 +136,11 @@ export const stepGateNetlist = (
         // 元件级时序器件（D 锁存器 / 主从 D 触发器）：输出 = 当前状态（没记录过就是 Z）
         // 注意：身体是**模块**的时序积木（八位寄存器 / 数字输入寄存器）不走这条路 ——
         // 它们直接递归下钻，所以内部状态、移位、保持逻辑都按电路原样算。
+        const initial: Bit = mod.seq?.initial === '1' ? B1 : B0;
         outs.forEach((p) => {
-          const bits = state.getPort(prefix + inst.id, p);
+          const bits = state
+            .getPort(prefix + inst.id, p)
+            .map((_v, b) => state.get(prefix + inst.id, p.name, b) ?? initial);
           for (let b = 0; b < widthOf(p); b++) {
             const netId = idx.pinToNet.get(pinKey(inst.id, p.name, b));
             if (netId !== undefined) push(netId, bits[b] ?? 'Z');
