@@ -223,6 +223,16 @@ export function expandVectors(
 
 export function judgeDesign(design: Design, level: Level, options: JudgeOptions): JudgeResult {
   const mode: SimMode = options.mode ?? level.mode;
+  /**
+   * 逻辑版（玩家可在工具栏切换）：**不看任何时间量** ——
+   *   · 不实测传播延迟（skipDelay）
+   *   · 不评延迟档（结果里 timingBudgetPs 置 null → 评星只按成本，见 apps/studio 的 starsOf）
+   *   · 不查毛刺上限（毛刺本身就是延迟差异造成的，逻辑口径下没有这个概念）
+   *   · 不查建立/保持（把 hardcore 一并关掉）
+   * 时序版（默认）仍是主线的硬核口径，行为一字未改。
+   */
+  const logicOnly = mode === 'logic';
+  const hardcore = (options.hardcore ?? false) && !logicOnly;
   const errors: string[] = [];
   const warnings: string[] = [];
   /** 生效可用元件：契约感知时由 familySpecOf 算出的并集；缺省 = 关卡声明 */
@@ -430,10 +440,11 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     // 不评延迟档（无 timingBudgetPs、非 timing 关、无 clock/maxGlitches 约束）时
     // 跳过传播延迟实测（输入数×2 次全仿真），只做「是否时序电路」判定。
     const skipDelay =
-      effectiveTimingBudgetPs === undefined &&
-      level.kind !== 'timing' &&
-      checks.clockPort === undefined &&
-      checks.maxGlitches === undefined;
+      logicOnly ||
+      (effectiveTimingBudgetPs === undefined &&
+        level.kind !== 'timing' &&
+        checks.clockPort === undefined &&
+        checks.maxGlitches === undefined);
     const analysis = analyzeTiming(net, { skipDelay });
     isSequential = analysis.isSequential;
     criticalPathPs = analysis.criticalPathPs;
@@ -459,7 +470,7 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
   // 第 1 个向量包含上电建立过程，跳变次数天然不止一次，不计入空翻统计
   const glitchRows = rows.filter((r) => r.index > 0 && r.glitches > 1).map((r) => r.index);
   const totalGlitches = rows.reduce((sum, r) => sum + r.glitches, 0);
-  if (checks.maxGlitches !== undefined) {
+  if (!logicOnly && checks.maxGlitches !== undefined) {
     const max = checks.maxGlitches;
     const over = rows.filter((r) => r.index > 0 && r.glitches > max);
     if (over.length > 0) {
@@ -494,7 +505,7 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
       edgeTriggered = measured.edgeTriggered;
       for (const note of measured.notes) notes.push(note);
       const freq = level.clock?.freqHz;
-      if (options.hardcore && measured.setupPs !== null) {
+      if (hardcore && measured.setupPs !== null) {
         const needed = criticalPathPs + measured.setupPs;
         if (freq && needed > period) {
           warnings.push(
@@ -506,7 +517,7 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
           );
         }
       }
-      if (options.hardcore && measured.setupPs !== null && measured.holdPs !== null) {
+      if (hardcore && measured.setupPs !== null && measured.holdPs !== null) {
         if (checks.setupBudgetPs !== undefined && measured.setupPs > checks.setupBudgetPs) {
           warnings.push(
             `建立时间超标：数据要提前 ${(measured.setupPs / 1000).toFixed(2)}ns 稳定，预算 ${(checks.setupBudgetPs / 1000).toFixed(2)}ns（只降星级，不影响交付）`,
@@ -539,22 +550,22 @@ export function judgeDesign(design: Design, level: Level, options: JudgeOptions)
     overBudget,
     timingOk,
     criticalPathPs,
-    timingBudgetPs: effectiveTimingBudgetPs ?? null,
+    timingBudgetPs: logicOnly ? null : (effectiveTimingBudgetPs ?? null),
     isSequential,
     waveform: waveform ?? null,
     timing: {
       clockPort: checks.clockPort ?? null,
       criticalPathPs,
       portDelayPs,
-      timingBudgetPs: effectiveTimingBudgetPs ?? null,
+      timingBudgetPs: logicOnly ? null : (effectiveTimingBudgetPs ?? null),
       timingOk,
       setupPs,
       holdPs,
       edgeTriggered,
-      setupBudgetPs: checks.setupBudgetPs ?? null,
-      holdBudgetPs: checks.holdBudgetPs ?? null,
+      setupBudgetPs: logicOnly ? null : (checks.setupBudgetPs ?? null),
+      holdBudgetPs: logicOnly ? null : (checks.holdBudgetPs ?? null),
       glitches: totalGlitches,
-      maxGlitches: checks.maxGlitches ?? null,
+      maxGlitches: logicOnly ? null : (checks.maxGlitches ?? null),
       glitchRows,
       isSequential,
       notes,

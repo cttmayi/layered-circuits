@@ -200,9 +200,12 @@ export function App(): React.JSX.Element {
   const [timingView, setTimingView] = useState(true);
   /** 最近一次仿真的端口级波形（时序视图用）；逻辑模式没有时间轴，恒为 null */
   const [liveWave, setLiveWave] = useState<Waveform | null>(null);
-  /** 这次仿真的跑法：**恒为真实时序**（2026-01 移除「科普模式」后不再有抹平延迟的看法）。
-   *  判定另算：它按关卡声明的口径走，与画布无关。 */
-  const simMode: 'logic' | 'timing' = 'timing';
+  /** 这次仿真与判定用的口径。**时序版**（默认）：按真实元件延迟跑，主线的硬核口径；
+   *  **逻辑版**：抹平延迟、只看逻辑对不对 —— 判定器把 timingBudgetPs 置空，
+   *  于是评星只按成本（延迟档视为达标），毛刺与建立/保持也都不查。
+   *  画布与判定共用同一口径，切换后立刻重新仿真；选择持久化、跨关卡保留。 */
+  const [logicMode, setLogicMode] = usePersistentBool('lc.logicMode', false);
+  const simMode: 'logic' | 'timing' = logicMode ? 'logic' : 'timing';
   const [snapshot, setSnapshot] = useState<SimSnapshot | null>(null);
   const [resultDoc, setResultDoc] = useState<Doc | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -245,7 +248,6 @@ export function App(): React.JSX.Element {
   // ---- 自动仿真（Worker 优先，防抖 40ms） ----
   // currentLevel/gameMode 声明在本 effect 之后（TDZ，不能进 deps 数组）；关卡/教学模式切换
   // 必然产生新 doc，由 doc 依赖覆盖重跑。
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 见上（TDZ 限制，doc 依赖兜底）
   useEffect(() => {
     // recomputeNonce 只作「重新计算」按钮的触发信号：值本身不参与计算，仅靠它在依赖
     // 列表里变化来重跑仿真（读一下避免被判定为多余依赖——删除它会让按钮失效）。
@@ -275,7 +277,7 @@ export function App(): React.JSX.Element {
           prevSignals,
           prevContribs,
           prevNodeSignals,
-          withTiming: showTiming,
+          withTiming: showTiming && simMode === 'timing',
           withWaveform: simMode === 'timing',
         })
         .then((response: StudioResponse) => {
@@ -1015,7 +1017,8 @@ export function App(): React.JSX.Element {
         library: doc.library.map((m) => m.template),
         level: judgedLevel,
         // 判定恒按真实时序：建立/保持等时序检查一律生效（不再由玩家的看法开关决定）
-        hardcore: true,
+        mode: simMode,
+        hardcore: simMode === 'timing',
         family: progress.family,
       });
       if (response.error || !response.judge) {
@@ -1337,7 +1340,16 @@ export function App(): React.JSX.Element {
         <div className="group">
           <button
             type="button"
+            className={logicMode ? 'active' : ''}
+            title="逻辑版：抹平元件延迟、只看逻辑对不对（不评延迟档，只按成本评星）"
+            onClick={() => setLogicMode(!logicMode)}
+          >
+            {logicMode ? '逻辑版' : '时序版'}
+          </button>
+          <button
+            type="button"
             className={timingView ? 'active' : ''}
+            disabled={logicMode}
             onClick={() => setTimingView(!timingView)}
             title="在画布上画出真实波形：竞争、毛刺、传播延迟。只改画布，不改判定。"
           >
@@ -1593,7 +1605,7 @@ export function App(): React.JSX.Element {
                   : []
               }
             />
-            {timingView && (
+            {timingView && simMode === 'timing' && (
               <WaveformPanel
                 waveform={liveWave}
                 portNames={Object.keys(snapshot?.portValues ?? {})}

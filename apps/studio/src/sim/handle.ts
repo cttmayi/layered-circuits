@@ -87,6 +87,7 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       const result = judgeDesign(req.design, level, {
         library,
         hardcore: req.hardcore,
+        mode: req.mode,
         family: spec.family,
         units: spec.units,
         timingBudgetPs: spec.timingBudgetPs,

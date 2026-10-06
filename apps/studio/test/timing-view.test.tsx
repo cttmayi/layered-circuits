@@ -97,7 +97,7 @@ describe('界面层：时序视图只改仿真，不改判定', () => {
     // 一键出答案：省得在测试里手搭电路
     fireEvent.click(screen.getByText('一键出答案'));
     await waitFor(() => expect(screen.getByText('三极管')).toBeTruthy());
-    // 画布恒按真实时序跑（2026-01 移除了「科普模式」），默认带波形
+    // 画布与判定共用工具栏口径（默认时序版），因此默认按真实时序跑、带波形
     await waitFor(() => {
       const last = simRequests().at(-1)!;
       expect(last.type === 'simulate' && last.mode).toBe('timing');
@@ -105,7 +105,7 @@ describe('界面层：时序视图只改仿真，不改判定', () => {
     const first = simRequests().at(-1)!;
     expect(first.type === 'simulate' && first.withWaveform).toBe(true);
     await waitFor(() => expect(document.querySelectorAll('.wlabel').length).toBeGreaterThan(0));
-    // 「科普模式 / 硬核模式」开关已移除（2026-01）：画布恒按真实时序跑
+    // 旧的两档开关（科普模式 / 硬核模式）已移除；现在是「逻辑版 / 时序版」一个总开关，默认时序版
     expect(screen.queryByText('科普模式')).toBeNull();
     expect(screen.queryByText(/硬核模式/)).toBeNull();
 
@@ -115,12 +115,13 @@ describe('界面层：时序视图只改仿真，不改判定', () => {
     await waitFor(() => expect(document.querySelectorAll('.wlabel').length).toBe(0));
     expect(simRequests().length).toBe(before);
 
-    // 交付验收：判定请求与画布无关（不给 mode），而且恒按真实时序（hardcore 恒 true）
+    // 交付验收：判定口径只由工具栏的「逻辑版 / 时序版」决定，跟「时序视图」（画不画波形）无关；
+    // 默认时序版 → 判定按真实时序 + hardcore。上面刚收起过波形，这里 mode 必须还是 timing。
     fireEvent.click(screen.getAllByText('交付验收')[0]!);
     await waitFor(() => expect(judgeRequests().length).toBeGreaterThan(0));
     const judge = judgeRequests().at(-1)!;
     expect(judge.type === 'judge' && judge.hardcore).toBe(true);
-    expect(judge.type === 'judge' && (judge as { mode?: unknown }).mode).toBeUndefined();
+    expect(judge.type === 'judge' && judge.mode).toBe('timing');
     // 而且照样判过（说明收起波形没把判定带偏）
     await waitFor(() => expect(screen.getAllByText(/材料费/).length).toBeGreaterThan(0));
   }, 30_000);
