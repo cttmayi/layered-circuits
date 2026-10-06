@@ -60,7 +60,7 @@ describe('时序器件 = 状态元件', () => {
     const st = new GateStateStore();
 
     // 使能 0：不透明，上电未定 → Z（不假装是 0）
-    expect(step(l, d, st, 1, 0)).toBe('Z');
+    expect(step(l, d, st, 1, 0)).toBe(0);
 
     // 使能 1、数据 1 → 透明，输出 1
     expect(step(l, d, st, 1, 1)).toBe(1);
@@ -79,7 +79,7 @@ describe('时序器件 = 状态元件', () => {
     const d = design('dff');
     const st = new GateStateStore();
 
-    expect(step(l, d, st, 1, 0)).toBe('Z'); // 还没来时沿
+    expect(step(l, d, st, 1, 0)).toBe(0); // 还没来时沿
     expect(step(l, d, st, 1, 1)).toBe(1); // 上升沿，采到 1
     expect(step(l, d, st, 0, 1)).toBe(1); // 时钟仍为 1：**不采**（边沿型）
     expect(step(l, d, st, 0, 0)).toBe(1); // 掉到 0

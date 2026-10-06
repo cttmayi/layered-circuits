@@ -12,6 +12,7 @@
  * 状态**按位**保存，并**穿透复合模块递归**（模块内部的触发器用 `外层/内层` 前缀各自占槽）。
  */
 import {
+  B0,
   type Bit,
   evalGate,
   isFunctionAtom,
@@ -57,7 +58,7 @@ export class GateStateStore {
   }
 
   getPort(instId: string, port: { name: string; width?: number }): Bit[] {
-    return Array.from({ length: widthOf(port) }, (_, b) => this.get(instId, port.name, b) ?? 'Z');
+    return Array.from({ length: widthOf(port) }, (_, b) => this.get(instId, port.name, b) ?? B0);
   }
 
   getClock(instId: string): Bit | undefined {
