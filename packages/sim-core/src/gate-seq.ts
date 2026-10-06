@@ -11,7 +11,7 @@
  *
  * 状态**按位**保存，并**穿透复合模块递归**（模块内部的触发器用 `外层/内层` 前缀各自占槽）。
  */
-import { type Bit, evalGate, isGateName, mergeDrivers } from './gate-logic.js';
+import { type Bit, evalGate, isGateName, mergeDrivers, notBit } from './gate-logic.js';
 import {
   bindInputs,
   type GateLibrary,
@@ -197,20 +197,27 @@ export const stepGateNetlist = (
       const outs = mod.ports.filter((p) => p.dir === 'out');
       const sole = spec.data.length === 1 && outs.length === 1 ? outs[0]?.name : undefined;
       for (const dataPort of spec.data) {
-        const target = spec.map?.[dataPort] ?? sole ?? dataPort;
         // 关键：要拿**端口对象**读，才能带上位宽（只按名字读会默认 1 位，总线就会漏位）
         const srcPort: { name: string; width?: number } = mod.ports.find(
           (p) => p.name === dataPort,
         ) ?? { name: dataPort };
-        const dstPort: { name: string; width?: number } = mod.ports.find(
-          (p) => p.name === target,
-        ) ?? { name: target };
         const src = idx.readPort(inst.id, srcPort);
-        for (let b = 0; b < widthOf(dstPort); b++) {
-          state.set(prefix + inst.id, target, src[b] ?? 'X', b);
-          updates.push(
-            `${prefix}${inst.id}/${target}#${b}=${String(state.get(prefix + inst.id, target, b))}`,
-          );
+        const mapped = spec.map?.[dataPort];
+        const targets =
+          mapped === undefined ? [sole ?? dataPort] : Array.isArray(mapped) ? mapped : [mapped];
+        for (const raw of targets) {
+          const invert = raw.startsWith('!'); // qn 这类反相输出
+          const target = invert ? raw.slice(1) : raw;
+          const dstPort: { name: string; width?: number } = mod.ports.find(
+            (p) => p.name === target,
+          ) ?? { name: target };
+          for (let b = 0; b < widthOf(dstPort); b++) {
+            const v = src[b] ?? 'X';
+            state.set(prefix + inst.id, target, invert ? notBit(v) : v, b);
+            updates.push(
+              `${prefix}${inst.id}/${target}#${b}=${String(state.get(prefix + inst.id, target, b))}`,
+            );
+          }
         }
       }
     }

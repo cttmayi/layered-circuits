@@ -53,7 +53,8 @@ export interface GateSeqSpec {
   clock: string;
   data: readonly string[];
   mode: 'level' | 'rising';
-  map?: Readonly<Record<string, string>>;
+  /** 数据端口 → 输出端口（可多个；端口名带前导 `!` 表示反相输出，如 qn）*/
+  map?: Readonly<Record<string, string | readonly string[]>>;
 }
 
 export interface GateModuleInfo {
