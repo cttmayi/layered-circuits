@@ -51,6 +51,13 @@ export interface GateNetlistDesign {
 export interface GateModuleInfo {
   name: string;
   isSequential?: boolean;
+  /** 时序器件语义（时钟/数据端口、电平型或边沿型）；见 gate-seq.ts 的 SeqSpec */
+  seq?: {
+    clock: string;
+    data: readonly string[];
+    mode: 'level' | 'rising';
+    map?: Readonly<Record<string, string>>;
+  };
   ports: readonly { name: string; dir: 'in' | 'out' }[];
   /** 复合模块的内部电路；7 个基础门不需要（按真值函数算） */
   body?: GateNetlistDesign;
