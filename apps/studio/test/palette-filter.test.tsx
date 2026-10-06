@@ -146,3 +146,36 @@ describe('逻辑版（抹平延迟）下的卡片', () => {
     expect(card?.children.length, '逻辑版下卡片也保持两行').toBe(2);
   });
 });
+
+describe('左侧菜单的分层：基础门区', () => {
+  const fakeGate = (name: string): StoredModule =>
+    ({ ...fakeModule(2500), name, hash: `h-${name}`, teaching: true }) as unknown as StoredModule;
+
+  it('本关开放模块库时，菜单里出现「基础门」区并列出该门', () => {
+    render(
+      <Palette
+        placing={null}
+        onPick={() => {}}
+        library={[fakeGate('与非门'), fakeModule(6500)]}
+        level={moduleLevel()}
+      />,
+    );
+    expect(screen.getByText(/基础门（1）/)).toBeTruthy();
+    expect(screen.getByText('与非门')).toBeTruthy();
+    // 教学积木不算玩家资产：它归「基础门」区，不占「我的模块」的计数（只有玩家那个模块）
+    expect(screen.getByText('我的模块（1）')).toBeTruthy();
+    expect(screen.queryByText('我的模块（2）')).toBeNull();
+  });
+
+  it('本关只允许手搭（moduleAccess: none）时，不出现「基础门」区', () => {
+    render(
+      <Palette
+        placing={null}
+        onPick={() => {}}
+        library={[fakeGate('与非门')]}
+        level={lockedLevel()}
+      />,
+    );
+    expect(screen.queryByText(/基础门/)).toBeNull();
+  });
+});

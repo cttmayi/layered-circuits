@@ -76,6 +76,7 @@ const SECTIONS_KEY = 'lc-ui-palette-sections';
 const SECTIONS = {
   parts: 'parts',
   power: 'power',
+  gates: 'gates',
   modules: 'modules',
 } as const;
 
@@ -249,6 +250,11 @@ export function Palette({
   /** 勾选「隐藏本关不可用」后的展示列表 */
   const filteredUnits = hideLocked ? UNITS.filter((u) => unitAllowed(u.unit)) : UNITS;
   const userModules = library.filter((m) => !m.teaching);
+  /** 基础门：本关提供的门（teaching 积木）。库里注入的是整族（复合门的身体会引用更底层的门），
+   *  菜单只列本关允许的门，所以列表里不会出现被锁住的卡片。 */
+  const gateModules = library.filter(
+    (m) => m.teaching === true && (level?.moduleAccess !== 'listed' || moduleAllowed(m.name)),
+  );
   const filteredModules = hideLocked
     ? userModules.filter((m) => modulesAllowed && moduleAllowed(m.name))
     : userModules;
@@ -349,6 +355,71 @@ export function Palette({
             );
           })}
       </Section>
+
+      {/* 基础门：本关提供的门。契约在门的内部，这里只按白名单列出来。
+          库里注入的是整族（复合门的身体会引用更底层的门，只注入白名单会 unknown-module），
+          菜单只列本关允许的门，所以不会出现"锁住"的卡片。 */}
+      {level && modulesAllowed && gateModules.length > 0 && (
+        <Section
+          open={openSections.has(SECTIONS.gates)}
+          onToggle={() => toggleSection(SECTIONS.gates)}
+          title={`基础门（${gateModules.length}）`}
+        >
+          {gateModules.map((gate) => {
+            // 基础门区只列本关允许的门，不存在被锁住的卡片
+            const locked = false;
+            return (
+              <button
+                key={gate.hash}
+                type="button"
+                className={isArmed('module', gate.hash) ? 'palette-item active' : 'palette-item'}
+                disabled={locked}
+                draggable={!locked}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(
+                    DRAG_MIME,
+                    dragPayload({ kind: 'module', hash: gate.hash }),
+                  );
+                  e.dataTransfer.effectAllowed = 'copy';
+                  e.dataTransfer.setDragImage(dragImage('module'), 48, 48);
+                }}
+                onClick={() => pick('module', undefined, gate.hash)}
+                title={locked ? moduleLockReason(gate.name) : '拖到画布放置'}
+              >
+                <span className="palette-row">
+                  <span className="palette-name">
+                    {gate.name} {gate.isSequential && <em>时序</em>}
+                  </span>
+                  <span className="palette-cost">成本 {gate.costHalf / 2}</span>
+                </span>
+                {/* 第二行：左边入/出，右边延迟（= 封装时实测的关键路径，任一输入 → 输出口最长路径）。
+                  延迟并进这一行、不自己占一行，卡片始终两行高、加延迟不会变高 */}
+                <span className="palette-row">
+                  <span className="palette-note">
+                    {gate.ports.filter((p) => p.dir === 'in').length} 入 /{' '}
+                    {gate.ports.filter((p) => p.dir === 'out').length} 出
+                  </span>
+                  {mode !== 'logic' && (
+                    <span
+                      className="palette-delay"
+                      title={
+                        moduleCriticalPathPs(gate) > 0
+                          ? '封装时实测：任一输入到输出口的最长路径'
+                          : '封装时未记录时序（早期模块，重新封装即可得到）'
+                      }
+                    >
+                      {moduleCriticalPathPs(gate) > 0
+                        ? `延迟 ${(moduleCriticalPathPs(gate) / 1000).toFixed(1)} ns`
+                        : '延迟 —'}
+                    </span>
+                  )}
+                </span>
+                {locked && <span className="palette-lock">{moduleLockReason(gate.name)}</span>}
+              </button>
+            );
+          })}
+        </Section>
+      )}
 
       <Section
         open={openSections.has(SECTIONS.modules)}

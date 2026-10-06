@@ -935,7 +935,9 @@ export function App(): React.JSX.Element {
     const mode: GameMode = teach ? 'teach' : 'level';
     setGameMode(mode);
     setLevelId(nextLevelId);
-    setDoc(docFor(mode, nextLevelId, progress.library));
+    setDoc(
+      docFor(mode, nextLevelId, withLevelGates(progress.library, nextLevelId, progress.family)),
+    );
     clearTransient();
     setScreen('bench');
     if (!teach) {
@@ -956,7 +958,7 @@ export function App(): React.JSX.Element {
   const enterFree = (): void => {
     setGameMode('free');
     setLevelId(levelId);
-    setDoc(docFor('free', levelId, progress.library));
+    setDoc(docFor('free', levelId, withLevelGates(progress.library, levelId, progress.family)));
     clearTransient();
     setScreen('bench');
   };
@@ -1683,6 +1685,24 @@ const teachingStoredFor = (family: LogicFamily): StoredModule[] =>
  * 封装出的复合模块要跨关复用，其身体引用的教学积木必须也在玩家库里；
  * 这里把它们找出来（保持 teaching 标记，不出现在「我的模块」，但库里有 → 编译可解析）。
  */
+/**
+ * 本关开放模块库时（`moduleAccess !== 'none'`，第 1 章起），把该契约的**门整族**注入画布库，
+ * 玩家不必再从元件手搭门。
+ *
+ * 为什么注入整族而不是只注入白名单：复合门的身体会引用更底层的门（异或门 → 与非门…），
+ * 只注入白名单会在展开时 unknown-module。菜单（Palette）只列出 `allowedModules` 里的门，
+ * 判定器也按同一名单把关，所以"库里多、菜单里少"是刻意的。
+ */
+const withLevelGates = (
+  library: StoredModule[],
+  levelId: string | null,
+  family: LogicFamily,
+): StoredModule[] => {
+  const level = levelId ? findLevel(levelId) : null;
+  if (!level || level.moduleAccess === 'none') return library;
+  return [...library, ...teachingStoredFor(family)];
+};
+
 const teachingDepsOf = (
   design: Design,
   library: readonly StoredModule[],
