@@ -164,6 +164,11 @@ body,
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* 开合手柄上的文字标签：宽屏由面板本身说明用途，只在窄屏（@media 块）显示 */
+.edge-strip-label {
+  display: none;
+}
+
 .edge-strip.right.closed {
   width: 34px;
 }
@@ -436,6 +441,11 @@ body,
   margin-top: 2px;
   font-size: 10.5px;
   opacity: 0.85;
+}
+
+/* 窄屏（@media 块）里只藏鼠标那一行（hint-mouse），放置/连线的状态提示（hint-state）保留 */
+.hint-mouse {
+  display: block;
 }
 
 .legend {
@@ -2143,4 +2153,306 @@ body,
 }
 .probe td {
   padding: 2px 8px 2px 0;
+}
+
+/* ==========================================================================
+   窄屏布局（手机竖屏 / 横屏手机 / 竖屏平板）
+   --------------------------------------------------------------------------
+   断点：max-width: 900px，与 src/layout/viewport.ts 的 NARROW_BREAKPOINT_PX 一致
+   （两边各写一份数字，靠 apps/studio/test/mobile-layout.test.tsx 对照防漂移）。
+   为什么取 900：
+     · 360×640 / 390×844 / 430×932（手机竖屏）与 844×390（横屏手机）都在里面；
+     · 768×1024（竖屏平板）也在里面 —— 桌面左右栏 240+316+32 = 588px，只剩约 180px 画布；
+     · 1024×768（横屏平板）与更宽的桌面屏不进这个块，桌面布局一个字节都没动。
+   本块里只放「窄屏才成立」的覆盖规则：全部规则都在 @media 里，宽屏读不到。
+   ========================================================================== */
+@media (max-width: 900px) {
+  /* ⑥ iOS：动态视口高度（地址栏收起/展开时不至于把底部顶出屏幕）；
+     不支持 dvh 的浏览器忽略这一行，沿用基础规则的 height: 100%。 */
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+
+  /* ---- ① 顶栏：单行横向滚动 ----
+     一个控件都不删（余额、称号、撤销/重做照旧），但不换行：横屏手机高度只有 390px，
+     换行会把画布挤没。按钮全部 ≥ 44px 触屏目标，整条栏可左右滑，没有按钮被裁掉拿不到。 */
+  .toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    gap: 8px;
+    padding: 6px max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left));
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .toolbar > *,
+  .toolbar .group {
+    flex: none;
+  }
+
+  /* 滚动容器里 flex:1 的弹簧没有意义，还会撑出一条空白 */
+  .toolbar .spacer {
+    display: none;
+  }
+
+  .toolbar button {
+    min-height: 44px;
+    padding: 8px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .brand {
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  /* 「· 电路工作台」在窄屏纯占宽度 */
+  .brand span {
+    display: none;
+  }
+
+  .toolbar .cleared-count {
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  /* ---- ② 左右面板 = 覆盖抽屉 ----
+     窄屏不再把画布挤成一条缝：body 是定位上下文，面板绝对定位浮在画布之上，
+     画布永远占满整个 body（尺寸由 ResizeObserver 重新量，见 App.tsx）。
+     开合仍由原有状态控制（收起 = 组件不渲染），所以面板一出现就是「抽屉已拉出」。 */
+  .body {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .palette,
+  .side {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 30;
+    /* 顶上 56px 让给浮起的开合手柄（44px 手柄 + 上下各 6px） */
+    padding-top: 56px;
+    overscroll-behavior: contain;
+  }
+
+  .palette {
+    left: 0;
+    width: min(320px, 86vw);
+    border-right: 1px solid var(--line);
+    box-shadow: 16px 0 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .side {
+    right: 0;
+    width: min(360px, 92vw);
+    border-left: 1px solid var(--line);
+    box-shadow: -16px 0 32px rgba(0, 0, 0, 0.5);
+  }
+
+  /* ---- ③ 开合手柄：44px、常驻最上层、带文字标签 ----
+     抽屉开着时同一个按钮就在抽屉左上/右上角，点它收起；抽屉收起时它浮在画布角上。
+     窄屏没有 hover，只画箭头没人知道能开什么，所以补一个可见文字标签。 */
+  .edge-strip,
+  .edge-strip.left,
+  .edge-strip.right,
+  .edge-strip.right.closed {
+    position: absolute;
+    top: 6px;
+    z-index: 40;
+    width: auto;
+    height: auto;
+    background: transparent;
+    border: none;
+  }
+
+  .edge-strip.left {
+    left: max(8px, env(safe-area-inset-left));
+  }
+
+  .edge-strip.right {
+    right: max(8px, env(safe-area-inset-right));
+  }
+
+  .edge-strip > button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 11px;
+    font-size: 15px;
+    line-height: 1.1;
+    color: var(--text);
+    background: rgba(19, 26, 34, 0.94);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+
+  /* 手指按下时浏览器也会给 :hover，别让它把手柄的底衬打回透明 */
+  .edge-strip > button:hover {
+    color: var(--text);
+    background: rgba(25, 34, 44, 0.98);
+  }
+
+  .edge-strip-label {
+    display: inline;
+    font-size: 12px;
+  }
+
+  /* ---- ④ 画布上的覆盖物：让开顶部手柄位、贴边、字号收小 ---- */
+  .hint {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    max-width: none;
+    padding: 5px 7px;
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  /* 手机上没滚轮也没键盘，鼠标那行说明纯占地方（放置/连线的状态提示不受影响） */
+  .hint-mouse {
+    display: none;
+  }
+
+  .legend {
+    top: 60px;
+    right: 8px;
+    left: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px 10px;
+    font-size: 10px;
+  }
+
+  .toast {
+    left: 8px;
+    right: 8px;
+    bottom: 96px;
+    max-width: none;
+    transform: none;
+    padding: 10px 12px;
+    font-size: 12.5px;
+  }
+
+  /* ---- ⑤ 触屏点击目标：面板里的主要可点项都抬到 44px ---- */
+  .palette-item,
+  .palette-filter,
+  .palette-section-head,
+  .task-detail-btn,
+  .level-select,
+  .expand-btn,
+  .rail button {
+    min-height: 44px;
+  }
+
+  .palette-item {
+    padding: 10px 11px;
+  }
+
+  /* ---- ⑥ 弹窗 / 选关 / 主菜单：贴边留缝、按钮加大 ---- */
+  .modal-box {
+    width: calc(100vw - 16px);
+    max-height: 86vh;
+    border-radius: 12px;
+  }
+
+  .modal-head,
+  .modal-foot {
+    padding: 10px 12px;
+  }
+
+  .modal-body {
+    padding: 12px;
+  }
+
+  .modal-x {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 20px;
+  }
+
+  .modal-foot button,
+  .modal-actions button,
+  .answer-choices button,
+  .family-actions .menu-btn {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  .screen-menu .menu-card {
+    width: calc(100vw - 24px);
+    gap: 18px;
+    padding: 26px 16px 20px;
+  }
+
+  .menu-brand h1 {
+    font-size: 30px;
+    letter-spacing: 4px;
+  }
+
+  .menu-btn {
+    min-height: 52px;
+    padding: 13px 14px;
+    font-size: 15px;
+  }
+
+  .menu-stats {
+    gap: 4px 12px;
+    font-size: 11px;
+  }
+
+  /* 关节点是叠在 SVG 上的真按钮：窄屏不再整体缩到火柴盒大小（96px 节点会互相压住），
+     改成地图区内部左右滚动，节点保持 96px 可点。 */
+  .screen-map {
+    padding: 12px 12px 16px;
+  }
+
+  .map-head {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .map-head h1 {
+    font-size: 17px;
+  }
+
+  .map-back {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  .map-stats {
+    width: 100%;
+    margin-left: 0;
+    font-size: 11px;
+  }
+
+  .map-stage,
+  .teach-stage {
+    overflow: auto;
+  }
+
+  .map-canvas {
+    /* 720/960 = 0.75 缩放：行距 105px、列距 117px > 节点 96px，节点不再互相压住 */
+    min-width: 720px;
+  }
+
+  .teach-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+  }
+
+  .family-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .classroom-box {
+    padding: 16px;
+  }
 }

@@ -59,6 +59,7 @@ import {
   type Scene,
   screenToWorld,
 } from './editor/render';
+import { useNarrowScreen } from './layout/viewport';
 import { addModule, dedupeLibrary, storeModule } from './level/library';
 import {
   docForLevel,
@@ -189,6 +190,19 @@ export function App(): React.JSX.Element {
   /** 左右侧面板整体收起/展开（体验：布线时把侧栏收起来腾画布），选择记忆在 localStorage */
   const [leftOpen, setLeftOpen] = usePersistentBool('lc-ui-left-open', true);
   const [rightOpen, setRightOpen] = usePersistentBool('lc-ui-right-open', true);
+  /** 窄屏（手机 / 竖屏平板，≤ 900px）：布局换成覆盖抽屉（见 styles.css 的 @media 块）。
+   *  窄屏上两块面板铺在画布之上，两个都开着的话画布就被盖满了 —— 所以判定到窄屏时先收起，
+   *  画布优先，玩家点左上/右上那两颗 44px 手柄再拉出来。
+   *  只在「是否窄屏」变化时执行一次：玩家在窄屏里自己展开的面板不会被反复关掉；
+   *  桌面宽屏下 narrow 恒为 false，这个 effect 什么都不做，桌面行为逐字不变。
+   *  代价：窄屏收起会写进 localStorage（开合偏好），下次在桌面打开时也是收起状态 —— 相比
+   *  「手机上先被面板盖满」，这个代价可以接受。 */
+  const narrow = useNarrowScreen();
+  useEffect(() => {
+    if (!narrow) return;
+    setLeftOpen(false);
+    setRightOpen(false);
+  }, [narrow, setLeftOpen, setRightOpen]);
   /** 调试开关是否可见：只有 URL 带 ?debug=1 才显示「调试模式」按钮 —— 正式玩法里
    *  连这个按钮都不该出现（存档里残留 lc-ui-debug=true 也不行）。挂载时判一次即可。 */
   const [debugFlag] = useState(
@@ -1709,7 +1723,14 @@ export function App(): React.JSX.Element {
             title={leftOpen ? '收起元件库（腾出画布空间）' : '展开元件库'}
             aria-label={leftOpen ? '收起元件库' : '展开元件库'}
           >
-            {leftOpen ? '◀' : '▶'}
+            <span className="edge-strip-glyph" aria-hidden="true">
+              {leftOpen ? '◀' : '▶'}
+            </span>
+            {/* 窄屏才显示的文字标签（宽屏由 CSS 隐藏）：手机上没有 hover，
+                只画一个箭头的话不知道点开的是什么面板 */}
+            <span className="edge-strip-label" aria-hidden="true">
+              元件库
+            </span>
           </button>
         </div>
 
@@ -1735,7 +1756,9 @@ export function App(): React.JSX.Element {
             onContextMenu={(e) => e.preventDefault()}
           />
           <div className="hint">
-            <div>
+            {/* 这一行两种用途：放置/连线的状态提示（hint-state），或空闲时的鼠标操作说明
+                （hint-mouse）。窄屏没有滚轮/键盘，CSS 只把 hint-mouse 藏掉，状态提示照旧显示 */}
+            <div className={placing || pendingPin ? 'hint-state' : 'hint-mouse'}>
               {placing
                 ? '点击/轻点画布放置元件（Esc 取消）'
                 : pendingPin
@@ -1913,7 +1936,13 @@ export function App(): React.JSX.Element {
             title={rightOpen ? '收起右侧面板（验收/属性）' : '展开右侧面板（验收/属性）'}
             aria-label={rightOpen ? '收起右侧面板' : '展开右侧面板'}
           >
-            {rightOpen ? '▶' : '◀'}
+            <span className="edge-strip-glyph" aria-hidden="true">
+              {rightOpen ? '▶' : '◀'}
+            </span>
+            {/* 窄屏才显示的文字标签，理由同左侧 */}
+            <span className="edge-strip-label" aria-hidden="true">
+              验收
+            </span>
           </button>
         </div>
       </div>
