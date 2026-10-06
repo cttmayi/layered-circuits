@@ -38,3 +38,50 @@ describe('逻辑版判定口径', () => {
     expect(r.timing.holdBudgetPs).toBeNull();
   });
 });
+
+/**
+ * 关卡内容编排：1~3 关只能元件、4~7 关元件+模块（都走时序），第 8 关起只能用模块 + 只判逻辑。
+ * 这两条是**关卡自带**的（elementAccess / judgeMode），不是全局开关。
+ */
+describe('关卡自带的口径与素材约束', () => {
+  const library = new InMemoryModuleLibrary();
+  const elementDesign = findLevel('s1-not')!.referenceSolution!;
+
+  it('第 8 关起：17~27 关都标注了只能用模块 + 只判逻辑', () => {
+    for (const id of ['s2-sr-latch', 's2-dff', 's3-half-adder', 's3-bin2bcd', 's3-calc']) {
+      const level = findLevel(id)!;
+      expect(level.elementAccess, id).toBe('none');
+      expect(level.judgeMode, id).toBe('logic');
+    }
+  });
+
+  it('1~7 关：允许元件，且判定仍走真实时序', () => {
+    for (const id of ['s1-not', 's1-and', 's1-or', 's1-nand', 's1-nor', 's1-xor', 's1-xnor']) {
+      const level = findLevel(id)!;
+      expect(level.elementAccess, id).toBe('all');
+      expect(level.judgeMode, id).toBe('timing');
+    }
+  });
+
+  /**
+   * ⚠️ 已知未生效：这条现在是**复现器**，不是通过的护栏。
+   *
+   * 实测证据（本轮）：拿四关**自己的参考解**去判它自己的关，全部 pass=true、errors 空 ——
+   *   s3-half-adder(元件30/模块0)、s3-calc(元件6191/模块0)、s2-sr-latch(元件10)、s2-dff(元件49)
+   * 也就是说 schema 字段与内容标注都对（上面两条测试守着），但 judgeDesign 这条路径上
+   * **没有执行** elementAccess 检查 → 玩家在只能用模块的关卡里摆元件，不会被拦。
+   * 另一个连带问题：那 20 关的参考解本身就是元件搭的，规则一旦生效会拒掉游戏自己的参考解
+   * （需二选一：参考解换门版，或对参考解豁免）。
+   */
+  it.skip('只能用模块的关卡：画布上摆元件 → 判不通过并说明原因', () => {
+    const level = findLevel('s2-sr-latch')!;
+    const r = judgeDesign(elementDesign, level, { library, mode: 'logic' });
+    expect(r.errors.join(' ')).toContain('本关只能用模块搭建');
+  });
+
+  it('同一种元件解法在 1~7 关不会被这条规则拒绝', () => {
+    const level = findLevel('s1-nand')!;
+    const r = judgeDesign(elementDesign, level, { library, mode: 'timing' });
+    expect(r.errors.join(' ')).not.toContain('本关只能用模块搭建');
+  });
+});
