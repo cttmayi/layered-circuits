@@ -217,6 +217,16 @@ export function Palette({
   const [hideLocked, toggleHideLocked] = useHideLocked();
   /** 竖屏窄屏 = 底部精简形态：卡片只留名字，且不渲染顶部那个「隐藏本关不可用」开关 */
   const compact = usePortraitNarrow();
+  /**
+   * 竖屏底部形态**一律不套**「隐藏本关不可用」的持久化过滤（等于恒为「显示全部」）。
+   *
+   * 为什么：竖屏下那个开关根本不渲染（见下面 `!compact`），可它存在 localStorage 里 —— 如果
+   * 玩家之前在桌面/横屏打开过它，手机上就会看到缺项的元件库、又没有开关能恢复，等于一个
+   * 看不见也关不掉的隐藏态。所以竖屏下直接按「不过滤」算。
+   * ⚠️ 只影响竖屏的**展示列表**：桌面/横屏照旧按持久化状态过滤，`hideLocked` 状态和
+   * localStorage 键（lc-ui-palette-hide-locked）都没动，判定/仿真逻辑一行没碰。
+   */
+  const hideLockedActive = !compact && hideLocked;
   const unitAllowed = (unit: UnitKind): boolean => !level || level.allowedUnits.includes(unit);
   const modulesAllowed = level?.moduleAccess !== 'none';
   /** 模块关卡的可用性：白名单 / 复古关禁用（与判定里的策略保持一致） */
@@ -271,8 +281,8 @@ export function Palette({
   const portLocked = (kind: string): boolean =>
     (kind === 'input' || kind === 'output' || kind === 'button' || kind === 'segment') &&
     Boolean(level);
-  /** 勾选「隐藏本关不可用」后的展示列表 */
-  const filteredUnits = hideLocked ? UNITS.filter((u) => unitAllowed(u.unit)) : UNITS;
+  /** 勾选「隐藏本关不可用」后的展示列表（竖屏底部形态恒不过滤，见 hideLockedActive） */
+  const filteredUnits = hideLockedActive ? UNITS.filter((u) => unitAllowed(u.unit)) : UNITS;
   const userModules = library.filter((m) => !m.teaching);
   /** 基础门：本关提供的门（teaching 积木）。库里注入的是整族（复合门的身体会引用更底层的门），
    *  菜单只列本关允许的门，所以列表里不会出现被锁住的卡片。 */
@@ -286,7 +296,7 @@ export function Palette({
       BASIC_GATES.includes(m.name) &&
       (level?.moduleAccess !== 'listed' || moduleAllowed(m.name)),
   );
-  const filteredModules = hideLocked
+  const filteredModules = hideLockedActive
     ? userModules.filter((m) => modulesAllowed && moduleAllowed(m.name))
     : userModules;
 
@@ -373,7 +383,7 @@ export function Palette({
             ['segment', '七段数码管', '按端口值（BCD 0-9）点亮段'],
           ] as Array<[string, string, string]>
         )
-          .filter(([kind]) => !hideLocked || !portLocked(kind))
+          .filter(([kind]) => !hideLockedActive || !portLocked(kind))
           .map(([kind, name, note]) => {
             const locked = portLocked(kind);
             return (
@@ -490,7 +500,7 @@ export function Palette({
             搭好电路后点「封装为模块」，就能像元件一样复用，造价会自动递归累加。
           </p>
         )}
-        {hideLocked && filteredModules.length === 0 && userModules.length > 0 && (
+        {hideLockedActive && filteredModules.length === 0 && userModules.length > 0 && (
           <p className="palette-empty">已按「隐藏本关不可用」过滤，本关没有可用的模块。</p>
         )}
         {filteredModules.map((mod) => {

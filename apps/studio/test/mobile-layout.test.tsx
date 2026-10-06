@@ -17,8 +17,9 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { App } from '../src/App';
 import {
   NARROW_BREAKPOINT_PX,
   NARROW_MEDIA_QUERY,
@@ -263,6 +264,68 @@ describe('横屏 / 桌面：元件库照旧（卡片信息 + 筛选开关都在�
     expect(document.body.textContent).toMatch(/价格/);
     // 名字也照旧
     expect(screen.getByText('三极管 NPN')).toBeTruthy();
+  });
+});
+
+// ---------- 「隐藏本关不可用」的持久化状态：竖屏不生效、横屏/桌面照旧生效 ----------
+/**
+ * 预置「隐藏本关不可用」的持久化状态（lc-ui-palette-hide-locked）后进工作台、拉开元件库，
+ * 量到卡片数 / 开关是否在 / 卡片名字，然后**卸载**（同一个用例里要渲染两次来对比）。
+ * 注意不能用 renderApp()：它会把 localStorage 清掉，而这个用例考的就是持久化状态。
+ */
+function paletteProbe(
+  w: number,
+  h: number,
+  filterOn: boolean,
+): { count: number; filter: boolean; names: string } {
+  setViewport(w, h);
+  localStorage.clear();
+  localStorage.setItem('lc-ui-palette-hide-locked', filterOn ? '1' : '0');
+  const { unmount } = render(<App />);
+  startJob('非门');
+  openPalette();
+  const palette = document.querySelector('aside.palette');
+  const out = {
+    count: palette?.querySelectorAll('.palette-item').length ?? 0,
+    filter: Boolean(palette?.querySelector('.palette-filter')),
+    names: [...(palette?.querySelectorAll('.palette-name') ?? [])]
+      .map((el) => (el.textContent ?? '').trim())
+      .join('|'),
+  };
+  unmount();
+  return out;
+}
+
+describe('竖屏底部形态：不套「隐藏本关不可用」的持久化过滤（开关看不见 → 就不能让它生效）', () => {
+  it.each([
+    ['390×844', 390, 844],
+    ['360×640', 360, 640],
+    ['430×932', 430, 932],
+  ])('%s：预置「过滤 = 开」时卡片数与全量一致（过滤未生效）', (_label, w, h) => {
+    const off = paletteProbe(w, h, false);
+    const on = paletteProbe(w, h, true);
+
+    expect(off.count).toBeGreaterThan(0);
+    expect(on.count).toBe(off.count); // 恒为「显示全部」
+    expect(on.names).toBe(off.names); // 连顺序都一样
+    expect(on.filter).toBe(false); // 开关确实不在
+    // 反证：这个关在桌面形态下确实会被过滤掉几张（见下一个用例），所以「相等」不是巧合
+    expect(on.count).toBeGreaterThan(paletteProbe(1280, 800, true).count);
+  });
+});
+
+describe('横屏 / 桌面：同一个持久化状态仍然生效（行为不变）', () => {
+  it.each([
+    ['844×390（横屏手机）', 844, 390],
+    ['1024×768（横屏平板）', 1024, 768],
+    ['1280×800（桌面）', 1280, 800],
+  ])('%s：预置「过滤 = 开」时卡片数确实变少，且开关在', (_label, w, h) => {
+    const off = paletteProbe(w, h, false);
+    const on = paletteProbe(w, h, true);
+
+    expect(on.filter).toBe(true); // 开关还在
+    expect(on.count).toBeLessThan(off.count); // 过滤真的生效
+    expect(on.names).not.toBe(off.names);
   });
 });
 
