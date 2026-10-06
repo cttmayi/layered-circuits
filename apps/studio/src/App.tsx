@@ -71,7 +71,6 @@ import {
   leaderboard,
   PROGRESS_KEY,
   type Progress,
-  rankOf,
   recordAttempt,
   recordClear,
   saveProgress,
@@ -1640,11 +1639,6 @@ export function App(): React.JSX.Element {
                   ? '验收中…'
                   : '交付验收'}
             </button>
-            <span className="cleared-count">
-              已通关 {ALL_LEVELS.filter((item) => isCleared(progress, item.id)).length}/
-              {ALL_LEVELS.length} · 可用余额 {(progress.walletHalf - progress.spentHalf) / 2} 元 ·{' '}
-              {rankOf(progress).title}
-            </span>
           </div>
         )}
         <div className="group">

@@ -30,7 +30,6 @@ beforeEach(() => {
 });
 
 /** 关卡总数直接取内容包，避免每加一关就回来改测试 */
-const LEVEL_TOTAL = ALL_LEVELS.length;
 
 describe('关卡内容与进度', () => {
   it('关卡初始画布预置锁定的输入/输出端口（端口名就是判定接口）', () => {
@@ -276,7 +275,7 @@ describe('关卡界面', () => {
     const budgetText = document.querySelector('.budget-text')?.textContent ?? '';
     expect(budgetText).toContain('款项');
     expect(budgetText).toContain('12');
-    expect(screen.getByText(new RegExp(`已通关 0/${LEVEL_TOTAL}`))).toBeTruthy(); // 教学关不在关卡链：主线从零开始
+    expect(screen.queryByText(/已通关/)).toBeNull(); // 顶栏进度显示已按用户要求移除
 
     // 关卡地图：非门是进行中（已开工可继续），与门是锁定的灰态（不能点）
     fireEvent.click(screen.getByText('← 返回地图'));
@@ -329,7 +328,7 @@ describe('关卡界面', () => {
     await waitFor(() => expect(screen.getByText(/任务 · 与门/)).toBeTruthy(), {
       timeout: 5000,
     });
-    expect(screen.getByText(new RegExp(`已通关 1/${LEVEL_TOTAL}`))).toBeTruthy(); // 只有非门在关卡链上
+    expect(screen.queryByText(/已通关/)).toBeNull(); // 顶栏进度显示已按用户要求移除
     // 地图：非门已通关，与门是进行中（已解锁可接）
     fireEvent.click(screen.getByText('← 返回地图'));
     const notNode = screen.getByText('非门').closest('button');
