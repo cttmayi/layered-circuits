@@ -210,7 +210,9 @@ export function App(): React.JSX.Element {
   /** 「时序视图」：在画布上画出真实波形（竞争/毛刺/传播延迟）。
    *  仿真本身**恒按真实时序跑**（判定也是）—— 这个开关只决定画不画波形，绝不改判定结果。
    *  默认打开；玩家的选择跨关卡保留。 */
-  const [timingView, setTimingView] = useState(true);
+  // 「时序视图」按钮已按用户要求移除：默认值保持 true（与移除前的默认行为一致，
+  // 时序版关卡照旧在画布上画真实波形），只是不再提供开关。
+  const timingView = true;
   /** 最近一次仿真的端口级波形（时序视图用）；逻辑模式没有时间轴，恒为 null */
   const [liveWave, setLiveWave] = useState<Waveform | null>(null);
   /** 这次仿真与判定用的口径。**时序版**（默认）：按真实元件延迟跑，主线的硬核口径；
@@ -1650,15 +1652,6 @@ export function App(): React.JSX.Element {
             disabled={Boolean(levelJudgeMode)}
           >
             {logicMode ? '逻辑版' : '时序版'}
-          </button>
-          <button
-            type="button"
-            className={timingView ? 'active' : ''}
-            disabled={logicMode}
-            onClick={() => setTimingView(!timingView)}
-            title="在画布上画出真实波形：竞争、毛刺、传播延迟。只改画布，不改判定。"
-          >
-            时序视图
           </button>
         </div>
         <div className="group">
