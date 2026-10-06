@@ -1702,12 +1702,17 @@ export function App(): React.JSX.Element {
   // ---- 工作台 ----
   return (
     <div className="app">
+      {/* 顶栏是**两行**结构（见 styles.css 的 .toolbar / .toolbar-row）：
+          第一行 = 主要按钮组 + 右侧区域；第二行 = 调试模式那一组。
+          第二行**只在 ?debug=1（debugFlag）时才渲染** —— 正式玩法里没有调试控件，
+          所以那一行不占高度（不是渲染一条空栏）。 */}
       <header className="toolbar">
-        <div className="brand">
-          逐层电路 <span>· 电路工作台</span>
-        </div>
-        {gameMode === 'level' ? (
-          <button
+        <div className="toolbar-row">
+          <div className="brand">
+            逐层电路 <span>· 电路工作台</span>
+          </div>
+          {gameMode === 'level' ? (
+            <button
             type="button"
             className="back-btn"
             onClick={goToMap}
@@ -1733,44 +1738,6 @@ export function App(): React.JSX.Element {
           >
             ← 主菜单
           </button>
-        )}
-        {debugFlag && (
-          <div className="group debug-group">
-            <button
-              type="button"
-              className={debugMode ? 'active' : ''}
-              onClick={() => setDebugMode(!debugMode)}
-              title="调试模式：解锁「一键出答案」等开发辅助，不影响正常玩法"
-            >
-              调试模式
-            </button>
-            {debugMode && (
-              <>
-                <button
-                  type="button"
-                  onClick={copyCircuit}
-                  title="复制当前电路 JSON（贴给我检查布线）"
-                >
-                  复制电路
-                </button>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={solveOneKey}
-                  title="把本关参考解直接搭到画布上（调试用）。优先逻辑门版；元件版仅在造价/延迟占优时才会弹窗让你选"
-                >
-                  一键出答案
-                </button>
-                <button
-                  type="button"
-                  onClick={recompute}
-                  title="丢弃上次仿真终态，从头重新计算全部门逻辑（组合电路每次本来就会全量算）"
-                >
-                  重新计算
-                </button>
-              </>
-            )}
-          </div>
         )}
         {gameMode !== 'free' && (
           <div className="group">
@@ -1813,7 +1780,50 @@ export function App(): React.JSX.Element {
             </button>
           )}
         </div>
-        <div className="spacer" />
+          <div className="spacer" />
+        </div>
+        {/* 第二行：调试模式那一组（默认就在第二行，不需要用户点什么才换行）。
+            没有调试控件（不带 ?debug=1）时整行不渲染 → 不占高度。 */}
+        {debugFlag && (
+          <div className="toolbar-row toolbar-row-debug">
+            <div className="group debug-group">
+              <button
+                type="button"
+                className={debugMode ? 'active' : ''}
+                onClick={() => setDebugMode(!debugMode)}
+                title="调试模式：解锁「一键出答案」等开发辅助，不影响正常玩法"
+              >
+                调试模式
+              </button>
+              {debugMode && (
+                <>
+                  <button
+                    type="button"
+                    onClick={copyCircuit}
+                    title="复制当前电路 JSON（贴给我检查布线）"
+                  >
+                    复制电路
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={solveOneKey}
+                    title="把本关参考解直接搭到画布上（调试用）。优先逻辑门版；元件版仅在造价/延迟占优时才会弹窗让你选"
+                  >
+                    一键出答案
+                  </button>
+                  <button
+                    type="button"
+                    onClick={recompute}
+                    title="丢弃上次仿真终态，从头重新计算全部门逻辑（组合电路每次本来就会全量算）"
+                  >
+                    重新计算
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       <div className="body">

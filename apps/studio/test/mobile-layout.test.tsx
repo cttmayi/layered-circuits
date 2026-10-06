@@ -63,6 +63,8 @@ function setViewport(width: number, height: number): void {
 }
 
 afterEach(() => {
+  // 个别用例会用 ?debug=1 让「调试模式」那组出现，跑完复位，别漏给其它用例
+  window.history.replaceState({}, '', '/');
   window.matchMedia = realMatchMedia;
   Object.defineProperty(window, 'innerWidth', {
     configurable: true,
@@ -415,6 +417,68 @@ describe('横屏 / 桌面：同一个持久化状态仍然生效（行为不变�
   });
 });
 
+// ---------- 顶栏两行结构：调试模式那一组固定在第二行 ----------
+/** URL 带不带 ?debug=1：调试控件（debugFlag）只在带上时才存在 */
+function setDebugUrl(on: boolean): void {
+  window.history.replaceState({}, '', on ? '/?debug=1' : '/');
+}
+
+describe('顶栏两行结构：调试模式那一组在第二行', () => {
+  it.each([
+    ['桌面 1280×800', 1280, 800],
+    ['竖屏 390×844', 390, 844],
+  ])('%s：?debug=1 时调试控件落在第二行容器里，且能点开', (_label, w, h) => {
+    setViewport(w, h);
+    setDebugUrl(true);
+    renderApp();
+    startJob('非门');
+
+    const rows = [...document.querySelectorAll('.toolbar-row')];
+    expect(rows).toHaveLength(2); // 默认就是两行，不靠点什么才换行
+    const row2 = document.querySelector('.toolbar-row-debug');
+    expect(row2).toBeTruthy();
+    expect(row2).toBe(rows[1]);
+
+    // 调试那一组整个在第二行：开关在里面，第一行里没有
+    expect(row2?.querySelector('.debug-group')).toBeTruthy();
+    expect(screen.getByText('调试模式').closest('.toolbar-row-debug')).toBe(row2);
+    expect(rows[0]?.querySelector('.debug-group')).toBeNull();
+    expect(rows[0]?.querySelector('.debug-group')).toBeFalsy();
+
+    // 可点：?debug=1 进来调试模式已被强制打开（App.tsx 里的 effect），三个调试按钮就在第二行里
+    for (const label of ['复制电路', '一键出答案', '重新计算']) {
+      expect(screen.getByText(label).closest('.toolbar-row-debug')).toBe(row2);
+    }
+    // 关掉再打开，按钮仍在第二行（第二行容器不因为开关状态而搬家）
+    fireEvent.click(screen.getByText('调试模式'));
+    expect(screen.queryByText('一键出答案')).toBeNull();
+    fireEvent.click(screen.getByText('调试模式'));
+    expect(screen.getByText('一键出答案').closest('.toolbar-row-debug')).toBe(row2);
+
+    // 第一行照旧：主要按钮组 + 右侧区域（弹簧）
+    expect(rows[0]?.querySelector('.brand')).toBeTruthy();
+    expect(rows[0]?.querySelector('.spacer')).toBeTruthy();
+    expect(rows[0]?.textContent).toContain('返回地图');
+  });
+
+  it.each([
+    ['桌面 1280×800', 1280, 800],
+    ['竖屏 390×844', 390, 844],
+  ])('%s：不带 ?debug=1 时第二行整行不渲染（正式玩法不多一条空栏）', (_label, w, h) => {
+    setViewport(w, h);
+    setDebugUrl(false);
+    renderApp();
+    startJob('非门');
+
+    expect(document.querySelector('.toolbar-row-debug')).toBeNull();
+    expect(document.querySelectorAll('.toolbar-row')).toHaveLength(1);
+    // 顶栏里只剩第一行这一个子元素 → 不占高度
+    expect([...(document.querySelector('.toolbar')?.children ?? [])]).toHaveLength(1);
+    expect(screen.queryByText('调试模式')).toBeNull();
+    expect(screen.queryByText('一键出答案')).toBeNull();
+  });
+});
+
 // ---------- 桌面防回归 ----------
 describe('桌面宽屏：结构与基线逐字一致', () => {
   it.each([
@@ -536,7 +600,9 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
     // 顶栏一行横向滚动（按钮一个不删）
     const toolbar = rules.get('.toolbar') ?? '';
     expect(toolbar).toContain('flex-wrap: nowrap');
-    expect(toolbar).toContain('overflow-x: auto');
+    // 横滑从「整条顶栏」下移到**每一行**（顶栏现在是两行结构）
+    expect(rules.get('.toolbar-row')).toContain('overflow-x: auto');
+    expect(rules.get('.toolbar-row')).toContain('flex-wrap: nowrap');
     expect(rules.get('.toolbar button')).toMatch(/min-height:\s*44px/);
     // 开合手柄：44px 触屏目标 + 窄屏才显示的文字标签
     const handle = rules.get('.edge-strip > button') ?? '';
@@ -624,7 +690,10 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
   });
 
   it('基础块（非媒体查询）里的桌面布局关键声明原样还在', () => {
-    expect(BASE_CSS.get('.toolbar')).toContain('flex-wrap: wrap');
+    // 桌面默认两行：顶栏是 column 容器，行内才换行
+    expect(BASE_CSS.get('.toolbar')).toContain('flex-direction: column');
+    expect(BASE_CSS.get('.toolbar-row')).toContain('flex-wrap: wrap');
+    expect(BASE_CSS.get('.toolbar .spacer')).toContain('flex: 1');
     expect(BASE_CSS.get('.body')).toContain('display: flex');
     expect(BASE_CSS.get('.palette')).toContain('width: 240px');
     expect(BASE_CSS.get('.side')).toContain('width: 316px');

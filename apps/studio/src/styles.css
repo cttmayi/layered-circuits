@@ -36,12 +36,26 @@ body,
 /* ---------- 工具栏 ---------- */
 .toolbar {
   display: flex;
-  align-items: center;
-  gap: 14px;
+  /* 两行结构：第一行 = 主要按钮组 + 右侧区域，第二行 = 调试模式那一组（见 .toolbar-row） */
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   padding: 8px 14px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
+}
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* 第二行只在 ?debug=1 时渲染；这一行不需要右侧弹簧，控件靠左对齐 */
+.toolbar-row-debug {
+  gap: 8px;
 }
 
 .brand {
@@ -2175,15 +2189,23 @@ body,
     height: 100dvh;
   }
 
-  /* ---- ① 顶栏：单行横向滚动 ----
-     一个控件都不删（余额、称号、撤销/重做照旧），但不换行：横屏手机高度只有 390px，
-     换行会把画布挤没。按钮全部 ≥ 44px 触屏目标，整条栏可左右滑，没有按钮被裁掉拿不到。 */
+  /* ---- ① 顶栏：每行各自横向滚动（现在是两行结构，行内不换行） ----
+     一个控件都不删（余额、称号照旧），但不换行：横屏手机高度只有 390px，
+     换行会把画布挤没。按钮全部 ≥ 44px 触屏目标，每一行可左右滑，没有按钮被裁掉拿不到。
+     第二行（调试模式那组）只有 ?debug=1 才渲染，正式玩法里没有这一行、也不占高度。 */
   .toolbar {
+    /* 行方向已经由基础规则定成 column：这里保证两行各自不换行、各自横滑 */
+    flex-wrap: nowrap;
+    overflow-x: visible;
+    gap: 6px;
+    padding: 6px max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left));
+  }
+
+  .toolbar-row {
     flex-wrap: nowrap;
     overflow-x: auto;
     overscroll-behavior-x: contain;
     gap: 8px;
-    padding: 6px max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left));
     -webkit-overflow-scrolling: touch;
   }
 
