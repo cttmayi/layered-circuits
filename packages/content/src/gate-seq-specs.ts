@@ -67,7 +67,14 @@ export const GATE_FAST_LEVELS: readonly string[] = [
   's3-reg-8',
   's3-digit-entry',
   // 暂不放行（对照表里仍有差异，宁可不快不能算错）：
-  //   s3-calc（结论不一致 + 慢 100 倍以上）
+  //   s3-calc：**根因已定位并修掉一半**（"同一引脚挂多条网名"让门级读数整片相反，
+  //     见 docs/design-gates.md 第 10 节；修好后 timing 口径差异 58/67 → 0/67）。
+  //     但判定真用的口径是 mode:'logic'（judge.ts 里门级快路只认 logic），
+  //     logic 下该关仍是 门级 pass=false / 差异 58/67：门级顶层 accClk 网是 1，
+  //     八位寄存器的 clk 引脚却恒读到 0 → ACC 从锁存器永远等不到时钟沿，
+  //     显示一直停在 0x6f；而元件级 logic 是无延迟定点求解，交叉耦合锁存器收敛到
+  //     的不动点与门级"状态 + 时钟沿"模型不同（同一设计元件级 logic=0x3f / timing=0x6f）。
+  //     要放行得先给逻辑模式的组合环定口径，再让门级对齐 —— 在那之前不许走快路。
   //   s3-or-chain（没有门版参考解）
 ];
 
