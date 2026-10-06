@@ -1532,6 +1532,7 @@ export function App(): React.JSX.Element {
             <ModuleDetailModal
               module={expandedModule}
               library={doc.library}
+              stopAtGates={currentLevel?.judgeMode === 'logic'}
               onClose={() => setExpandedModule(null)}
             />
           )}

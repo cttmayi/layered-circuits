@@ -9,6 +9,7 @@
 
 import { buildCostTree, type CostTree } from '@lc/compiler';
 import { formatCounts, InMemoryModuleLibrary, type ModuleTemplate } from '@lc/schema';
+import { isFunctionAtom, isGateName } from '@lc/sim-core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type Doc,
@@ -207,6 +208,12 @@ function CostTreeView({ tree }: { tree: KeyedCostTree }): React.JSX.Element {
 }
 
 export interface ModuleDetailModalProps {
+  /**
+   * **展开只到门**：逻辑版关卡下，基础门（7 个基础门 + 2 个功能原子）不再往下展开到元件。
+   * 逻辑版的语义就是"按门算"，玩家要看的是门级结构，不是三极管 —— 这就是"简化"的落点。
+   * （时序版关卡保持原样：那里元件本身就是主角，展开看内部是有意义的。）
+   */
+  stopAtGates?: boolean;
   module: StoredModule;
   /** 画布库（含嵌套模块模板时一并解析；缺省的子模块渲染成空盒，不影响查看） */
   library: StoredModule[];
@@ -214,16 +221,20 @@ export interface ModuleDetailModalProps {
 }
 
 export function ModuleDetailModal({
+  stopAtGates = false,
   module,
   library,
   onClose,
 }: ModuleDetailModalProps): React.JSX.Element {
   const template = (module.template ?? null) as ModuleTemplate | null;
+  const isBasicGate =
+    template !== null && (isGateName(template.name) || isFunctionAtom(template.name));
+  const gateStop = stopAtGates && isBasicGate;
   const merged = useMemo(() => libraryWithNested(module, library), [module, library]);
   const previewDoc = useMemo(() => {
-    if (!template?.body) return null;
+    if (gateStop || !template?.body) return null;
     return fromDesign(template.body, docForModuleBody(template, merged));
-  }, [template, merged]);
+  }, [template, merged, gateStop]);
   const costTree = useMemo(() => {
     if (!template?.body) return null;
     const lib = new InMemoryModuleLibrary(
@@ -312,6 +323,13 @@ export function ModuleDetailModal({
             </tr>
           </tbody>
         </table>
+
+        {gateStop && (
+          <p className="hint">
+            逻辑版按门计算：<b>{template?.name}</b> 是基础门（原子），它的功能就是它本身，
+            这里不再展开到元件。看元件实现请到时序版关卡，或把它的行为直接当成一个黑盒来用。
+          </p>
+        )}
 
         {previewDoc && (
           <>
