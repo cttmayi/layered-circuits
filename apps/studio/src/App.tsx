@@ -59,7 +59,8 @@ import {
   type Scene,
   screenToWorld,
 } from './editor/render';
-import { useNarrowScreen } from './layout/viewport';
+import { type OverlayAnchor, placeFloatingBar, selectionAnchor } from './layout/overlay';
+import { useNarrowScreen, usePortraitNarrow } from './layout/viewport';
 import { addModule, dedupeLibrary, storeModule } from './level/library';
 import {
   docForLevel,
@@ -104,6 +105,9 @@ import { WorldMap } from './panels/WorldMap';
 import { probeModule } from './sim/probe';
 import type { SimSnapshot, StudioResponse } from './sim/protocol';
 import { createRunner } from './sim/runner';
+// 画布浮动工具条（撤销/重做 常驻左下、旋转/删除 贴选中对象）的样式：
+// 单独一个文件，避免与同时在被编辑的 styles.css 打架
+import './overlay-toolbar.css';
 
 interface DragState {
   mode: 'pan' | 'move' | 'none';
@@ -141,6 +145,23 @@ export function App(): React.JSX.Element {
   });
   /** 当前按住的按钮端口（按住 = 1，onMouseUp 松开归 0） */
   const heldButtonRef = useRef<string | null>(null);
+
+  // ---- 画布浮动工具条（撤销/重做 + 选中对象的旋转/删除） ----
+  /** 正在拖动元件 / 平移画布：左下工具条淡出（别挡看电路）。
+   *  用 ref 挡住重复 setState —— 拖动时 mousemove 每帧都会走到这里。 */
+  const busyRef = useRef(false);
+  const [dragBusy, setDragBusy] = useState(false);
+  const setCanvasBusy = (busy: boolean): void => {
+    if (busyRef.current === busy) return;
+    busyRef.current = busy;
+    setDragBusy(busy);
+  };
+  /** 贴选中对象的小条（旋转/删除）：量出来的尺寸，用来把它夹进画布可视区 */
+  const selBarRef = useRef<HTMLDivElement | null>(null);
+  const [selBarSize, setSelBarSize] = useState({ width: 0, height: 0 });
+  /** 画布可视区里要避让的东西（画布内坐标）：底部提示行 / 竖屏挪到底部的抽屉手柄 / 竖屏底部抽屉；
+   *  以及顶部浮起的抽屉手柄 / 图例。全部来自实测 rect，不硬编码高度。 */
+  const [overlayInsets, setOverlayInsets] = useState({ top: 8, bottom: 8, left: 12, right: 12 });
 
   // 会话（模式 / 当前关卡 / 存档）一次性装载
   const session = useMemo(() => initialSession(), []);
@@ -197,6 +218,23 @@ export function App(): React.JSX.Element {
    *  代价：窄屏收起会写进 localStorage（开合偏好），下次在桌面打开时也是收起状态 —— 相比
    *  「手机上先被面板盖满」，这个代价可以接受。 */
   const narrow = useNarrowScreen();
+  /** 窄屏且竖屏：竖屏时元件库是**底部**抽屉、左侧开合手柄也挪到了画布左下角，
+   *  浮动工具条要让开它们（桌面与横屏手机读到的都是 false，行为不变） */
+  const portraitNarrow = usePortraitNarrow();
+  /**
+   * 竖屏下两个面板都是**底部抽屉**，同开必然叠在一起 —— 所以开一个就自动关另一个。
+   * 桌面与横屏（portraitNarrow = false）完全不进这两个分支，两边仍可同时展开。
+   */
+  const toggleLeftPanel = (): void => {
+    setLeftOpen(!leftOpen);
+    if (portraitNarrow) setRightOpen(false);
+  };
+  const toggleRightPanel = (): void => {
+    setRightOpen(!rightOpen);
+    if (portraitNarrow) setLeftOpen(false);
+  };
+  /** 竖屏时两颗手柄并排在同一行（都在底部），行里只要有任一个抽屉开着就一起抬到抽屉顶沿 */
+  const handleRowOpen = portraitNarrow ? leftOpen || rightOpen : leftOpen;
   useEffect(() => {
     if (!narrow) return;
     setLeftOpen(false);
@@ -270,6 +308,81 @@ export function App(): React.JSX.Element {
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, [screen]);
+
+  // ---- 浮动工具条要避让的范围（每次都重量，值没变就不 setState） ----
+  /**
+   * 量的是「画布可视区里已经被别人占掉的边」：
+   *  - 底部提示行（.hint）：桌面 58px、横屏 27px、竖屏 58px，高度随文字换行变，所以实测；
+   *  - 竖屏挪到画布左下角的开合手柄（.edge-strip.left）：实测它的高度，让浮动条蹲在它上面；
+   *  - 竖屏的元件库**底部抽屉**（.palette）：它一拉开浮动条就整体上移避让 —— 用 offsetHeight
+   *    （布局高度，**不含**入场动画的 transform，否则动画那 180ms 会量出一个偏小的值）；
+   *  - 横屏/竖屏平板的元件库是**左侧**覆盖抽屉：浮动条整体右移一个抽屉宽；
+   *  - 右侧面板开着时，把"可视区"的右边界收窄；
+   *  - 顶部浮起的开合手柄（窄屏 56px 带）与右上角图例。
+   *
+   * 这里**不碰**任何既有元素的样式：所有值都是"读"，浮动条自己是绝对定位，
+   * 不会反过来影响被量的元素（画布区 overflow: hidden），所以不会来回抖。
+   */
+  useEffect(() => {
+    const wrap = containerRef.current;
+    if (!wrap) return;
+    const wrapRect = wrap.getBoundingClientRect();
+    const hint = wrap.querySelector('.hint');
+    const legend = wrap.querySelector('.legend');
+    const strip = document.querySelector<HTMLElement>('.edge-strip.left');
+    // 竖屏的底部抽屉：元件库和验收面板是同一个形态、且互斥（只会有一个在 DOM 里）
+    const palette = document.querySelector<HTMLElement>('.palette, .side');
+
+    let bottom = 8;
+    const hintRect = hint?.getBoundingClientRect();
+    if (hintRect && hintRect.height > 0)
+      bottom = Math.max(bottom, wrapRect.bottom - hintRect.top + 8);
+    if (portraitNarrow && strip) {
+      const stripRect = strip.getBoundingClientRect();
+      if (stripRect.height > 0) bottom = Math.max(bottom, wrapRect.bottom - stripRect.top + 8);
+      // 抽屉只在竖屏是"底部抽屉"，也只有它开着时才要避让
+      if ((leftOpen || rightOpen) && palette && palette.offsetHeight > 0)
+        bottom = Math.max(bottom, palette.offsetHeight + 8);
+    }
+
+    let top = narrow ? 56 : 8; // 窄屏顶部 56px 带留给浮起的开合手柄（44px 手柄 + 上下各 6px）
+    const legendRect = legend?.getBoundingClientRect();
+    if (legendRect && legendRect.height > 0)
+      top = Math.max(top, legendRect.bottom - wrapRect.top + 8);
+
+    // 左右：窄屏的元件库是**左侧**覆盖抽屉（横屏/竖屏平板：width min(320px, 86vw)，占满整高），
+    // 会把画布左下角整个盖住 → 左下浮动条整体右移一个抽屉宽（marginLeft，见 JSX）；
+    // 右侧面板同理，用它收窄"可视区"的右边界。桌面（非窄屏）的元件库是常驻栏不是覆盖层，不用躲。
+    const side = narrow ? 8 : 12;
+    let left = side;
+    let right = side;
+    if (narrow && !portraitNarrow && leftOpen && palette && palette.offsetWidth > 0)
+      left = side + palette.offsetWidth;
+    const sidePanel = document.querySelector<HTMLElement>('.side');
+    // 竖屏的验收面板是**底部**抽屉（占满宽度），不是右侧覆盖层 → 不再收窄右边界，
+    // 改为和元件库一样由上面的 bottom 让位（Desktop/横屏读到的 portraitNarrow 恒 false）
+    if (narrow && !portraitNarrow && rightOpen && sidePanel && sidePanel.offsetWidth > 0)
+      right = side + sidePanel.offsetWidth;
+
+    const next = { top, bottom, left, right };
+    setOverlayInsets((prev) =>
+      prev.top === next.top &&
+      prev.bottom === next.bottom &&
+      prev.left === next.left &&
+      prev.right === next.right
+        ? prev
+        : next,
+    );
+    // 选中对象那个小条的尺寸：夹取位置要用（jsdom 量到 0，此时夹取退化成以对象为中心）
+    const bar = selBarRef.current;
+    if (bar && bar.offsetWidth > 0) {
+      const w = bar.offsetWidth;
+      const h = bar.offsetHeight;
+      setSelBarSize((prev) =>
+        prev.width === w && prev.height === h ? prev : { width: w, height: h },
+      );
+    }
+  });
 
   // ---- 自动仿真（Worker 优先，防抖 40ms） ----
   // currentLevel/gameMode 声明在本 effect 之后（TDZ，不能进 deps 数组）；关卡/教学模式切换
@@ -662,6 +775,8 @@ export function App(): React.JSX.Element {
   const applyPan = (sx: number, sy: number): void => {
     const drag = dragRef.current;
     if (Math.abs(sx - drag.originX) + Math.abs(sy - drag.originY) > 3) drag.moved = true;
+    // 真的在平移了 → 左下工具条淡出（阈值不过的轻微抖动不算）
+    if (drag.moved) setCanvasBusy(true);
     setCamera((prev) => ({
       ...prev,
       x: drag.cameraX - (sx - drag.originX) / prev.scale,
@@ -673,6 +788,7 @@ export function App(): React.JSX.Element {
   const applySymMove = (sx: number, sy: number): void => {
     const drag = dragRef.current;
     drag.moved = true;
+    setCanvasBusy(true); // 拖元件时左下工具条淡出
     const dx = (sx - drag.originX) / camera.scale;
     const dy = (sy - drag.originY) / camera.scale;
     setDoc((prev) => ({
@@ -701,6 +817,7 @@ export function App(): React.JSX.Element {
       setRedoStack([]);
     }
     dragRef.current = { ...drag, mode: 'none', moved: false, startSyms: new Map() };
+    setCanvasBusy(false); // 手势收尾 → 工具条淡回来
   };
 
   /** 瞬时按钮端口松手归 0（鼠标松手 / 触屏手指抬起共用） */
@@ -765,6 +882,7 @@ export function App(): React.JSX.Element {
     // 松开按住的按钮 → 归 0（按住 = 1、松开 = 0）
     releaseHeldButton();
     finishSymMove();
+    setCanvasBusy(false); // 鼠标平移/拖元件松手：工具条淡回来（finishSymMove 只管拖元件那条）
   };
 
   const onWheel = (event: React.WheelEvent): void => {
@@ -993,6 +1111,8 @@ export function App(): React.JSX.Element {
       remaining: firstPointerPoint(),
       pair: pairOf(pointersRef.current),
     });
+    // 触屏单指平移抬手时状态机不发 end-move（只有拖元件才发），这里一并收尾
+    if (pointersRef.current.size === 0) setCanvasBusy(false);
     capturePointer(event.pointerId, false);
   };
 
@@ -1002,6 +1122,7 @@ export function App(): React.JSX.Element {
     pointersRef.current.clear(); // 系统抢走指针（来电/切后台）：这一轮手势整体作废
     releaseHeldButton();
     dispatchTouch({ type: 'cancel' });
+    setCanvasBusy(false);
     capturePointer(event.pointerId, false);
   };
 
@@ -1494,6 +1615,34 @@ export function App(): React.JSX.Element {
     : [];
 
   const selectedSyms = doc.syms.filter((s) => selection.includes(s.id));
+
+  // ---- 浮动工具条：位置全部由画布实测 rect + 既有视图变换算出来，不另外存一份 pan/zoom ----
+  /** 选中对象（元件或连线，口径就是 selection / selectedWires）的屏幕锚点；没选中 → null */
+  const selAnchorPos: OverlayAnchor | null = selectionAnchor(
+    doc,
+    selection,
+    selectedWires,
+    camera,
+    size.width,
+    size.height,
+  );
+  /** 画布可视区（让开底部提示行 / 竖屏抽屉与手柄 / 顶部手柄带 / 图例） */
+  const selBox = {
+    left: overlayInsets.left,
+    top: overlayInsets.top,
+    right: size.width - overlayInsets.right,
+    bottom: size.height - overlayInsets.bottom,
+  };
+  const selPos = selAnchorPos ? placeFloatingBar(selAnchorPos, selBarSize, selBox) : null;
+  /** 左下浮动条要额外右移的距离：横屏/竖屏平板拉出**左侧**元件库抽屉时躲开它（其余情况 0）。
+   *  左边距的基础值（8/12）由 CSS 管着（窄屏还要带 iOS 安全区），这里只补抽屉那一份。 */
+  const toolsShift = Math.max(0, overlayInsets.left - (narrow ? 8 : 12));
+  /** 选中对象那个小条同时要挂两个 ref：一个给"量尺寸"用，一个是原生吞事件（见模块底部注释） */
+  const attachSelBar = useCallback((el: HTMLDivElement | null): void => {
+    selBarRef.current = el;
+    swallowOverlayPointer(el);
+  }, []);
+
   const levelRecord = currentLevel ? progress.cleared[currentLevel.id] : undefined;
   /** 单选中的模块（Inspector 里给出「展开内部电路」入口） */
   // ---- 主菜单（开场）：模式只在这是选 ----
@@ -1642,24 +1791,8 @@ export function App(): React.JSX.Element {
           </div>
         )}
         <div className="group"></div>
-        <div className="group">
-          <button type="button" onClick={undo} disabled={undoStack.length === 0}>
-            撤销
-          </button>
-          <button type="button" onClick={redo} disabled={redoStack.length === 0}>
-            重做
-          </button>
-          <button type="button" onClick={rotateSelection} disabled={selection.length === 0}>
-            旋转 (R)
-          </button>
-          <button
-            type="button"
-            onClick={deleteSelection}
-            disabled={selection.length === 0 && selectedWires.length === 0}
-          >
-            删除
-          </button>
-        </div>
+        {/* 撤销/重做/旋转/删除 四个按钮已搬到画布上的浮动工具条（见 .canvas-wrap 里的 .ovl-tools
+            与 .ovl-sel）：手机与桌面都不再占顶栏位置，快捷键 Ctrl+Z / Ctrl+Shift+Z / R / Delete 不变 */}
         <div className="group">
           {gameMode === 'free' ? (
             <button type="button" onClick={() => loadDoc(notGateDemo())}>
@@ -1700,10 +1833,10 @@ export function App(): React.JSX.Element {
             }
           />
         )}
-        <div className={`edge-strip left${leftOpen ? '' : ' closed'}`}>
+        <div className={`edge-strip left${handleRowOpen ? '' : ' closed'}`}>
           <button
             type="button"
-            onClick={() => setLeftOpen(!leftOpen)}
+            onClick={toggleLeftPanel}
             title={leftOpen ? '收起元件库（腾出画布空间）' : '展开元件库'}
             aria-label={leftOpen ? '收起元件库' : '展开元件库'}
           >
@@ -1716,6 +1849,20 @@ export function App(): React.JSX.Element {
               元件库
             </span>
           </button>
+          {/* 竖屏：验收手柄也在这行里（两颗并排贴底，见 styles.css 竖屏块 ⑥）。
+              横屏/桌面走下面那颗独立手柄，DOM 与位置逐字不变。 */}
+          {portraitNarrow && (
+            <button
+              type="button"
+              onClick={toggleRightPanel}
+              title={rightOpen ? '收起右侧面板（验收/属性）' : '展开右侧面板（验收/属性）'}
+              aria-label={rightOpen ? '收起右侧面板' : '展开右侧面板'}
+            >
+              <span className="edge-strip-label" aria-hidden="true">
+                验收
+              </span>
+            </button>
+          )}
         </div>
 
         <div className="canvas-wrap" ref={containerRef}>
@@ -1739,6 +1886,59 @@ export function App(): React.JSX.Element {
             onPointerCancel={onPointerCancel}
             onContextMenu={(e) => e.preventDefault()}
           />
+
+          {/* ---- 画布浮动工具条（顶栏那四个按钮搬到这里）----
+              ① 撤销/重做：常驻左下角，竖排 44×44，半透明；拖动元件/平移画布时淡出（.is-busy）。
+                 bottom 由实测 rect 算：让开底部提示行；竖屏还要让开左下角手柄与拉开的底部抽屉。
+              ② 旋转/删除：只在有选中（元件或连线）时出现，贴在选中对象附近并夹进画布可视区；
+                 没有选中就**不渲染**这两个按钮（不是置灰）。 */}
+          <div
+            className={`ovl-tools${dragBusy ? ' is-busy' : ''}`}
+            ref={swallowOverlayPointer}
+            role="toolbar"
+            aria-label="画布历史操作"
+            aria-orientation="vertical"
+            style={{ bottom: overlayInsets.bottom, marginLeft: toolsShift }}
+          >
+            <button
+              type="button"
+              onClick={undo}
+              disabled={undoStack.length === 0}
+              title="撤销上一步（Ctrl+Z）"
+            >
+              撤销
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              disabled={redoStack.length === 0}
+              title="重做（Ctrl+Shift+Z）"
+            >
+              重做
+            </button>
+          </div>
+          {selAnchorPos && selPos && (
+            <div
+              className="ovl-sel"
+              ref={attachSelBar}
+              role="toolbar"
+              aria-label="选中对象操作"
+              style={{ left: selPos.left, top: selPos.top }}
+            >
+              <button
+                type="button"
+                onClick={rotateSelection}
+                disabled={selection.length === 0}
+                title="旋转选中元件（快捷键 R）"
+              >
+                旋转 (R)
+              </button>
+              <button type="button" onClick={deleteSelection} title="删除选中的元件/连线（Delete）">
+                删除
+              </button>
+            </div>
+          )}
+
           <div className="hint">
             {/* 这一行两种用途：放置/连线的状态提示（hint-state），或空闲时的鼠标操作说明
                 （hint-mouse）。窄屏没有滚轮/键盘，CSS 只把 hint-mouse 藏掉，状态提示照旧显示 */}
@@ -1913,22 +2113,25 @@ export function App(): React.JSX.Element {
             <WaveformPanel waveform={judgeWaveform} portNames={judgePortNames} marks={judgeMarks} />
           </Modal>
         )}
-        <div className={`edge-strip right${rightOpen ? '' : ' closed'}`}>
-          <button
-            type="button"
-            onClick={() => setRightOpen(!rightOpen)}
-            title={rightOpen ? '收起右侧面板（验收/属性）' : '展开右侧面板（验收/属性）'}
-            aria-label={rightOpen ? '收起右侧面板' : '展开右侧面板'}
-          >
-            <span className="edge-strip-glyph" aria-hidden="true">
-              {rightOpen ? '▶' : '◀'}
-            </span>
-            {/* 窄屏才显示的文字标签，理由同左侧 */}
-            <span className="edge-strip-label" aria-hidden="true">
-              验收
-            </span>
-          </button>
-        </div>
+        {/* 竖屏下验收手柄已经并到左下那行里（见上面的 edge-strip left），这里只在宽屏/横屏渲染 */}
+        {!portraitNarrow && (
+          <div className={`edge-strip right${rightOpen ? '' : ' closed'}`}>
+            <button
+              type="button"
+              onClick={toggleRightPanel}
+              title={rightOpen ? '收起右侧面板（验收/属性）' : '展开右侧面板（验收/属性）'}
+              aria-label={rightOpen ? '收起右侧面板' : '展开右侧面板'}
+            >
+              <span className="edge-strip-glyph" aria-hidden="true">
+                {rightOpen ? '▶' : '◀'}
+              </span>
+              {/* 窄屏才显示的文字标签，理由同左侧 */}
+              <span className="edge-strip-label" aria-hidden="true">
+                验收
+              </span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2029,6 +2232,31 @@ function usePersistentBool(key: string, def: boolean): [boolean, (v: boolean) =>
 
 function snap(v: number): number {
   return Math.round(v / 10) * 10;
+}
+
+/**
+ * 画布浮动工具条要吞掉的指针事件（硬约束）：点在按钮上绝不能同时被画布当成
+ * 平移 / 连线 / 长按的手势起手（手势层见 editor/gesture.ts，一行没改）。
+ *
+ * 为什么用**原生**监听而不是 React 的 onPointerDown：React 17+ 把事件委托挂在根节点上，
+ * 组件里的 `stopPropagation()` 要到根节点才执行 —— 那时原生事件早就冒过 .canvas-wrap 了。
+ * 在浮动条自己身上挂原生监听才是真的"吞掉"（事件连父节点都到不了）。
+ * 再叠一层保险的原因：现在浮动条是 <canvas> 的**兄弟**节点，画布的 pointerdown 本来也
+ * 收不到它；但将来若把它挪进画布、或给 .canvas-wrap 挂上手势，这里也不用改。
+ *
+ * ⚠️ 唯独**不吞 click / pointerup / mouseup**：React 的 onClick 同样靠事件冒泡到根节点
+ * 才触发，把这些也吞了按钮就彻底点不动了。
+ */
+const OVL_SWALLOWED_EVENTS = ['pointerdown', 'mousedown', 'touchstart', 'dblclick'] as const;
+
+const swallowOverlayEvent = (event: Event): void => {
+  event.stopPropagation();
+};
+
+/** 挂在浮动条根节点上的 ref：元素一出现就挂上原生"吞事件"监听（重复挂同一个函数是幂等的） */
+function swallowOverlayPointer(el: HTMLDivElement | null): void {
+  if (!el) return;
+  for (const type of OVL_SWALLOWED_EVENTS) el.addEventListener(type, swallowOverlayEvent);
 }
 
 function describeSym(sym: Sym, doc: Doc): string {

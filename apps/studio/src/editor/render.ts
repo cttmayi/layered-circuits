@@ -150,7 +150,9 @@ export function moduleGlyph(name: string): { text: string; bubble: boolean } | n
   return MODULE_GLYPHS[name] ?? null;
 }
 
-function footprintOf(
+/** 元件在画布上的足迹（世界坐标矩形）。命中测试与画布浮动工具条共用同一份，
+ *  免得两处尺寸口径不一致（只加了个 export，逻辑一字未改）。 */
+export function footprintOf(
   sym: Sym,
   library: StoredModule[],
 ): { x: number; y: number; w: number; h: number } {

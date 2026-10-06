@@ -1,0 +1,126 @@
+/* ==========================================================================
+   画布浮动工具条（顶栏那四个按钮搬到画布上）
+   --------------------------------------------------------------------------
+   单独一个文件：`styles.css` 可能正被别的改动同时编辑，这里只加**新类名**
+   （.ovl-tools / .ovl-sel / .ovl-btn），不覆盖任何既有选择器，所以两份 CSS
+   的先后顺序不影响结果。
+
+   两个条：
+     ① .ovl-tools —— 撤销 / 重做，常驻画布左下角，竖排；拖动元件或平移画布时淡出
+     ② .ovl-sel   —— 旋转 / 删除，只在有选中时出现，贴在选中对象附近（Figma 式）
+
+   位置（left/top/bottom）由 App 用画布实测 rect 算好写成行内样式，这里只管长相。
+   ========================================================================== */
+
+/* ---------- ① 撤销 / 重做：常驻左下 ---------- */
+.ovl-tools {
+  position: absolute;
+  z-index: 20; /* 在画布之上；低于窄屏抽屉(30)与抽屉手柄(40)，也低于弹窗(100) */
+  left: 12px; /* 只由 CSS 管左边距（窄屏段贴到 8px，让开 iOS 安全区）；行内只给 bottom */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 12px;
+  /* 半透明：不挡看电路（画布上的电平颜色能透过来一点） */
+  background: rgba(19, 26, 34, 0.72);
+  border: 1px solid rgba(34, 48, 64, 0.85);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition: opacity 0.16s ease;
+}
+
+/* 拖动元件 / 平移画布时淡出：手势进行中别挡着看电路（按钮仍留在原地，手势一停就回来） */
+.ovl-tools.is-busy {
+  opacity: 0.18;
+}
+
+/* ---------- ② 旋转 / 删除：贴着选中对象 ---------- */
+.ovl-sel {
+  position: absolute;
+  z-index: 21;
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(19, 26, 34, 0.82);
+  border: 1px solid rgba(34, 48, 64, 0.9);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* ---------- 按钮：≥44×44 触屏目标（桌面也保持同一尺寸，学习成本一致） ---------- */
+.ovl-tools button,
+.ovl-sel button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font-size: 12px;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  /* 触屏：别让浏览器把点按当成双击缩放（画布区是 touch-action: none，这里显式声明） */
+  touch-action: manipulation;
+}
+
+.ovl-tools button:hover:not(:disabled),
+.ovl-sel button:hover:not(:disabled) {
+  border-color: #3b556e;
+}
+
+.ovl-sel button:active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 撤销/重做到底了：保持"置灰不可点"（与顶栏时一致），而不是消失 */
+.ovl-tools button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ovl-tools button:focus-visible,
+.ovl-sel button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------- 窄屏（≤900px）：贴到与抽屉手柄同一个左边距，字号抬一档 ---------- */
+@media (max-width: 900px) {
+  .ovl-tools,
+  .ovl-sel {
+    gap: 5px;
+  }
+
+  .ovl-tools button,
+  .ovl-sel button {
+    font-size: 13px;
+    padding: 0 10px;
+  }
+
+  .ovl-tools {
+    left: max(8px, env(safe-area-inset-left));
+  }
+}
+
+/* ---------- 竖屏（≤900px 且 竖屏）：底部留给元件库抽屉与手柄，左边距跟手柄对齐 ---------- */
+@media (max-width: 900px) and (orientation: portrait) {
+  .ovl-tools button {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  .ovl-sel button {
+    min-height: 46px;
+  }
+}
