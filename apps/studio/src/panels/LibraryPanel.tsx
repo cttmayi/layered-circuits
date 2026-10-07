@@ -83,6 +83,8 @@ export function LibraryPanel({
     () => [...new Set(owned.map((m) => m.name))].sort((a, b) => a.localeCompare(b)),
     [owned],
   );
+  // 组头报**名字数**，不是条目数：这里按名字分组（同名不同内容的多个版本折叠成一组），
+  // 报条目数会出现「我的模块（2）」却只列出一组的自相矛盾（与 Palette 显示层去重同一口径）。
   const cleared = rows.filter((row) => row.cleared);
 
   const pickFile = (event: ChangeEvent<HTMLInputElement>): void => {
@@ -96,7 +98,7 @@ export function LibraryPanel({
     <section className="panel library">
       <h3>组件库与成绩</h3>
 
-      <h4>我的模块（{owned.length}）</h4>
+      <h4>我的模块（{names.length}）</h4>
       {owned.length === 0 && <p className="panel-empty">还没有封装过模块。</p>}
       {names.map((name) => {
         // 版本只列玩家自有的（教学积木即使同名也不算玩家的版本）；

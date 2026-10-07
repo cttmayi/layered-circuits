@@ -5,6 +5,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 import type { PlaceKind, StoredModule, UnitKind } from '../editor/model';
 import { drawIcon } from '../editor/render';
 import { usePortraitNarrow } from '../layout/viewport';
+import { dedupeByNameForDisplay } from '../level/library';
 import { gateLevelUsable, gateProbeLibrary } from '../sim/gate-usable';
 
 /**
@@ -48,6 +49,13 @@ export interface PaletteProps {
   header?: React.ReactNode;
   /** 判定/仿真口径：逻辑版抹平延迟，卡片上就不显示延迟（默认时序版） */
   mode?: 'logic' | 'timing';
+  /**
+   * 本关「门整族」的注入顺序（`teachingModulesFor(本关生效族)` 的 hash 次序，由 App 传入）。
+   * 显示层按名字去重时，这个次序是**权威依据**：同名条目里保留本关族的那一份
+   * （它带本关契约，逻辑关的判定与一键出答案用的都是它）。
+   * 不传（自由模式/测试）时退化为「版本号新的优先」，结果依然稳定。
+   */
+  gateOrder?: readonly string[];
 }
 
 /** 拖拽编码：把「放什么」写进 dataTransfer */
@@ -216,6 +224,7 @@ export function Palette({
   level,
   header,
   mode = 'timing',
+  gateOrder,
 }: PaletteProps): React.JSX.Element {
   const [openSections, toggleSection] = useOpenSections();
   const [hideLocked, toggleHideLocked] = useHideLocked();
@@ -297,7 +306,16 @@ export function Palette({
     Boolean(level);
   /** 勾选「隐藏本关不可用」后的展示列表（竖屏底部形态恒不过滤，见 hideLockedActive） */
   const filteredUnits = hideLockedActive ? UNITS.filter((u) => unitAllowed(u.unit)) : UNITS;
-  const userModules = useMemo(() => library.filter((m) => !m.teaching), [library]);
+  /**
+   * 「我的模块」= 库里的非教学条目，**显示层按名字去重**（`dedupeByNameForDisplay`）：
+   * 库是内容寻址的（一 hash 一条），玩家把两个不同电路都叫「我的锁存器」就是两条；
+   * 存档瘦身（`dedupeLibrary`）对被画布引用的旧版是**故意保留**的，所以同名条目真的会同时在库里。
+   * 只动显示：库、存档、判定按 hash 解析，一行没碰 —— 详情/血统面板仍能看到全部版本。
+   */
+  const userModules = useMemo(
+    () => dedupeByNameForDisplay(library.filter((m) => !m.teaching)),
+    [library],
+  );
   /**
    * 逻辑关（`judgeMode === 'logic'`，第 8 关起）里「我的模块」**只列门级口径跑得动的** ——
    * 第 1~7 关用元件搭的非门/与门这些**组合**老模块在门级口径下不成立（门级引擎递归展开时
@@ -327,13 +345,25 @@ export function Palette({
    *  菜单只列本关允许的门，所以列表里不会出现被锁住的卡片。 */
   /** 本关是否允许在顶层画布摆元件（第 8 关起为 false） */
   const elementAllowed = level?.elementAccess !== 'none';
-  const gateModules = library.filter(
-    (m) =>
-      m.teaching === true &&
-      // 只列**基础门**：teachingModulesFor 里还混着"一键出答案"用的复合积木
-      // （二进制→BCD 3084 元、显示控制 1500 元、七段译码器 430 元…），列出来等于把答案给玩家
-      BASIC_GATES.includes(m.name) &&
-      (level?.moduleAccess !== 'listed' || moduleAllowed(m.name)),
+  /**
+   * 基础门分组。两道过滤，顺序不能反：
+   *   ① 只列**基础门**：teachingModulesFor 里还混着"一键出答案"用的复合积木
+   *      （二进制→BCD 3084 元、显示控制 1500 元、七段译码器 430 元…），列出来等于把答案给玩家；
+   *   ② **按名字去重**（`dedupeByNameForDisplay`，按 `gateOrder` 保留本关族那一份）：
+   *      分组是**按名字**列的，而库是**内容寻址**的 —— 名字相同、族不同（rtl/cmos 的非门是
+   *      两个 hash）就是两条 → 同名出两张卡（用户实测：本来 7 个，点一次「一键出答案」变 11 个）。
+   *      存档瘦身故意保留全部教学积木（见 dedupeLibrary 注释），所以历史遗留条目必须在这里兜住。
+   */
+  // 不套 useMemo：moduleAllowed 依赖 level、每次渲染都是新函数（套上要么漏依赖要么每帧重算），
+  // 而这里就是一次 O(库大小) 的过滤 + 去重（库几十条），直接算最省心也最不容易出错。
+  const gateModules = dedupeByNameForDisplay(
+    library.filter(
+      (m) =>
+        m.teaching === true &&
+        BASIC_GATES.includes(m.name) &&
+        (level?.moduleAccess !== 'listed' || moduleAllowed(m.name)),
+    ),
+    { ...(gateOrder ? { order: gateOrder } : {}) },
   );
   const filteredModules = hideLockedActive
     ? visibleUserModules.filter((m) => modulesAllowed && moduleAllowed(m.name))

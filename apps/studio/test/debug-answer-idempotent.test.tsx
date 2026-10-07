@@ -140,10 +140,10 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
 
     const before = snapshot();
     console.log(
-      `[幂等 A] 初始：基础门「${before['基础门']?.head}」=${JSON.stringify(before['基础门']?.names)}`,
+      `[幂等 A] 初始：基础门「${before.基础门?.head}」=${JSON.stringify(before.基础门?.names)}`,
     );
     // 反证：这一关确实有门版答案可搭（否则下面的"不变"可能是"什么都没发生"）
-    expect(before['基础门']?.names.length).toBe(5);
+    expect(before.基础门?.names.length).toBe(5);
 
     for (let i = 1; i <= 3; i++) {
       await clickAnswer();
@@ -151,7 +151,7 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
       expect(document.querySelector('.toast')?.textContent ?? '').toContain('逻辑门版已搭好');
       const now = snapshot();
       console.log(
-        `[幂等 A] 第${i}次点击后：基础门「${now['基础门']?.head}」｜我的模块「${now['我的模块']?.head}」｜元件组卡数=${now['我的元件']?.names.length}`,
+        `[幂等 A] 第${i}次点击后：基础门「${now.基础门?.head}」｜我的模块「${now.我的模块?.head}」｜元件组卡数=${now.我的元件?.names.length}`,
       );
       expect(now, `第 ${i} 次点击后菜单必须逐字不变`).toEqual(before);
     }
@@ -165,16 +165,16 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
 
     const before = snapshot();
     console.log(
-      `[幂等 B] 初始：基础门「${before['基础门']?.head}」｜我的模块「${before['我的模块']?.head}」=${JSON.stringify(before['我的模块']?.names)}`,
+      `[幂等 B] 初始：基础门「${before.基础门?.head}」｜我的模块「${before.我的模块?.head}」=${JSON.stringify(before.我的模块?.names)}`,
     );
-    expect(before['我的模块']?.names).toEqual(['我的锁存器']);
+    expect(before.我的模块?.names).toEqual(['我的锁存器']);
 
     for (let i = 1; i <= 3; i++) {
       await clickAnswer();
       expect(document.querySelector('.toast')?.textContent ?? '').toContain('逻辑门版已搭好');
       const now = snapshot();
       console.log(
-        `[幂等 B] 第${i}次点击后：基础门「${now['基础门']?.head}」｜我的模块「${now['我的模块']?.head}」=${JSON.stringify(now['我的模块']?.names)}`,
+        `[幂等 B] 第${i}次点击后：基础门「${now.基础门?.head}」｜我的模块「${now.我的模块?.head}」=${JSON.stringify(now.我的模块?.names)}`,
       );
       expect(now, `第 ${i} 次点击后菜单必须逐字不变`).toEqual(before);
     }
@@ -189,7 +189,7 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
       startJob('与非门');
       dismissTaskDialog();
       const now = snapshot();
-      rows.push(`第${i}次进关：${JSON.stringify(now['基础门']?.names)}`);
+      rows.push(`第${i}次进关：${JSON.stringify(now.基础门?.names)}`);
       if (first === null) first = now;
       else expect(now, `第 ${i} 次进关后必须逐字不变`).toEqual(first);
       document.body.innerHTML = '';
@@ -208,10 +208,10 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
 
     const now = snapshot();
     console.log(
-      `[幂等 D] 第 7 关：基础门「${now['基础门']?.head}」=${JSON.stringify(now['基础门']?.names)}`,
+      `[幂等 D] 第 7 关：基础门「${now.基础门?.head}」=${JSON.stringify(now.基础门?.names)}`,
     );
     // 修前实测：8 张里 3 张重复（非门×2 / 与非门×2 / 与门×2）
-    const names = now['基础门']?.names ?? [];
+    const names = now.基础门?.names ?? [];
     expect(names.length).toBe(5);
     expect(new Set(names).size, `出现重复卡片：${JSON.stringify(names)}`).toBe(names.length);
   }, 60000);
@@ -232,9 +232,9 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
     });
     const afterWrap = snapshot();
     console.log(
-      `[幂等 E] 验收后：基础门「${afterWrap['基础门']?.head}」｜我的模块「${afterWrap['我的模块']?.head}」=${JSON.stringify(afterWrap['我的模块']?.names)}`,
+      `[幂等 E] 验收后：基础门「${afterWrap.基础门?.head}」｜我的模块「${afterWrap.我的模块?.head}」=${JSON.stringify(afterWrap.我的模块?.names)}`,
     );
-    expect(afterWrap['基础门']).toEqual(afterAnswer['基础门']);
+    expect(afterWrap.基础门).toEqual(afterAnswer.基础门);
 
     // 结算对话框关掉后再点一次「一键出答案」：库不许再变
     const settleClose = document.querySelector('.modal-box .modal-close, .modal-box button');
@@ -242,9 +242,9 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
     await clickAnswer();
     const afterSecond = snapshot();
     console.log(
-      `[幂等 E] 再点一次：基础门「${afterSecond['基础门']?.head}」｜我的模块「${afterSecond['我的模块']?.head}」`,
+      `[幂等 E] 再点一次：基础门「${afterSecond.基础门?.head}」｜我的模块「${afterSecond.我的模块?.head}」`,
     );
-    expect(afterSecond['基础门']).toEqual(afterAnswer['基础门']);
-    expect(afterSecond['我的模块']).toEqual(afterWrap['我的模块']);
+    expect(afterSecond.基础门).toEqual(afterAnswer.基础门);
+    expect(afterSecond.我的模块).toEqual(afterWrap.我的模块);
   }, 60000);
 });

@@ -261,6 +261,23 @@ export function App(): React.JSX.Element {
    *  画布与判定共用同一口径，切换后立刻重新仿真；选择持久化、跨关卡保留。 */
   // 本关自带的判定口径：1~7 关 = timing（走真实时序），第 8 关起 = logic（只判逻辑）。
   // 自由/教学模式没有关卡口径，仍听工具栏那个总开关。
+  /**
+   * 某一关的**生效族**（`familySpecOf`）：非教学关 = 关卡自己声明的族，教学关 = 该族的变体。
+   *
+   * 为什么进关注入与一键出答案必须用同一个族（用户实测 bug：本来 7 个，点一次变 11 个）：
+   * 进关时 `withLevelGates` 原来注入**玩家工艺**（`progress.family`）的整族门，而一键出答案
+   * （`applyAnswer`）注入的是**本关族**（`familySpecOf(currentLevel, progress.family).family`）
+   * —— 玩家工艺与关卡族不同（例如工艺选 cmos、关卡是 rtl）时，点一下就会凭空多出关卡族的
+   * 那几个门（rtl 与 ttl 的异或门内容相同，所以只多 4 个）。库里多出来的不会自己消失，
+   * 菜单按名字列 → 玩家看到「7 个变 11 个」。现在两处都按本关族注入，点击不再改变库。
+   */
+  const levelFamilyOf = useCallback(
+    (id: string | null): LogicFamily => {
+      const level = id ? (levelOf(gameMode, id) ?? findLevel(id)) : null;
+      return level ? familySpecOf(level, progress.family).family : progress.family;
+    },
+    [gameMode, progress.family],
+  );
   const levelJudgeMode = levelOf(gameMode, levelId)?.judgeMode;
   /**
    * 逻辑关（第 8 关起，关卡自己声明 `judgeMode === 'logic'`）：判定是零延迟布尔口径，
@@ -271,6 +288,14 @@ export function App(): React.JSX.Element {
    * 意义的信息 → 自由模式与时序关（1~7 关）逐字不变。
    */
   const logicLevel = levelJudgeMode === 'logic';
+  /**
+   * 基础门菜单的「权威顺序」= 本关生效族的门整族注入顺序（hash 次序）。
+   * 菜单按名字去重时用它决定同名条目保留哪一份（本关族那一份带本关契约），
+   * 同时给卡片排序 —— 干净存档下与去重前的顺序逐字一致。 */
+  const gateOrderForLevel = useMemo(
+    () => teachingModulesFor(levelFamilyOf(levelId)).map((m) => m.hash),
+    [levelFamilyOf, levelId],
+  );
   // 自由模式恒按「零延迟逻辑口径」；关卡口径仍由关卡自己声明（levelJudgeMode 优先）。
   const simMode: 'logic' | 'timing' = levelJudgeMode ?? 'logic';
   const [snapshot, setSnapshot] = useState<SimSnapshot | null>(null);
@@ -1462,7 +1487,11 @@ export function App(): React.JSX.Element {
     setGameMode(mode);
     setLevelId(nextLevelId);
     setDoc(
-      docFor(mode, nextLevelId, withLevelGates(progress.library, nextLevelId, progress.family)),
+      docFor(
+        mode,
+        nextLevelId,
+        withLevelGates(progress.library, nextLevelId, levelFamilyOf(nextLevelId)),
+      ),
     );
     clearTransient();
     setScreen('bench');
@@ -1931,6 +1960,7 @@ export function App(): React.JSX.Element {
             placing={placing}
             onPick={setPlacing}
             library={doc.library}
+            gateOrder={gateOrderForLevel}
             level={
               currentLevel
                 ? {

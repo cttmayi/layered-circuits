@@ -111,6 +111,59 @@ export function mergeModules(
   return out ?? (library as StoredModule[]);
 }
 
+/**
+ * **显示层**按名字去重：同一个名字只留一条，菜单里就只出一张卡。
+ *
+ * 为什么显示层也要去重（用户实测 bug：本来 7 个，点一次「一键出答案」变 11 个，之后不再涨）：
+ *
+ *  · 菜单的分组是**按名字**列的（Palette 的基础门 = `library.filter(teaching && BASIC_GATES)`），
+ *    而库是**内容寻址**的（一 hash 一条）—— 名字相同、内容不同（族不同：rtl 的非门与 cmos 的
+ *    非门是两个 hash）就是两条 → **同名出两张卡**。
+ *  · `dedupeLibrary`（读档瘦身）**故意**不合并它们：`if (m.teaching || keep.has(m.hash)) return true`
+ *    —— 教学积木一律保留（内容包随时能重新注入，删了反而可能让存档里引用它的电路解析不到）。
+ *    所以历史遗留的同名条目会一直躺在库里，"看起来脏"。
+ *  · 追加去重（`mergeModules`）只能防**新增**，清不掉**已有**的重复 —— 修前一版就漏了这一层。
+ *
+ * 取舍：**只动显示，不动库、不动存档、更不动判定**（判定按 hash 解析，与这里无关）。
+ * 同名要留哪一份，按下面的优先级（`order` 最权威）：
+ *   ① `order`（本关族的教学注入顺序）里出现的那一份 —— 它带**本关的契约**：逻辑关的判定与
+ *      一键出答案用的都是本关族的门，显示另一族的同名门会让玩家摆上一个判不过去的变体；
+ *   ② 版本号更高的（与 `dedupeLibrary` 「同名只留最新版」的口径一致）；
+ *   ③ 更早出现的（先到先得，保证结果稳定、可解释）。
+ * 返回顺序：命中的条目按 `order` 的次序排（有 order 时），否则保持库里的原始次序 ——
+ * 这样干净存档的卡片顺序与去重前**逐字一致**（不会无谓地动排版）。
+ */
+export function dedupeByNameForDisplay(
+  modules: readonly StoredModule[],
+  options: { order?: readonly string[] } = {},
+): StoredModule[] {
+  const rank = new Map<string, number>();
+  for (const [i, hash] of (options.order ?? []).entries()) rank.set(hash, i);
+  const best = new Map<string, { module: StoredModule; index: number; rank: number }>();
+  for (const [index, module] of modules.entries()) {
+    const r = rank.get(module.hash) ?? Number.MAX_SAFE_INTEGER;
+    const current = best.get(module.name);
+    if (!current) {
+      best.set(module.name, { module, index, rank: r });
+      continue;
+    }
+    // order 里有的赢；都没有 order 名分时按版本号；再同则保留先到的
+    const better =
+      r < current.rank ||
+      (r === current.rank &&
+        current.rank === Number.MAX_SAFE_INTEGER &&
+        compareVersions(module.version, current.module.version) > 0);
+    if (better) best.set(module.name, { module, index, rank: r });
+  }
+  const kept = [...best.values()];
+  if (!options.order || options.order.length === 0) {
+    return kept.sort((a, b) => a.index - b.index).map((v) => v.module);
+  }
+  return kept
+    .sort((a, b) => (a.rank === b.rank ? a.index - b.index : a.rank - b.rank))
+    .map((v) => v.module);
+}
+
 export interface TraceNode {
   hash: string;
   name: string;
