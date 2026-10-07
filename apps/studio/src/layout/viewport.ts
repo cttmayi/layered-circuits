@@ -23,6 +23,21 @@ export const NARROW_MEDIA_QUERY = `(max-width: ${NARROW_BREAKPOINT_PX}px)`;
  */
 export const PORTRAIT_MEDIA_QUERY = `${NARROW_MEDIA_QUERY} and (orientation: portrait)`;
 
+/**
+ * 竖屏**窄屏**档（用户第 ⑬ 轮追加）：360×640 这类 ≤380px 的窄竖屏。
+ *
+ * 为什么单独一档：360 − 6(抽屉左右内边距) − 15(自由模式的纵向滚动条) = 339px，
+ * 而 44px 卡要 8 × 44 + 7 × 2 = 366px —— 几何上放不下 8 张。用户要求「一行至少 8 个」，
+ * 所以这一档把卡片压到 40px（8 × 40 + 7 × 2 = 334 ≤ 339），**高度与字号一分不让**
+ * （min-height 仍 48 ≥ 44；字号仍 10px）。40px < 44px 触控目标是这一档的**已知取舍**。
+ *
+ * ⚠️ styles.css 末尾那条 `@media (max-width: 380px) and (orientation: portrait)` 必须与这里一致。
+ */
+export const TINY_PORTRAIT_BREAKPOINT_PX = 380;
+
+/** 窄竖屏档媒体查询串（测试拿它跟 styles.css 里的 @media 对照） */
+export const TINY_PORTRAIT_MEDIA_QUERY = `(max-width: ${TINY_PORTRAIT_BREAKPOINT_PX}px) and (orientation: portrait)`;
+
 /** 媒体查询求值：优先 matchMedia；jsdom（没有 matchMedia）用 fallback 兜底 */
 function queryMatches(query: string, fallback: () => boolean): boolean {
   if (typeof window === 'undefined') return false;

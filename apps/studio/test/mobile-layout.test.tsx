@@ -25,6 +25,8 @@ import {
   NARROW_BREAKPOINT_PX,
   NARROW_MEDIA_QUERY,
   PORTRAIT_MEDIA_QUERY,
+  TINY_PORTRAIT_BREAKPOINT_PX,
+  TINY_PORTRAIT_MEDIA_QUERY as TINY_PORTRAIT_MEDIA_QUERY_FROM_TS,
 } from '../src/layout/viewport';
 import { dismissTaskDialog, renderApp, startJob } from './helpers';
 
@@ -572,6 +574,10 @@ const CSS_SOURCE = readFileSync(resolve(process.cwd(), 'apps/studio/src/styles.c
 const { base: BASE_CSS, media: MEDIA_CSS } = parseCss(CSS_SOURCE);
 const NARROW_BLOCK = MEDIA_CSS.find((block) => block.query === NARROW_MEDIA_QUERY)?.body ?? '';
 const PORTRAIT_INDEX = MEDIA_CSS.findIndex((block) => block.query === PORTRAIT_MEDIA_QUERY);
+/** 用户第 ⑬ 轮：≤380px 竖屏单独一档（360×640 也要一行 8 张） */
+const TINY_PORTRAIT_MEDIA_QUERY = TINY_PORTRAIT_MEDIA_QUERY_FROM_TS;
+const TINY_INDEX = MEDIA_CSS.findIndex((block) => block.query === TINY_PORTRAIT_MEDIA_QUERY);
+const TINY_BLOCK = TINY_INDEX >= 0 ? (MEDIA_CSS[TINY_INDEX]?.body ?? '') : '';
 const PORTRAIT_BLOCK = PORTRAIT_INDEX >= 0 ? (MEDIA_CSS[PORTRAIT_INDEX]?.body ?? '') : '';
 
 describe('样式表契约：窄屏断点只管窄屏', () => {
@@ -752,6 +758,70 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
     const nameFont = num(/font-size:\s*(\d+(?:\.\d+)?)px/, name);
     expect(nameFont).toBeGreaterThanOrEqual(10);
     expect(nameFont).toBeLessThanOrEqual(11);
+  });
+
+  it('窄屏竖屏档（≤380px）：卡片 40px、8 张放得下 360，高度与字号一分不让', () => {
+    // 这一档的**存在性**本身就是需求：360×640 上 44px 卡几何上放不下 8 张（见下面的算式）
+    expect(TINY_PORTRAIT_MEDIA_QUERY).toBe(
+      `(max-width: ${TINY_PORTRAIT_BREAKPOINT_PX}px) and (orientation: portrait)`,
+    );
+    expect(TINY_INDEX, '样式表里缺少 ≤380px 竖屏档').toBeGreaterThan(-1);
+    // 层叠顺序：必须排在竖屏块**之后**，否则 width: 44px 会盖掉这条
+    expect(TINY_INDEX).toBeGreaterThan(PORTRAIT_INDEX);
+    const tiny = parseCss(TINY_BLOCK).base;
+    const portrait = parseCss(PORTRAIT_BLOCK).base;
+    const num = (re: RegExp, css: string): number => {
+      const m = re.exec(css);
+      expect(m, `${re} 没匹配到：${css.slice(0, 60)}`).toBeTruthy();
+      return Number(m?.[1] ?? Number.NaN);
+    };
+    const tinyItem = tiny.get('.palette-item') ?? '';
+    expect(tinyItem, 'TINY_BLOCK 里必须覆盖 .palette-item').not.toBe('');
+    const width = num(/width:\s*(\d+(?:\.\d+)?)px/, tinyItem);
+    const minWidth = num(/min-width:\s*(\d+(?:\.\d+)?)px/, tinyItem);
+    expect(width).toBe(40);
+    expect(minWidth).toBe(40);
+    // 已知取舍：宽度 40 < 44 触控目标，但**只在这一档**；高度不许动
+    expect(width).toBeLessThan(44);
+    expect(tinyItem, '这一档不许改高度').not.toMatch(/min-height/);
+    expect(
+      num(/min-height:\s*(\d+(?:\.\d+)?)px/, portrait.get('.palette-item') ?? ''),
+    ).toBeGreaterThanOrEqual(44);
+    // 字号也不许借机变小（显式写死 10px，仍是允许区间 10~11px）
+    const tinyFont = num(
+      /font-size:\s*(\d+(?:\.\d+)?)px/,
+      tiny.get('.palette-item .palette-name') ?? '',
+    );
+    expect(tinyFont).toBeGreaterThanOrEqual(10);
+    expect(tinyFont).toBeLessThanOrEqual(11);
+
+    // 360×640（用户点名的尺寸）实算：抽屉左右内边距来自竖屏块（≤8px），自由模式再多一条 15px 滚动条
+    const pad = /padding:\s*(\d+)px\s+(\d+)px\s+calc\(/.exec(portrait.get('.palette') ?? '');
+    expect(pad).toBeTruthy();
+    const sidePad = Number(pad?.[2] ?? Number.NaN);
+    expect(sidePad).toBeLessThanOrEqual(8);
+    const gap = num(/gap:\s*(\d+(?:\.\d+)?)px/, portrait.get('.palette-section-body') ?? '');
+    expect(gap).toBeLessThanOrEqual(4);
+    const SCROLLBAR_PX = 15; // CDP 实测：自由模式下抽屉多一条 15px 纵向滚动条
+    const usable360 = 360 - 2 * sidePad - SCROLLBAR_PX;
+    expect(usable360).toBe(339); // 与 CDP 实测一致（360 − 6 − 15）
+    const need8 = 8 * width + 7 * gap;
+    expect(need8, '8 张卡 + 7 道缝').toBe(334);
+    expect(need8, '360px 上必须放得下 8 张').toBeLessThanOrEqual(usable360);
+    expect(Math.floor((usable360 + gap) / (width + gap)), '360px 一行张数').toBeGreaterThanOrEqual(
+      8,
+    );
+    // 反证：旧的 44px 卡在 360 上确实放不下（说明这条规则不是多余的）
+    expect(8 * 44 + 7 * gap).toBeGreaterThan(usable360);
+    // 390 / 430 不被这条规则影响（各自 44px 档仍 ≥8 张）
+    expect(TINY_PORTRAIT_BREAKPOINT_PX).toBeLessThan(390);
+    for (const vw of [390, 430]) {
+      const usable = vw - 2 * sidePad - SCROLLBAR_PX;
+      const w44 = num(/width:\s*(\d+(?:\.\d+)?)px/, portrait.get('.palette-item') ?? '');
+      expect(Math.floor((usable + gap) / (w44 + gap)), `${vw}px 一行张数`).toBeGreaterThanOrEqual(
+        8,
+      );
+    }
   });
 
   it('基础块（非媒体查询）里的桌面布局关键声明原样还在', () => {
