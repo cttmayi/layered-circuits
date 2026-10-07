@@ -1365,6 +1365,11 @@ export function App(): React.JSX.Element {
         ports: info.ports,
         template: info.template,
         stage: currentLevel?.stage ?? 1,
+        // 手动封装**与交付验收自动封装同口径**：在关卡里产出就一定写 `levelId`（产出处的关卡 id）。
+        // 为什么必须写：逻辑关（第 8 关起）按产出处 `judgeMode` 过滤 ——「时序关产出的模块不要往
+        // 逻辑关放」（`producedInElementLevel`）。手动封装若不带 provenance，就会绕过这条规则，
+        // 让第 1~7 关手封的元件模块出现在逻辑关；自由模式没有关卡 → 不写（`currentLevel` 为空）。
+        ...(currentLevel ? { levelId: currentLevel.id } : {}),
         sources: design.instances
           .filter((inst) => inst.kind === 'module')
           .map((inst) => (inst.kind === 'module' ? inst.module : '')),

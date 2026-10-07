@@ -148,8 +148,11 @@ export function producedInElementLevel(mod: StoredModule): boolean {
  *   · **自由模式本身**（没有关卡）照旧全列，不受影响。
  *
  * 为什么 `stage === 1` 就能代表"没进过关卡"（**这是前提，测试里钉住了**）：
- *   · 关卡封装**一定**写 `levelId`（App 的两条封装路径都是 `storeModule({..., levelId: currentLevel.id})`
- *     —— 一条是交付验收自动封装、一条是手动封装），所以关卡产出永远不会落到这个分支；
+ *   · 关卡封装**一定**写 `levelId`：App 的两条封装路径都传
+ *     `...(currentLevel ? { levelId: currentLevel.id } : {})` —— 一条是交付验收自动封装、
+ *     一条是画布上的手动「封装为模块」。**手动那条曾经漏传**（第 ㉓ 轮修掉：漏传就等于没有
+ *     provenance，手动封装的时序关模块会绕过"1~7 关产出不进逻辑关"这条规则），所以关卡产出
+ *     永远不会落到这个分支；自由模式封装没有关卡 → 不写 `levelId`（`stage` 恒为 1）。
  *   · 自由模式的封装用 `stage: currentLevel?.stage ?? 1` —— 自由模式没有关卡 → **stage 恒为 1**，
  *     和电路是"全用门搭的"还是"元件搭的"**无关**（stage 来自当前关卡，不来自内容）；
  *   · 第 1~7 关的产出在**新存档**里也带 `levelId`（老存档才缺），所以这里不会误伤它们的老存档版本
