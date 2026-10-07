@@ -1,18 +1,21 @@
 /**
  * 进关自适应（按可见面积）纯函数单测。
  *
- * 口径：目标 175 格²、允许 [150, 200]；格距 = `GRID_PITCH = 20` 世界单位/格
- * （editor/render.ts `drawGrid()` 的步长）。
+ * 口径（**唯一口径**）：目标 175 格²、允许 [150, 200]；格距 = `GRID_PITCH = 20` 世界单位/格
+ * （editor/render.ts `drawGrid()` 的步长）。175 格² ≈ **13.2 × 13.2 格** = 用户要的「横向 10~15 格」。
+ * **内容尺寸不参与定 scale**（用户裁定：早期"内容优先"会把视野撑到 607~3105 格²，是要求值的 3 倍），
+ * 内容 bbox 只决定相机中心；大关卡超出视野靠平移/缩放看 —— 这是预期代价。
  *
  * 这里断言的是**实得面积**（由 camera 反推：`visibleCells()`），不是"应该"，全是数字。
- * 大屏上 175 格² 需要的缩放超过手势层上限 2.6（桌面要 3.713、平板要 3.257），被硬夹紧后
- * 面积必然 > 200 —— 这几条单独写出来，断言 `clamped === 'max'` 与具体数字，别假装达标。
+ * 大屏上 175 格² 需要的缩放超过手势层上限 2.6（桌面画布 1024×754 要 3.321、平板 768×967 要 3.257），
+ * 被硬夹紧后面积必然 > 200（桌面 **285.5**、平板 **274.7**）—— 这几条单独写出来，断言 `clamped === 'max'`
+ * 与具体数字，别假装达标（上限属手势契约，本轮不动）。
  */
 import { describe, expect, it } from 'vitest';
 import { SCALE_RANGE } from '../src/editor/gesture.ts';
 import {
+  type Box,
   CELLS_AREA_RANGE,
-  CONTENT_MARGIN,
   contentBoxOf,
   fitCamera,
   GRID_PITCH,
@@ -21,25 +24,37 @@ import {
   visibleCells,
 } from '../src/layout/fit.ts';
 
-/** 可用区 = 视口扣掉顶栏（桌面 46 / 窄屏 57）与竖屏底部抽屉 */
+/**
+ * 可用区 = **真机量出来的画布尺寸**（headless Chrome 1280×800 / 844×390 / 390×844 / 768×1024，
+ * 第 ⑧ 轮 CDP 实测，与 App 里 usableArea 的口径一致）：
+ *  - 桌面：画布 1024×754 —— 顶栏 46 + 左侧元件库 240 + 间距 16（元件库是流内布局）；
+ *  - 竖屏：画布 390×683 —— 顶栏 161（任务块换行后的高度，见 mobile-layout 的竖屏顶栏契约）；
+ *  - 横屏：画布 844×333 —— 顶栏 57，元件库是覆盖抽屉（关着就不占）；
+ *  - 平板竖屏：画布 768×967 —— 顶栏 57（任务块与按钮同行）。
+ */
 const VIEWPORTS = [
-  { label: '桌面 1280×800（画布 1280×754）', w: 1280, h: 754 },
-  { label: '竖屏 390×844（画布 390×787）', w: 390, h: 787 },
+  { label: '桌面 1280×800（画布 1024×754）', w: 1024, h: 754 },
+  { label: '竖屏 390×844（画布 390×683）', w: 390, h: 683 },
   { label: '横屏 844×390（画布 844×333）', w: 844, h: 333 },
   { label: '平板 768×1024（画布 768×967）', w: 768, h: 967 },
 ] as const;
 
-/** 竖屏把抽屉拉开后的可用区（元件库/验收抽屉高 362，见 mobile-layout 实测） */
+/** 竖屏把元件库抽屉拉开后**未被遮住**的那条（CDP 实测抽屉 314px：683 − 314 = 369） */
 const PORTRAIT_WITH_SHEET = {
-  label: '竖屏 390×844 + 底部抽屉 362（可用 390×425）',
+  label: '竖屏 390×844 + 底部抽屉 314（未被遮住 390×369）',
   w: 390,
-  h: 425,
+  h: 369,
 };
 
-/** 小内容：40×30 世界单位的元件区（远小于 175 格² 的可视区 → 面积口径说了算） */
+/** 小内容：40×30 世界单位的元件区 */
 const SMALL = { x: 300, y: 200, w: 40, h: 30 };
-/** 大内容：900×700 世界单位（≈ 45×35 格，比可视区大 → 内容口径说了算） */
-const BIG = { x: 260, y: 90, w: 900, h: 700 };
+/**
+ * **真实关卡进关时的内容 bbox**（元件足迹，`docForLevel` + `footprintOf` 实算，见 fit-entry.test.tsx
+ * 里同一算法现算的那几条）：所有关卡都带 VCC/GND 电源轨与右侧端口，所以**宽度恒 704**；
+ * 高度按关卡 164（非门）~ 584（段码·abc / 多输入或门）。
+ */
+const REAL_NOT = { x: 18, y: 49, w: 704, h: 164 }; // 第 1 关「非门」
+const REAL_TALL = { x: 18, y: 49, w: 704, h: 584 }; // 最高的一关
 
 describe('格距与可见格数口径', () => {
   it('格距常量 = 20 世界单位/格（render.ts drawGrid 的步长）', () => {
@@ -59,7 +74,7 @@ describe('格距与可见格数口径', () => {
 
   it('可见格块的宽高比 == 可用区宽高比（铺满可用区，不是反的）', () => {
     for (const v of [...VIEWPORTS, PORTRAIT_WITH_SHEET]) {
-      const { camera, cells } = fitCamera({ width: v.w, height: v.h, content: SMALL });
+      const { camera, cells } = fitCamera({ width: v.w, height: v.h, content: REAL_TALL });
       expect(cells.x / cells.y).toBeCloseTo(v.w / v.h, 6);
       // 面积口径落点：格块宽高比正确时 cellsX 就是 sqrt(175 × A)
       expect(camera.scale).toBeGreaterThan(0);
@@ -67,9 +82,9 @@ describe('格距与可见格数口径', () => {
   });
 });
 
-describe('面积口径：小内容时按 175 格² 取景', () => {
+describe('面积口径：按 175 格² 取景（内容尺寸不参与）', () => {
   it.each([...VIEWPORTS, PORTRAIT_WITH_SHEET])('$label', (v) => {
-    const r = fitCamera({ width: v.w, height: v.h, content: SMALL });
+    const r = fitCamera({ width: v.w, height: v.h, content: REAL_TALL });
     const cells = visibleCells(r.camera, v.w, v.h);
     // scale 永远落在手势区间里
     expect(r.camera.scale).toBeGreaterThanOrEqual(SCALE_RANGE.min);
@@ -91,42 +106,44 @@ describe('面积口径：小内容时按 175 格² 取景', () => {
   });
 
   it('竖屏/横屏/竖屏+抽屉：实得面积正好 175.0 格²，且 scale 在上限之内', () => {
-    for (const v of [{ w: 390, h: 787 }, { w: 844, h: 333 }, PORTRAIT_WITH_SHEET]) {
-      const r = fitCamera({ width: v.w, height: v.h, content: SMALL });
+    for (const v of [{ w: 390, h: 683 }, { w: 844, h: 333 }, PORTRAIT_WITH_SHEET]) {
+      const r = fitCamera({ width: v.w, height: v.h, content: REAL_NOT });
       expect(r.clamped).toBe('none');
       expect(r.cells.area).toBeCloseTo(175, 6);
       expect(r.camera.scale).toBeLessThan(SCALE_RANGE.max);
     }
-    // 具体数字：竖屏 2.094、横屏 2.004、竖屏+抽屉 1.539
-    expect(fitCamera({ width: 390, height: 787, content: SMALL }).camera.scale).toBeCloseTo(
-      2.094,
+    // 具体数字：竖屏 1.951、横屏 2.004、竖屏+抽屉 1.434（后两个与 CDP 实测 2.0 / 1.45 对得上）
+    expect(fitCamera({ width: 390, height: 683, content: REAL_NOT }).camera.scale).toBeCloseTo(
+      1.951,
       3,
     );
-    expect(fitCamera({ width: 844, height: 333, content: SMALL }).camera.scale).toBeCloseTo(
+    expect(fitCamera({ width: 844, height: 333, content: REAL_NOT }).camera.scale).toBeCloseTo(
       2.004,
       3,
     );
-    expect(fitCamera({ width: 390, height: 425, content: SMALL }).camera.scale).toBeCloseTo(
-      1.539,
+    expect(fitCamera({ width: 390, height: 369, content: REAL_NOT }).camera.scale).toBeCloseTo(
+      1.434,
       3,
     );
   });
 
-  it('桌面/平板：175 格² 需要 3.713 / 3.257 > 上限 2.6 → 顶到 2.6，面积必然超标（硬夹紧）', () => {
-    const desk = fitCamera({ width: 1280, height: 754, content: SMALL });
-    expect(desk.areaScale).toBeCloseTo(3.713, 3);
+  it('桌面/平板：175 格² 需要 3.321 / 3.257 > 上限 2.6 → 顶到 2.6，面积必然超标（硬夹紧）', () => {
+    // 「被 max 截住」= 这两个视口永远拿不到 175：**285.5 / 274.7 格²** 就是本口径在大屏上的真实落点
+    // （CDP 从画布像素量出来的也是这两个数）
+    const desk = fitCamera({ width: 1024, height: 754, content: SMALL });
+    expect(desk.areaScale).toBeCloseTo(3.321, 3);
     expect(desk.clamped).toBe('max');
     expect(desk.camera.scale).toBe(2.6);
-    expect(desk.cells.area).toBeCloseTo(356.9, 1); // 1280×754 / (20×2.6)²
+    expect(desk.cells.area).toBeCloseTo(285.5, 1); // 1024×754 / (20×2.6)²
 
     const pad = fitCamera({ width: 768, height: 967, content: SMALL });
     expect(pad.areaScale).toBeCloseTo(3.257, 3);
     expect(pad.camera.scale).toBe(2.6);
     expect(pad.cells.area).toBeCloseTo(274.7, 1);
 
-    // 反证：把上限提到 3.713 就正好 175（说明差的只是上限，不是公式）
+    // 反证：把上限提到 4 就正好 175（说明差的只是上限，不是公式）
     const unclamped = fitCamera({
-      width: 1280,
+      width: 1024,
       height: 754,
       content: SMALL,
       scaleRange: { min: 0.35, max: 4 },
@@ -136,46 +153,75 @@ describe('面积口径：小内容时按 175 格² 取景', () => {
   });
 });
 
-describe('内容优先', () => {
-  it('大电路：取更小的那个 scale，内容（含留白）完整落在可用区内', () => {
+describe('内容不参与定 scale（用户裁定：固定约 13 格视野，超出靠平移/缩放）', () => {
+  it('真实关卡尺寸（704×584）也不会把视野撑大：实得面积仍是 175 / 或只顶到上限 2.6 的边界', () => {
+    // 目标值：小屏 175 格²；桌面/平板被手势上限 2.6 截到 285.5 / 274.7（硬夹紧，见文件头）
+    const expected: Record<string, number> = {
+      '桌面 1280×800（画布 1024×754）': 285.5,
+      '竖屏 390×844（画布 390×683）': 175, // CDP 实测 175.1（网格间距量化误差）
+      '横屏 844×390（画布 844×333）': 175,
+      '平板 768×1024（画布 768×967）': 274.7,
+      '竖屏 390×844 + 底部抽屉 314（未被遮住 390×369）': 175,
+    };
     for (const v of [...VIEWPORTS, PORTRAIT_WITH_SHEET]) {
-      const r = fitCamera({ width: v.w, height: v.h, content: BIG });
-      expect(r.contentScale).toBeLessThan(r.areaScale); // 内容口径确实更紧
-      expect(r.camera.scale).toBeCloseTo(r.contentScale, 9);
-      expect(r.camera.scale).toBeGreaterThanOrEqual(SCALE_RANGE.min);
-      expect(r.camera.scale).toBeLessThanOrEqual(SCALE_RANGE.max);
-
-      // 内容 bbox（含留白）→ 屏幕坐标，四边都在可用区里
-      const halfW = (BIG.w / 2 + CONTENT_MARGIN) * r.camera.scale;
-      const halfH = (BIG.h / 2 + CONTENT_MARGIN) * r.camera.scale;
-      expect(halfW).toBeLessThanOrEqual(v.w / 2 + 1e-9);
-      expect(halfH).toBeLessThanOrEqual(v.h / 2 + 1e-9);
-      // 居中：内容中心 == 相机位置（可用区中心）
-      expect(r.camera.x).toBeCloseTo(BIG.x + BIG.w / 2, 9);
-      expect(r.camera.y).toBeCloseTo(BIG.y + BIG.h / 2, 9);
+      const r = fitCamera({ width: v.w, height: v.h, content: REAL_TALL });
+      expect(r.cells.area).toBeCloseTo(expected[v.label] ?? Number.NaN, 1);
+      // 关键：**不许**被内容撑大（老的内容优先口径下真实关卡是 606~2691 格²，见下面那条反证）
+      expect(r.cells.area).toBeLessThan(607);
+      // 内容比视野大 → 一定有一部分在视野外，靠平移/缩放看（这是本口径的预期代价）
+      expect((REAL_TALL.w * r.camera.scale) / 2).toBeGreaterThan(v.w / 2);
     }
   });
 
-  it('小内容：不会被放大超过面积口径的 scale（175 格² 那个）', () => {
-    for (const v of [...VIEWPORTS, PORTRAIT_WITH_SHEET]) {
-      const r = fitCamera({ width: v.w, height: v.h, content: { x: 0, y: 0, w: 20, h: 20 } });
-      expect(r.camera.scale).toBeLessThanOrEqual(Math.min(r.areaScale, SCALE_RANGE.max) + 1e-12);
-      expect(r.contentScale).toBeGreaterThan(r.areaScale); // 内容口径确实更松
+  it('反证：老口径（min(面积, 内容)）下真实关卡的实得面积是 606.3 / 1496.9 / 2691.1 格²', () => {
+    const cellsWith = (w: number, h: number, scale: number) => (w * h) / (GRID_PITCH * scale) ** 2;
+    const oldScale = (w: number, h: number, box: { w: number; h: number }): number =>
+      Math.min(w / (box.w + 80), h / (box.h + 80));
+    const newScale = (w: number, h: number, box: Box): number =>
+      fitCamera({ width: w, height: h, content: box }).camera.scale;
+
+    // ① 横屏 844×333 + 非门（内容 704×164）：老口径 1.0765 → 606.3 格²（新口径 175）
+    const land = oldScale(844, 333, REAL_NOT);
+    expect(land).toBeCloseTo(1.0765, 3);
+    expect(cellsWith(844, 333, land)).toBeCloseTo(606.3, 1);
+    expect(cellsWith(844, 333, newScale(844, 333, REAL_NOT))).toBeCloseTo(175, 1);
+    // ② 桌面 1024×754 + 高关（704×584）：老口径 1.1355 → 1496.9 格²（新口径 285.5）
+    const desk = oldScale(1024, 754, REAL_TALL);
+    expect(desk).toBeCloseTo(1.1355, 3);
+    expect(cellsWith(1024, 754, desk)).toBeCloseTo(1496.9, 1);
+    expect(cellsWith(1024, 754, newScale(1024, 754, REAL_TALL))).toBeCloseTo(285.5, 1);
+    // ③ 竖屏 390×683 + 高关：老口径 0.4974 → 2691.1 格²（新口径 175）
+    const port = oldScale(390, 683, REAL_TALL);
+    expect(port).toBeCloseTo(0.4974, 3);
+    expect(cellsWith(390, 683, port)).toBeCloseTo(2691.1, 1);
+    expect(cellsWith(390, 683, newScale(390, 683, REAL_TALL))).toBeCloseTo(175, 1);
+  });
+
+  it('同一视口下，内容尺寸怎么变都不动 scale：只动相机中心', () => {
+    for (const content of [SMALL, REAL_NOT, REAL_TALL, { x: 0, y: 0, w: 20000, h: 12000 }]) {
+      const r = fitCamera({ width: 390, height: 683, content });
+      expect(r.camera.scale).toBeCloseTo(1.951, 3); // 与 175 格² 的面积口径一致（CDP 实测 1.95）
+      expect(r.cells.area).toBeCloseTo(175, 1);
+      // 只有中心跟着内容走（把内容 bbox 中心放进可用区中心，不算内容优先）
+      expect(r.camera.x).toBeCloseTo(content.x + content.w / 2, 9);
+      expect(r.camera.y).toBeCloseTo(content.y + content.h / 2, 9);
     }
   });
 
-  it('超大电路：夹到 0.35 下限（允许平移看其余部分），不越界', () => {
+  it('超大电路也不再被夹到 0.35：面积口径与内容无关，视野恒定', () => {
     const huge = { x: 0, y: 0, w: 20000, h: 12000 };
-    const r = fitCamera({ width: 390, height: 787, content: huge });
-    expect(r.clamped).toBe('min');
-    expect(r.camera.scale).toBe(SCALE_RANGE.min);
+    const r = fitCamera({ width: 390, height: 683, content: huge });
+    expect(r.clamped).toBe('none');
+    expect(r.camera.scale).toBeCloseTo(1.951, 3);
+    expect(r.camera.x).toBeCloseTo(10000, 6); // 内容中心
+    expect(r.camera.y).toBeCloseTo(6000, 6);
   });
 
   it('空关卡（没有元件）：用传入的落点，只按面积定 scale', () => {
-    const r = fitCamera({ width: 390, height: 787, content: null, center: { x: 340, y: 220 } });
+    const r = fitCamera({ width: 390, height: 683, content: null, center: { x: 340, y: 220 } });
     expect(r.camera.x).toBe(340);
     expect(r.camera.y).toBe(220);
-    expect(r.cells.area).toBeCloseTo(175, 6);
+    expect(r.cells.area).toBeCloseTo(175, 1);
   });
 });
 
@@ -198,22 +244,22 @@ describe('usableArea：可用区扣掉覆盖式面板', () => {
   it('竖屏：元件库是底部抽屉 → 扣高度（抽屉关着不扣）', () => {
     const open = usableArea({
       width: 390,
-      height: 787,
+      height: 683,
       narrow: true,
       portrait: true,
       leftOpen: true,
-      bottomSheet: { w: 390, h: 362 },
+      bottomSheet: { w: 390, h: 314 }, // CDP 实测竖屏抽屉 314px
     });
-    expect(open).toEqual({ width: 390, height: 425 });
+    expect(open).toEqual({ width: 390, height: 369 });
     const closed = usableArea({
       width: 390,
-      height: 787,
+      height: 683,
       narrow: true,
       portrait: true,
       leftOpen: false,
-      bottomSheet: { w: 390, h: 362 }, // 元素不在了也量不到；这里给 0 表示量不到
+      bottomSheet: { w: 390, h: 314 }, // 元素不在了也量不到；这里给 0 表示量不到
     });
-    expect(closed).toEqual({ width: 390, height: 787 });
+    expect(closed).toEqual({ width: 390, height: 683 });
   });
 
   it('窄屏横屏：只有元件库是覆盖抽屉 → 扣宽度（右侧面板已移除，不再扣右边）', () => {
@@ -240,17 +286,17 @@ describe('usableArea：可用区扣掉覆盖式面板', () => {
   it('竖屏扣掉抽屉后：面积口径仍落在 175 格²（实得）', () => {
     const a = usableArea({
       width: 390,
-      height: 787,
+      height: 683,
       narrow: true,
       portrait: true,
       leftOpen: true,
-      bottomSheet: { w: 390, h: 362 },
+      bottomSheet: { w: 390, h: 314 },
     });
     const r = fitCamera({ width: a.width, height: a.height, content: SMALL });
     expect(r.clamped).toBe('none');
     expect(r.cells.area).toBeCloseTo(175, 6);
     expect(visibleCells(r.camera, a.width, a.height).area).toBeCloseTo(175, 6);
-    expect(r.camera.scale).toBeCloseTo(1.539, 3);
+    expect(r.camera.scale).toBeCloseTo(1.434, 3);
   });
 
   it('抽屉比画布还高（离谱输入）→ 兜底到下限，不出现 0/负数', () => {
@@ -260,7 +306,7 @@ describe('usableArea：可用区扣掉覆盖式面板', () => {
       narrow: true,
       portrait: true,
       leftOpen: true,
-      bottomSheet: { w: 390, h: 362 },
+      bottomSheet: { w: 390, h: 314 },
     });
     expect(a).toEqual({ width: 390, height: 120 });
   });
@@ -295,8 +341,8 @@ describe('contentBoxOf：内容 bbox 由元件足迹算', () => {
 describe('相机模型一致：camera 是「可用区中心对应的世界点」', () => {
   it('世界中心映射到屏幕中心（render.ts 的 worldToScreen 口径）', () => {
     const w = 390;
-    const h = 787;
-    const r = fitCamera({ width: w, height: h, content: BIG });
+    const h = 683;
+    const r = fitCamera({ width: w, height: h, content: REAL_TALL });
     // worldToScreen：sx = (wx - camera.x) * scale + width / 2
     const sx = (r.camera.x - r.camera.x) * r.camera.scale + w / 2;
     const sy = (r.camera.y - r.camera.y) * r.camera.scale + h / 2;
