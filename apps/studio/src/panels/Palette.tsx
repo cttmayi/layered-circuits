@@ -5,7 +5,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 import type { PlaceKind, StoredModule, UnitKind } from '../editor/model';
 import { drawIcon } from '../editor/render';
 import { usePortraitNarrow } from '../layout/viewport';
-import { dedupeByNameForDisplay } from '../level/library';
+import { dedupeByNameForDisplay, producedInElementLevel } from '../level/library';
 import { gateLevelUsable, gateProbeLibrary } from '../sim/gate-usable';
 
 /**
@@ -336,8 +336,19 @@ export function Palette({
   const probeLibrary = useMemo(() => gateProbeLibrary(library), [library]);
   // 探针不再做全局缓存（结论同时取决于模块名与库，按 hash 缓存会串味 —— 见 gate-usable.ts 文件头），
   // 所以这里按「库 + 是否逻辑关」记忆化，画布上的鼠标移动不会反复跑探针。
+  /**
+   * 逻辑关再拦一道（用户第 ⑰ 轮拍板）：「**1~7 关创建的模块不要往 8 关之后放**」。
+   * 第 1~7 关（元件/时序关）产出的东西在逻辑关是"含元件的组合模块" —— 门级引擎如实拒绝、
+   * 静默回落元件引擎，延迟与强弱语义就跟着回来了，所以第 8 关起干脆不列它们（不是置灰）。
+   * 判据见 `producedInElementLevel`：**优先用产出处**（存档的 levelId → 那关的 judgeMode），
+   * 存档没记 provenance 时用内容代理（身体含元件），两条都会在注释里写明会判错的情况。
+   * 时序关与自由模式不拦（玩家在原关卡里的产出照旧列着，见反证用例）。
+   */
   const visibleUserModules = useMemo(
-    () => (logicLevel ? userModules.filter((m) => gateLevelUsable(m, probeLibrary)) : userModules),
+    () =>
+      logicLevel
+        ? userModules.filter((m) => !producedInElementLevel(m) && gateLevelUsable(m, probeLibrary))
+        : userModules,
     [logicLevel, userModules, probeLibrary],
   );
   /** 基础门：本关提供的门（teaching 积木）。库里注入的是整族（复合门的身体会引用更底层的门），
