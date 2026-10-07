@@ -365,7 +365,7 @@ export function App(): React.JSX.Element {
    *  - 竖屏的元件库**底部抽屉**（.palette）：它一拉开浮动条就整体上移避让 —— 用 offsetHeight
    *    （布局高度，**不含**入场动画的 transform，否则动画那 180ms 会量出一个偏小的值）；
    *  - 横屏/竖屏平板的元件库是**左侧**覆盖抽屉：浮动条整体右移一个抽屉宽；
-   *  - 顶部浮起的开合手柄（窄屏 56px 带）与右上角图例。
+   *  - 顶部浮起的开合手柄（窄屏 56px 带）、右上角图例、以及画布顶端的任务描述浮层。
    *
    * 这里**不碰**任何既有元素的样式：所有值都是"读"，浮动条自己是绝对定位，
    * 不会反过来影响被量的元素（画布区 overflow: hidden），所以不会来回抖。
@@ -396,6 +396,10 @@ export function App(): React.JSX.Element {
     const legendRect = legend?.getBoundingClientRect();
     if (legendRect && legendRect.height > 0)
       top = Math.max(top, legendRect.bottom - wrapRect.top + 8);
+    // 画布顶端的任务描述浮层（从顶栏搬下来的那句）：选中对象的小条也得让开它 ——
+    // 「选中画布最上方的元件」时，小条会被夹到这块下面（placeFloatingBar 用的是 selBox.top = insets.top）。
+    const briefRect = wrap.querySelector('.canvas-brief')?.getBoundingClientRect();
+    if (briefRect && briefRect.height > 0) top = Math.max(top, briefRect.bottom - wrapRect.top + 8);
 
     // 左右：窄屏的元件库是**左侧**覆盖抽屉（横屏/竖屏平板：width min(320px, 86vw)，占满整高），
     // 会把画布左下角整个盖住 → 左下浮动条整体右移一个抽屉宽（marginLeft，见 JSX）。
@@ -1797,20 +1801,17 @@ export function App(): React.JSX.Element {
             </button>
           )}
           {currentLevel && (
-            // 任务信息常驻顶栏（右侧验收面板整块移除后，任务从这里看）：
-            // 标题 + 一句话任务默认可见、过长截断（title 里给全文），「详情」开完整任务对话框
-            <div className="task-bar" title={currentLevel.brief}>
+            // 顶栏只留**短标题**（用户反馈：顶栏栏位不够）：完整描述搬到画布顶端浮层
+            // （见 .canvas-wrap 里的 .canvas-brief）。这块窄、不抢宽度、窄屏也不会撑爆顶栏。
+            // 整块就是「任务详情」入口（合同条款/真值表/教学/提示），省掉一颗「详情」按钮占的位置。
+            <button
+              type="button"
+              className="task-bar"
+              onClick={() => setTaskDialog('detail')}
+              title="任务详情：合同条款、真值表、教学说明与提示"
+            >
               <span className="task-bar-title">任务 · {currentLevel.title}</span>
-              <span className="task-bar-brief">{currentLevel.brief}</span>
-              <button
-                type="button"
-                className="task-bar-detail"
-                onClick={() => setTaskDialog('detail')}
-                title="任务详情：合同条款、真值表、教学说明与提示"
-              >
-                详情
-              </button>
-            </div>
+            </button>
           )}
           {gameMode !== 'free' && (
             <div className="group">
@@ -1955,6 +1956,30 @@ export function App(): React.JSX.Element {
             onPointerCancel={onPointerCancel}
             onContextMenu={(e) => e.preventDefault()}
           />
+
+          {/* ---- 画布顶端的任务描述浮层（从顶栏搬下来）----
+              一行放得下就一行，放不下最多 2~3 行（窄屏 2 行、宽屏 3 行，见 CSS），再多就截断，
+              全文在 title 里。位置与避让：
+                · 宽屏：画布左上角（max-width 46% → 够不着右上角图例，实测图例占右 260/1024）；
+                · 窄屏：横屏让开左上角那颗「元件库」手柄（实测 8~96px 宽 → left: 104px），
+                  竖屏那颗手柄在底部所以贴左边缘；两种都夹在顶部手柄带（6px）与图例（top:60px）
+                  之间，高度上限 44px（= 最多 2 行）；
+                · 与左下浮动工具条/底部提示行/竖屏手柄行天然不重叠（一个在上一个在下）；
+                · 选中对象的小条（.ovl-sel）由 overlayInsets.top 让开这块的高度（App 的实测 effect
+                  把它的 rect 算进 top），所以选中画布最上方的元件时小条也不会压住描述。
+              手势：按 .ovl-tools 那套用**原生监听**吞掉自己的 pointerdown/mousedown/touchstart/
+              dblclick，**不吞** click/pointerup（见文件底部 swallowOverlayPointer 的注释）。 */}
+          {currentLevel && (
+            <div
+              className="canvas-brief"
+              ref={swallowOverlayPointer}
+              role="note"
+              aria-label={`本关任务：${currentLevel.title}`}
+              title={currentLevel.brief}
+            >
+              {currentLevel.brief}
+            </div>
+          )}
 
           {/* ---- 画布浮动工具条（顶栏那四个按钮搬到这里）----
               ① 撤销/重做：常驻左下角，竖排 44×44，半透明；拖动元件/平移画布时淡出（.is-busy）。

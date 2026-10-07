@@ -592,13 +592,19 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
     // 面板里的可点项抬到 44px；鼠标专用的提示行在窄屏藏掉
     expect(rules.get('.palette-item')).toContain('min-height: 44px');
     expect(rules.get('.hint-mouse')).toContain('display: none');
-    // 顶栏「任务」块（右侧面板移除后新增）：窄屏自己吃剩余宽度、44px 触屏目标、
-    // 描述过长走省略号（headless Chrome 实测 844×390 下这块 475px、描述宽 216px 未截断）
+    // 顶栏「任务」块（第 ⑧ 轮起只留短标题，描述搬到画布顶端 .canvas-brief）：窄屏**不再吃满
+    // 剩余宽度**，只占标题本身的宽度；触屏 44px 目标保住，标题超长自己省略号截断。
     const taskBar = rules.get('.toolbar .task-bar') ?? '';
-    expect(taskBar).toMatch(/flex:\s*1 1 auto/);
-    expect(taskBar).toMatch(/min-width:\s*84px/);
+    expect(taskBar).toMatch(/flex:\s*0 1 auto/);
     expect(taskBar).toMatch(/min-height:\s*44px/);
-    expect(rules.get('.toolbar .task-bar-detail')).toMatch(/min-height:\s*44px/);
+    expect(taskBar).toMatch(/max-width:\s*none/);
+    // 画布顶端的描述浮层：夹在顶部 56px 手柄带（图例 top:60px）之间，最多 2 行；
+    // 横屏左上角有「元件库」手柄（实测 8~96px），left 让开它
+    const brief = rules.get('.canvas-brief') ?? '';
+    expect(brief).toMatch(/top:\s*6px/);
+    expect(brief).toMatch(/left:\s*104px/);
+    expect(brief).toMatch(/max-height:\s*44px/);
+    expect(brief).toMatch(/-webkit-line-clamp:\s*2/);
   });
 
   it('竖屏块里真有关键规则：地图不横滑（靠减少列数）+ 元件库在底部', () => {
@@ -636,13 +642,15 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
     // ② 验收（右侧面板）整块移除：竖屏块里再也没有 .side / .edge-strip.right 的规则
     expect(rules.get('.side')).toBeUndefined();
     expect(rules.get('.edge-strip.right')).toBeUndefined();
-    // ③ 顶栏：竖屏**允许换行**（横屏/桌面仍是一行横滑），任务块放不下就自动独占一行 ——
-    //    headless Chrome 实测 390×844：一行里只剩 21px 给任务块（放不下），换行后它拿满 370px、
-    //    描述 216px 完整可读、整行溢出 0（改之前是溢出 63px 且描述被压成 0px）
+    // ③ 顶栏：竖屏**允许换行**（横屏/桌面仍是一行横滑）。第 ⑧ 轮起任务块只剩短标题，
+    //    所以它和「返回地图」「交付验收」同在第一行；真放不下时按内容宽度换到下一行。
     const topRow = rules.get('.toolbar-row') ?? '';
     expect(topRow).toContain('flex-wrap: wrap');
     expect(topRow).toContain('overflow-x: visible');
-    expect(rules.get('.toolbar .task-bar')).toMatch(/flex:\s*1 1 auto/);
+    //    第 ⑧ 轮：任务块只占短标题宽度（描述已在画布上），所以它留在第一行，不再独占一行
+    expect(rules.get('.toolbar .task-bar')).toMatch(/flex:\s*0 1 auto/);
+    //    画布顶端描述浮层：竖屏顶部手柄带是空的（开合手柄在底部那行）→ 贴左边缘
+    expect(rules.get('.canvas-brief')).toMatch(/left:\s*8px/);
     // ④ 手柄行：仍是那一行（贴底、抽屉开着时上抬）；行里现在只有元件库一颗按钮，
     //    flex 行结构与 44px 目标原样保留（多出来的 gap 对单颗按钮无影响）
     const row = rules.get('.edge-strip.left') ?? '';
@@ -694,10 +702,18 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
     expect(baseBody).not.toContain('overflow-x: auto');
     expect(baseBody).not.toContain('display: flex');
     expect(BASE_CSS.get('.palette-item')).toContain('width: 100%');
-    // 顶栏任务块：桌面/宽屏**不抢宽度**（只吃剩余空隙，右侧按钮不会被挤走）
+    // 顶栏任务块：桌面/宽屏**只占短标题宽度**（描述已搬到画布顶端，不再有 brief 那一行）
     expect(BASE_CSS.get('.task-bar')).toContain('flex: 0 1 auto');
-    expect(BASE_CSS.get('.task-bar')).toMatch(/max-width:\s*min\(560px/);
-    expect(BASE_CSS.get('.task-bar-brief')).toContain('text-overflow: ellipsis');
+    expect(BASE_CSS.get('.task-bar')).toMatch(/max-width:\s*min\(240px/);
+    expect(BASE_CSS.get('.task-bar-title')).toContain('text-overflow: ellipsis');
+    // 画布顶端的描述浮层（基础块 = 宽屏）：贴左上角、最多 3 行、max-width 够不着右上角图例
+    const baseBrief = BASE_CSS.get('.canvas-brief') ?? '';
+    expect(baseBrief).toContain('position: absolute');
+    expect(baseBrief).toMatch(/top:\s*10px/);
+    expect(baseBrief).toMatch(/left:\s*12px/);
+    expect(baseBrief).toMatch(/max-width:\s*min\(560px, 46%\)/);
+    expect(baseBrief).toMatch(/-webkit-line-clamp:\s*3/);
+    expect(baseBrief).toContain('overflow: hidden');
     expect(BASE_CSS.get('.palette-cost')).toContain('color: var(--ok)');
     expect(BASE_CSS.get('.palette-note')).toContain('white-space: nowrap');
   });

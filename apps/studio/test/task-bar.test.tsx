@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 /**
  * 第 ⑦ 轮验收（用户三条要求）：**右侧面板整块去掉，任务信息改到顶栏**
+ * 第 ⑧ 轮修订（用户反馈「顶栏栏位不够」）：**标题留顶栏、描述放画布顶端**
  *
  *  1. 去掉「验收」侧（右侧那整个面板）：任何视口下 `.side`、右侧开合手柄、成本表（材料费）
  *     都不在 DOM 里；但顶栏的判定入口「交付验收」必须还在、可点（结果改在弹窗里给）。
  *  2. 第一次进入某关弹一次任务说明对话框：同一关第二次不弹，换一关又会弹；
  *     弹窗可关，关掉不卡操作；`?debug=1` 下「一键出答案」流程照旧可用。
- *  3. 任务详情放进顶栏、位置在「← 返回地图」按钮右侧：默认就能看到当前任务是什么；
- *     过长靠 CSS 截断（title 里给全文），点「详情」开完整任务对话框。
+ *  3. 顶栏只留**短标题**（「任务 · 非门」，在「← 返回地图」右侧、窄到只剩标题），
+ *     整块可点 = 完整任务对话框入口；那句长描述**从顶栏消失**，改到画布顶端的
+ *     `.canvas-brief` 浮层（见 describe ④）。
  *
  * ⚠️ jsdom 不做真实布局：这里断言的是 **DOM 结构与兄弟顺序**；真实视口下的宽度/溢出
  * 由 headless Chrome 实测（提交信息里给了三个视口的数字）。
@@ -140,7 +142,7 @@ describe('② 每关第一次进入弹一次任务说明', () => {
   });
 });
 
-describe('③ 任务详情进顶栏（在「返回地图」右侧）', () => {
+describe('③ 顶栏只留短标题（在「返回地图」右侧）', () => {
   it('顶栏任务块紧跟在「← 返回地图」按钮后面（DOM 兄弟顺序）', () => {
     renderApp();
     startJob('非门');
@@ -152,22 +154,30 @@ describe('③ 任务详情进顶栏（在「返回地图」右侧）', () => {
     expect(taskIdx).toBe(backIdx + 1); // 就在返回按钮**右侧**（严格相邻的后一个兄弟）
   });
 
-  it('顶栏默认就能看到当前任务是什么：标题 + 一句话任务都在', () => {
+  it('顶栏这块只有短标题：那句长描述**不在顶栏里**（已搬到画布顶端）', () => {
     renderApp();
     startJob('非门');
     fireEvent.click(screen.getByText('开始干活 →'));
     const bar = document.querySelector('.task-bar') as HTMLElement;
-    expect(bar.textContent).toContain('任务 · 非门');
-    expect(bar.querySelector('.task-bar-brief')?.textContent).toBe(findLevel('s1-not')?.brief);
-    // 过长截断由 CSS 负责，全文放在 title 里（悬停补全）
-    expect(bar.getAttribute('title')).toBe(findLevel('s1-not')?.brief);
+    expect(bar.textContent).toBe('任务 · 非门'); // 就这几个字，没有别的
+    const brief = findLevel('s1-not')?.brief ?? '';
+    expect(brief.length).toBeGreaterThan(10);
+    expect(bar.textContent).not.toContain(brief);
+    expect(bar.querySelector('.task-bar-brief')).toBeNull();
+    expect(bar.querySelector('.task-bar-detail')).toBeNull();
+    // 原来塞在顶栏的那份描述现在只在画布顶端浮层上（而且一份，不是两份）
+    const ovl = document.querySelector('.canvas-brief') as HTMLElement;
+    expect(ovl.textContent).toBe(brief);
+    expect(document.querySelectorAll('.toolbar .canvas-brief')).toHaveLength(0);
+    // 整块是按钮（= 任务详情入口），没有额外按钮占宽度
+    expect(bar.tagName).toBe('BUTTON');
   });
 
-  it('「详情」按钮开完整任务对话框（条款 / 真值表 / 提示都在）', () => {
+  it('点顶栏标题开完整任务对话框（条款 / 真值表 / 提示都在）', () => {
     renderApp();
     startJob('非门');
     fireEvent.click(screen.getByText('开始干活 →'));
-    fireEvent.click(screen.getByRole('button', { name: '详情' }));
+    fireEvent.click(screen.getByRole('button', { name: /任务 · 非门/ }));
     const box = document.querySelector('.task-full') as HTMLElement;
     expect(box).toBeTruthy();
     expect(screen.getByRole('dialog', { name: /任务详情 · 非门/ })).toBeTruthy();
@@ -189,6 +199,46 @@ describe('③ 任务详情进顶栏（在「返回地图」右侧）', () => {
     const bar = document.querySelector('.task-bar') as HTMLElement;
     expect(bar).toBeTruthy();
     expect(bar.textContent).not.toContain('任务 · 非门');
-    expect(bar.querySelector('.task-bar-brief')?.textContent?.length).toBeGreaterThan(0);
+    // 换成知识卡片后，画布顶端的描述也跟着换（不是写死第一关那句）
+    const ovl = document.querySelector('.canvas-brief') as HTMLElement;
+    expect(ovl.textContent?.length).toBeGreaterThan(0);
+    expect(ovl.textContent).not.toBe(findLevel('s1-not')?.brief);
+  });
+});
+
+describe('④ 描述搬到画布顶端浮层（在画布区域里，不是顶栏）', () => {
+  it('浮层挂在 .canvas-wrap 里、给全文 title、且不吞 click（可 hover 补全）', () => {
+    renderApp();
+    startJob('非门');
+    fireEvent.click(screen.getByText('开始干活 →'));
+    const ovl = document.querySelector('.canvas-brief') as HTMLElement;
+    expect(ovl).toBeTruthy();
+    expect(ovl.closest('.canvas-wrap')).toBeTruthy(); // 在画布区域里
+    expect(ovl.closest('.toolbar')).toBeNull(); // 不在顶栏里
+    expect(ovl.getAttribute('title')).toBe(findLevel('s1-not')?.brief); // 截断后的全文补全
+    expect(ovl.textContent).toBe(findLevel('s1-not')?.brief); // 单行/多行都不改文案
+  });
+
+  it('拖画布不会被这块拦住：pointerdown 在浮层上被吞、click/pointerup 不吞', () => {
+    // 口径与 .ovl-tools 完全一致（App.tsx 的 OVL_SWALLOWED_EVENTS）：
+    // pointerdown/mousedown/touchstart/dblclick 吞；click/pointerup/mouseup **不吞**。
+    // jsdom 不做布局，这里直接验 DOM：在浮层上派发 pointerdown 不冒泡到 .canvas-wrap 之外。
+    renderApp();
+    startJob('非门');
+    fireEvent.click(screen.getByText('开始干活 →'));
+    const ovl = document.querySelector('.canvas-brief') as HTMLElement;
+    let reachedWrap = 0;
+    const wrap = ovl.closest('.canvas-wrap') as HTMLElement;
+    wrap.addEventListener('pointerdown', () => {
+      reachedWrap += 1;
+    });
+    ovl.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })); // hmm: jsdom 用 Event
+    expect(reachedWrap).toBe(0); // 被浮层自己的原生监听吞掉了
+  });
+
+  it('自由搭建（没有关卡）不渲染这块浮层', () => {
+    renderApp();
+    fireEvent.click(screen.getByText('自由搭建'));
+    expect(document.querySelector('.canvas-brief')).toBeNull();
   });
 });

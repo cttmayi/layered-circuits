@@ -54,45 +54,38 @@ body,
 }
 
 /* 顶栏上的「本关任务」：位置紧跟在「← 返回地图/主菜单」按钮右侧。
-   右侧验收面板整块移除后，任务信息就常驻在这里：默认就能看到这关要做什么；
-   太长就省略号截断（整段 brief 在 title 里 + 「详情」弹出完整任务对话框）。
-   flex: 0 1 auto → 只吃顶栏剩余空隙（.spacer 会让位），宽屏不会把右侧按钮挤走；
-   窄屏（见 @media 块）改成 flex: 1 1 auto 并留最小宽度，保证任务仍看得见。 */
+   用户反馈顶栏栏位不够 → 这里**只留短标题**（如「任务 · 与门」），完整描述搬到画布顶端的
+   .canvas-brief 浮层。整块就是「任务详情」入口（合同条款/真值表/教学/提示），所以不再需要
+   一颗「详情」按钮占宽度。
+   flex: 0 1 auto + max-width → 只占标题本身的宽度，宽屏/窄屏都不会把别的按钮挤走；
+   标题超长自己省略号截断。上下零内边距：块高不撑顶栏（桌面 46px / 横屏 57px 的基线不变）。 */
 .task-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
   flex: 0 1 auto;
   min-width: 0;
-  max-width: min(560px, 46vw);
-  /* 上下零内边距 + 无边框：块高就等于行内按钮高（桌面 29px、窄屏 44px），
-     所以加了这块**不会把顶栏顶高**（实测：桌面顶栏仍是 46px、横屏仍是 57px，
-     与右侧面板移除前的基线逐像素一致） */
-  padding: 0 4px 0 9px;
+  max-width: min(240px, 34vw);
+  padding: 0 9px;
+  font: inherit;
+  color: inherit;
   background: var(--panel-2);
+  border: 1px solid transparent;
   border-radius: 6px;
+  cursor: pointer;
+}
+
+.task-bar:hover {
+  border-color: var(--line);
 }
 
 .task-bar-title {
-  flex: none;
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
-}
-
-.task-bar-brief {
-  min-width: 0;
-  font-size: 12px;
-  color: var(--dim);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.task-bar-detail {
-  flex: none;
-  padding: 2px 8px;
-  font-size: 11px;
 }
 
 /* 第二行只在 ?debug=1 时渲染；这一行不需要右侧弹簧，控件靠左对齐 */
@@ -507,6 +500,31 @@ body,
   padding: 4px 9px;
   border-radius: 6px;
   pointer-events: none;
+}
+
+/* 画布顶端的任务描述浮层（顶栏那句长描述搬到这里）：
+   一行放得下就一行，放不下最多 3 行（窄屏 2 行，见 @media 块），再多截断 + title 给全文。
+   避让：宽屏贴左上角，max-width 46% 保证够不着右上角图例（图例实测占右 260/1024）；
+   窄屏由 @media 块把它压到「顶部手柄带之下、图例之上」并让开横屏左上角那颗手柄。
+   注意**不开 pointer-events: none** —— 要给 title 补全留出 hover 命中区，手势改用
+   .ovl-tools 那套原生监听吞掉自己的 pointerdown/mousedown/touchstart/dblclick（见 App.tsx）。 */
+.canvas-brief {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  max-width: min(560px, 46%);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+  background: rgba(14, 19, 25, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 9px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
 }
 
 .toast {
@@ -2205,19 +2223,29 @@ body,
     display: none;
   }
 
-  /* 顶栏任务块在窄屏自己吃掉剩余宽度（必须排在上面的 .toolbar > * 之后才生效）：
-     过长截断成省略号，但**不消失** —— 手机上也默认能看出这关要做什么。
-     最小宽度保住 5~6 个字的宽度，再窄就被行内横滑接走（行本身还是可左右滑的）。 */
+  /* 窄屏顶栏任务块：**不再吃满剩余宽度**（用户反馈顶栏栏位不够）：只占短标题本身的宽度，
+     触屏最小高度 44px 保住点得中；标题超长自己省略号截断。 */
   .toolbar .task-bar {
-    flex: 1 1 auto;
-    min-width: 84px;
+    flex: 0 1 auto;
+    min-width: 0;
     max-width: none;
-    padding: 0 4px 0 9px;
     min-height: 44px;
+    padding: 0 10px;
   }
 
-  .toolbar .task-bar-detail {
-    min-height: 44px;
+  /* 画布顶端的描述浮层：窄屏顶部 56px 那条留给浮起的开合手柄，图例在 top:60px，
+     所以这块夹在中间，最多 2 行（再多就顶到图例了）。横屏左上角还有一颗「元件库」手柄
+     （实测 8~96px 宽），left 让开它；竖屏那颗手柄在底部（见竖屏块），这里用 left: 8px。 */
+  .canvas-brief {
+    top: 6px;
+    left: 104px;
+    right: 8px;
+    max-width: none;
+    max-height: 44px;
+    padding: 4px 7px;
+    font-size: 10.5px;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
   .toolbar .cleared-count {
@@ -2481,12 +2509,20 @@ body,
     overflow-x: visible;
   }
 
-  /* 任务块：放得下就留在「返回地图」右侧那一行（竖屏平板 768×1024 就是这种情况），
-     放不下（390px 手机实测只剩 21px）就**自动换到下一行**并独占整行 ——
-     换行判定用的是内容宽度，所以这里给 flex-basis auto + min-width 0。 */
+  /* 任务块：只占短标题本身的宽度（用户反馈顶栏栏位不够 → 描述已搬到画布上），
+     所以 390px 手机上它和「返回地图」「交付验收」同在**第一行**放得下；
+     真放不下时按内容宽度自动换到下一行（flex-basis auto + min-width 0）。 */
   .toolbar .task-bar {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
+  }
+
+  /* 竖屏：顶部手柄带是空的（开合手柄在底部抽屉那行），描述浮层可以贴左边缘，
+     但仍在图例（top:60px）之上 —— 高度上限 44px 就是这两条之间的空隙。 */
+  .canvas-brief {
+    left: 8px;
+    top: 6px;
+    right: 8px;
   }
 
   /* ---- ① 地图：整幅放进屏宽，去掉窄屏块里那条给横屏手机横滑用的 720px 下限 ---- */
