@@ -1,10 +1,11 @@
 import { BASIC_GATES } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { UNIT_COST, UNIT_DELAY_PS } from '@lc/schema';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import type { PlaceKind, StoredModule, UnitKind } from '../editor/model';
 import { drawIcon } from '../editor/render';
 import { usePortraitNarrow } from '../layout/viewport';
+import { gateLevelUsable, gateProbeLibrary } from '../sim/gate-usable';
 
 /**
  * 卡片上的「其余信息」（价格 / 说明 / 引脚数 / 延迟 / 锁定原因）。
@@ -291,6 +292,25 @@ export function Palette({
   /** 勾选「隐藏本关不可用」后的展示列表（竖屏底部形态恒不过滤，见 hideLockedActive） */
   const filteredUnits = hideLockedActive ? UNITS.filter((u) => unitAllowed(u.unit)) : UNITS;
   const userModules = library.filter((m) => !m.teaching);
+  /**
+   * 逻辑关（`judgeMode === 'logic'`，第 8 关起）里「我的模块」**只列门级判定跑得了的** ——
+   * 第 1~7 关用元件搭的非门/与门这些老模块在门级判定里是"看着能用、其实不认"
+   * （门级引擎遇到身体里含元件的模块会如实放弃），所以**整条不渲染**（隐藏，不是置灰）。
+   *
+   * 判据不在这里维护，也不在别处维护名单：见 sim/gate-usable.ts —— 拿探针设计把**门级判定
+   * 自己叫起来跑一遍**（`runGateVectors`，就是判定在逻辑关走的那条入口），跑不了就不列。
+   * 这样将来新增模块/关卡、引擎放宽或收紧，这里自动跟着对。
+   *
+   * 时序关与自由模式（`judgeMode !== 'logic'`）走的是同一个 `visibleUserModules = userModules`
+   * 分支，列表、计数、提示语逐字不变（见 test/palette-logic-modules.test.tsx 的反证）。
+   */
+  const logicLevel = level?.judgeMode === 'logic';
+  const probeLibrary = useMemo(() => gateProbeLibrary(library), [library]);
+  const visibleUserModules = logicLevel
+    ? userModules.filter((m) => gateLevelUsable(m, probeLibrary))
+    : userModules;
+  /** 被门级判定挡掉的条数（非逻辑关恒为 0）*/
+  const hiddenByGate = userModules.length - visibleUserModules.length;
   /** 基础门：本关提供的门（teaching 积木）。库里注入的是整族（复合门的身体会引用更底层的门），
    *  菜单只列本关允许的门，所以列表里不会出现被锁住的卡片。 */
   /** 本关是否允许在顶层画布摆元件（第 8 关起为 false） */
@@ -304,8 +324,8 @@ export function Palette({
       (level?.moduleAccess !== 'listed' || moduleAllowed(m.name)),
   );
   const filteredModules = hideLockedActive
-    ? userModules.filter((m) => modulesAllowed && moduleAllowed(m.name))
-    : userModules;
+    ? visibleUserModules.filter((m) => modulesAllowed && moduleAllowed(m.name))
+    : visibleUserModules;
 
   return (
     <aside className="palette">
@@ -511,7 +531,7 @@ export function Palette({
       <Section
         open={openSections.has(SECTIONS.modules)}
         onToggle={() => toggleSection(SECTIONS.modules)}
-        title={`我的模块（${userModules.length}）`}
+        title={`我的模块（${visibleUserModules.length}）`}
       >
         {level && !modulesAllowed && (
           <p className="palette-empty">本关要求从底层元件手搭，暂不开放组件库模块。</p>
@@ -521,8 +541,15 @@ export function Palette({
             搭好电路后点「封装为模块」，就能像元件一样复用，造价会自动递归累加。
           </p>
         )}
-        {hideLockedActive && filteredModules.length === 0 && userModules.length > 0 && (
+        {/* 这个提示只在**过滤器真的过滤掉了东西**时说（visibleUserModules > filteredModules）：
+            逻辑关里被门级判定挡掉的模块不算"已按…过滤"，否则会把"本关没有可用的模块"误报出来 */}
+        {hideLockedActive && filteredModules.length === 0 && visibleUserModules.length > 0 && (
           <p className="palette-empty">已按「隐藏本关不可用」过滤，本关没有可用的模块。</p>
+        )}
+        {hiddenByGate > 0 && (
+          <p className="palette-empty">
+            本关判定走门级：含元件的模块用不了，已隐藏 {hiddenByGate} 个。
+          </p>
         )}
         {filteredModules.map((mod) => {
           const locked = !modulesAllowed || !moduleAllowed(mod.name);
