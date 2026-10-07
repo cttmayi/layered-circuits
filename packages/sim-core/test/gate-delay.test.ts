@@ -13,7 +13,7 @@
  *  ③ 上限兜底：真环振（3 个非门搭的奇环）必须**返回**、`capped=true`、`events ≤ maxEvents`、
  *     `timePs ≤ windowPs`（不死循环）。
  *
- * 另外把移植时用到的参考数据固化成断言：s3-calc 展平 556 单元 / 666 网 / 20 轨、
+ * 另外把移植时用到的参考数据固化成断言：s3-calc 展平 576 单元（含 20 条轨升格）/ 666 网 / 20 轨、
  * `unsupported=[]`、accClk 在 kind+inertial 下 [0,1e6] 翻转 16 次且之后不再新增。
  */
 import { expandVectors, portWidthsOf } from '@lc/compiler';
@@ -120,7 +120,7 @@ const zeroInputs = (design: Design): Map<string, Bit[]> => {
 /* ═════════════════════════ 0. 展平自检（含参考数据） ═════════════════════════ */
 
 describe('gate-delay · 展平与参考数据', () => {
-  it('s3-calc：556 单元 / 666 网 / 20 轨 / 不支持清单为空；延迟表就是 rtl 实测值', () => {
+  it('s3-calc：576 单元（556 + 20 条轨升格成的零延迟常量原子）/ 666 网 / 20 轨 / 不支持清单为空；延迟表就是 rtl 实测值', () => {
     const design = solutionOf('s3-calc') as Design;
     expect(design).not.toBeNull();
     const { flat, unsupported } = flattenGateNetlist(design, library, GATE_SEQ_SPECS);
@@ -136,7 +136,15 @@ describe('gate-delay · 展平与参考数据', () => {
       `[gd10] s3-calc 展平：单元 ${flat.cells.length} 网 ${flat.netCount} 轨 ${flat.railCount} ` +
         `不支持 ${unsupported.length}｜构成 ${JSON.stringify(tally)}｜展平一次性成本 ${ms.toFixed(1)}ms`,
     );
-    expect(flat.cells.length).toBe(556);
+    // 555 个逻辑单元 + **20 个 vcc/gnd（升格成的零延迟常量原子，delayPs=0）** = 576。
+    // 升格前后逐关判定结论必须一致（实证：gate-delay-levels 的逐关 pass/行数/错行/得分全等）；
+    // 这里顺带钉住"轨也出现在 cells 里、且延迟就是 0"。
+    expect(flat.cells.length).toBe(576);
+    const railCells = flat.cells.filter((c) => c.kind === 'rail');
+    expect(railCells.length).toBe(20);
+    expect(railCells.every((c) => c.delayPs === 0)).toBe(true);
+    // ⚠️ `Bit` 是 `0 | 1 | 'X' | 'Z'`：**数字** 0/1，不是字符串（写 '1'/'0' 会一直判错）
+    expect(railCells.every((c) => c.rail === 1 || c.rail === 0)).toBe(true);
     expect(flat.netCount).toBe(666);
     expect(flat.railCount).toBe(20);
     expect(unsupported).toEqual([]);

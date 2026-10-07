@@ -54,6 +54,20 @@ export class GateStateStore {
     return `${instId}/${port}#${bit}`;
   }
 
+  /**
+   * 清空全部状态（时序器件的值 + 内部网表）。
+   *
+   * 用途只有一个但很关键：「**上电重来**」——有延迟门级引擎遇到对称自振的环（延迟完全相同的
+   * 交叉耦合锁存器）时会按确定性顺序把上电过程重跑一遍（`powerUp:'settle'`）。如果那次重跑
+   * 还带着**上一次失败尝试**写进去的中间态，重跑就不是"上电"，而是"接着振"：实测
+   * `s2-d-latch` 冷启动（d=1,en=0）在脏状态上重跑收敛到 q=0，在干净状态上是 q=1 —— 同一个
+   * 输入两种答案，画布与直调引擎因此对不上。所以重跑前必须 `clear()`。
+   */
+  clear(): void {
+    this.values.clear();
+    this.nets.clear();
+  }
+
   get(instId: string, port: string, bit = 0): Bit | undefined {
     return this.values.get(GateStateStore.key(instId, port, bit));
   }

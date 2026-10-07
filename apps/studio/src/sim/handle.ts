@@ -86,9 +86,18 @@ const GATE_CANVAS_STATE_KEEP = 8; // 状态缓存只留最近 8 份电路
  * **第一帧**付这个代价，而且第一帧用下面的小预算探（撞上限就立刻改用 settle 重跑，≈11ms）。
  */
 const gateCanvasNeedsSettle = new Set<string>();
-/** 探"上电自振"用的小事件预算：正常电路一轮远用不到（18 关实测最大 292 事件），
- *  撞上它基本就是对称环 —— 真的需要更多事件的电路只会在这一帧走 settle 口径，不影响判定。*/
-const GATE_CANVAS_PROBE_EVENTS = 20_000;
+/**
+ * 这份电路的**画布状态已经热身**（至少成功跑过一帧）。
+ *
+ * 为什么要和上面那个备忘分开：`powerUp:'settle'` 的语义是"**上电**按确定性顺序铺一遍"，
+ * 它只在**冷启动**（没有携带状态）时才对。如果每一帧都拿它重跑，锁存器每帧都会被重新"上电"
+ * ——用户最担心的"点一下回上电初值"就会真的发生（实测：s2-btn-latch 松开那一帧 q 变 X）。
+ * 所以：冷帧可以 settle 救一次；**热帧一律走正常传播**（`'delay'`），锁存器靠状态保持。
+ */
+const gateCanvasWarm = new Set<string>();
+// 注：曾经有过一个"小预算探针"（20_000 事件）替冷帧省钱，**已废弃** —— 探针会改写状态，
+// 让随后的"升级重跑"落在脏状态上，画布与直调引擎就此分叉（实测 s2-sr-latch 画布 q=1 / 直调 q=0）。
+// 现在冷帧一律给完整预算，口径与 evalGateDelayed 的默认（'auto'）逐位相同。
 
 const gateCanvasStates = new Map<string, GateStateStore>();
 
@@ -266,29 +275,49 @@ export function handleRequest(req: StudioRequest): StudioResponse {
         // `gateFresh`（模块自测用）：每行都是全新状态，不读也不写跨请求缓存
         const fresh = req.gateFresh === true;
         const state = fresh ? new GateStateStore() : gateCanvasState(designHash);
-        const needsSettle = !fresh && gateCanvasNeedsSettle.has(designHash);
         const common = {
           state,
           seqSpecs: GATE_SEQ_SPECS,
           windowPs: GATE_CANVAS_WINDOW_PS,
         } as const;
-        // 已经在备忘里（上电对称自振）→ 直接用 settle 口径，不再白烧事件预算
-        let run = evalGateDelayed(design, library, gateInputsOf(design, inputs), {
+        /**
+         * 三种帧、三种上电口径（全部实测过，见 `GateDelayOptions.powerUp`）：
+         * · **冷帧**（`gateFresh`，或这份电路的状态还没热身）：按 `'delay'` 上电跑一个完整窗口；
+         *   · 撞上限 = 延迟完全相同的交叉耦合环在上电处对称自振（实测 `s2-d-latch` 保持态
+         *     50 万个事件）⇒ **清空状态**后按 `'settle'`（确定性顺序）重跑一次，并把这份电路
+         *     记进备忘（下次冷帧直接走 `'settle'`，不再白烧一个满窗口）。
+         * · **热帧**（状态已热身）：`powerUp:'none'` —— **不再做任何"上电"**，直接从携带的状态
+         *   继续传播。为什么必须这样：热帧按 `'delay'` 重新上电会把电路"重启"一遍，实测
+         *   `s2-btn-latch` 在保持态（btn=0）下会对称自振到事件上限（事件 500000、capped、
+         *   画布显示 X），而锁存器本该原样保持按下写入的值。
+         *
+         * ⚠️ 早前两次写错过（都已实测纠正，别再回退）：
+         *   ① 用一个**小预算探针**替冷帧省钱 —— 探针会**改写状态**，于是"探到上限后升级跑"的
+         *      那次已经不在干净状态上，画布与直调引擎就此分叉（`s2-sr-latch` 画布 q=1 / 直调 q=0）。
+         *      现在冷帧一律给完整预算，口径与 `evalGateDelayed` 的默认（`'auto'`）逐位相同。
+         *   ② 热帧也用了探针的小预算 ⇒ 热帧提交上限、而热帧又不补救 ⇒ 画布拿到振荡中间态。
+         */
+        const coldFrame = fresh || !gateCanvasWarm.has(designHash);
+        const needsSettle = coldFrame && gateCanvasNeedsSettle.has(designHash);
+        const gateInputs = gateInputsOf(design, inputs);
+        let run = evalGateDelayed(design, library, gateInputs, {
           ...common,
-          maxEvents: needsSettle ? GATE_CANVAS_MAX_EVENTS : GATE_CANVAS_PROBE_EVENTS,
-          powerUp: needsSettle ? 'settle' : 'delay',
+          maxEvents: GATE_CANVAS_MAX_EVENTS,
+          powerUp: coldFrame ? (needsSettle ? 'settle' : 'delay') : 'none',
         });
-        if (!needsSettle && run.ok && run.capped) {
-          // 上电对称自振（延迟完全匹配的交叉耦合环）：记下来，用确定性顺序上电重跑
+        if (coldFrame && !needsSettle && run.ok && run.capped) {
+          // 上电对称自振（延迟完全匹配的交叉耦合环）：记下来，清空状态后用确定性顺序上电重跑
           // （`gateFresh` 不记备忘：自测是逐行独立的短跑，没有"下一帧"可省）
           if (!fresh) gateCanvasNeedsSettle.add(designHash);
-          run = evalGateDelayed(design, library, gateInputsOf(design, inputs), {
+          state.clear();
+          run = evalGateDelayed(design, library, gateInputs, {
             ...common,
             maxEvents: GATE_CANVAS_MAX_EVENTS,
             powerUp: 'settle',
           });
           gatePowerUpRescued = true;
         }
+        if (!fresh && run.ok) gateCanvasWarm.add(designHash);
         if (run.ok) gateRun = run;
         else gateReason = run.reason ?? '门级引擎跑不了这份设计';
       }

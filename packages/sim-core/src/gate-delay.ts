@@ -137,6 +137,10 @@ export interface GateDelayOptions {
    * · `'delay'`：老行为 —— 所有单元同时按各自的延迟排队，彼此都只看得到**上一时刻的全 0 快照**。
    * · `'settle'`：上电按**确定性顺序**把每个单元的输出立刻算进去（零延迟地"顺一遍"），
    *   后面的单元看得见前面单元刚算出的值（网值就地刷新）。
+   * · `'none'`：**不做上电**，直接从携带进来的状态继续传播（只绑输入、按延迟推进）。
+   *   这是"**热帧**"该用的口径：状态里已经写着上电的结果，再"上电"一次就等于把电路重启一遍 ——
+   *   实测 `s2-btn-latch` 在保持态（btn=0）下，热帧按 `'delay'` 重新上电会**对称自振到事件上限**
+   *   （事件 500000、capped、画布显示 X），而按 `'none'` 继续是 0 事件、锁存值原样保持。
    * · `'auto'`（**默认**）：先按 `'delay'` 跑；**只有撞上事件上限**（= 延迟完全相同的对称环
    *   在上电处自振）才从头按 `'settle'` 重跑一次并采用它的结果。
    *
@@ -148,7 +152,7 @@ export interface GateDelayOptions {
    * （实测 `s2-sr-latch` 由 pass=true/0 错行 变成 pass=false/2 错行 —— 那是结论变化，不能默认）。
    * `'auto'` 下判定侧的向量全走 `'delay'` 那条路，逐行结论与老口径逐位相同。
    */
-  powerUp?: 'auto' | 'settle' | 'delay';
+  powerUp?: 'auto' | 'settle' | 'delay' | 'none';
 }
 
 /** 入口选项 = 引擎选项 + 单次运行要带的东西（窗口长度、跨请求携带的状态）*/
@@ -167,7 +171,7 @@ interface ResolvedDelayOptions {
   defaultDelayPs: number;
   zeroDelay: boolean;
   rails: GateDelayRails;
-  powerUp: 'auto' | 'settle' | 'delay';
+  powerUp: 'auto' | 'settle' | 'delay' | 'none';
 }
 
 const resolveOptions = (opts: GateDelayOptions = {}): ResolvedDelayOptions => {
@@ -217,12 +221,19 @@ export interface GateDelayCellSlot {
  * 展平后的**叶子单元**（内部结构；调用方当它是透明的即可）：
  *  · `gate` = 7 个基础门（按真值函数逐位算，不展开身体）；
  *  · `atom` = 功能原子（全加器 / 多输入或门）；
- *  · `seq`  = 已声明 SeqSpec 的时序器件（按 mode/initial/map 建模）。
+ *  · `seq`  = 已声明 SeqSpec 的时序器件（按 mode/initial/map 建模）；
+ *  · `rail` = **vcc/gnd 升格成的"零延迟常量原子"**（delayPs = 0，永远输出 1/0）——
+ *    以前它们只是"合并进网值的常量"（`netConst`），现在是一条**真的驱动**：
+ *    于是关卡/玩家电路里"用 vcc 给一个门喂常量 1"与门级口径**同一条路径**，
+ *    画布与判定不会再出现"画布认轨、门级不认轨"的分歧（实测两者读数本来就一致，
+ *    升格只是把它落成同一种机制）。
  */
 export interface GateDelayCell {
   /** 实例路径（`外层/内层` 前缀），与 gate-seq 的 GateStateStore 键口径一致 */
   id: string;
-  kind: 'gate' | 'atom' | 'seq';
+  kind: 'gate' | 'atom' | 'seq' | 'rail';
+  /** `kind === 'rail'` 时的常量值（vcc → 1，gnd → 0）*/
+  rail?: Bit;
   /** 模块名（门名 / 原子名 / 时序器件名）*/
   name: string;
   seq?: GateSeqSpec;
@@ -329,7 +340,14 @@ export const flattenGateNetlist = (
         continue;
       }
       if (inst.kind === 'vcc' || inst.kind === 'gnd') {
+        // 升格为零延迟常量原子：既进 rails（老路径：合并进网值 + 输入绑定守卫），
+        // 也是一条真驱动（下面按网建 cell）。
         rails.push({ qid, v: inst.kind === 'vcc' ? B1 : B0 });
+        leaf.set(qid, {
+          kind: 'rail',
+          name: inst.kind === 'vcc' ? 'vcc' : 'gnd',
+          ports: [{ name: 'p', dir: 'out', width: 1 }],
+        });
         continue;
       }
       if (inst.kind !== 'module') continue;
@@ -402,11 +420,16 @@ export const flattenGateNetlist = (
     // 只有叶子单元的引脚才算「读这条网」；复合实例的引脚已经在递归里落到内层网上了
     for (const p of pins) if (leaf.has(p.inst)) (rootPins[i] as PinRef[]).push(p);
   }
-  // vcc/gnd 各自接在哪条网上 → 那条网（归并后的节点）是恒定轨
+  // vcc/gnd 各自接在哪条网上 → 那条网（归并后的节点）是恒定轨（`netConst` 仍作为兜底合并）
   const netConst = new Map<number, Bit>();
+  const railNet = new Map<string, number>();
   for (const rail of rails) {
     for (const [key, pins] of netPins) {
-      if (pins.some((p) => p.inst === rail.qid)) netConst.set(idxOfKey(key), rail.v);
+      if (pins.some((p) => p.inst === rail.qid)) {
+        const idx = idxOfKey(key);
+        netConst.set(idx, rail.v);
+        railNet.set(rail.qid, idx);
+      }
     }
   }
 
@@ -460,12 +483,15 @@ export const flattenGateNetlist = (
         if (net >= 0) (netSlots[net] as number[]).push(slot);
       }
     }
-    const ps = GATE_DELAY_PS[info.name];
+    const isRail = info.kind === 'rail';
+    const ps = isRail ? 0 : GATE_DELAY_PS[info.name];
+    const railV = isRail ? (rails.find((r) => r.qid === qid)?.v ?? B0) : undefined;
     cells.push({
       id: qid,
       kind: info.kind,
       name: info.name,
       ...(info.seq ? { seq: info.seq } : {}),
+      ...(railV !== undefined ? { rail: railV } : {}),
       ins,
       outs,
       outSlots,
@@ -535,6 +561,11 @@ const outK = (c: GateDelayCell, port: string, bit: number): number | undefined =
 /** 组合单元（7 个基础门 / 全加器 / 多输入或门）的输出值，按 outSlots 的 k 排列 */
 const evalCombCell = (c: GateDelayCell, read: NetRead): Bit[] => {
   const out = Array.from({ length: c.outSlots.length }, (): Bit => B0);
+  // vcc/gnd（零延迟常量原子）：不读任何输入，永远输出常量（vcc → 1，gnd → 0）
+  if (c.kind === 'rail') {
+    for (let k = 0; k < out.length; k++) out[k] = c.rail ?? B0;
+    return out;
+  }
   const inBits = inputBits(c, read);
   if (c.kind === 'atom') {
     const atomOut = evalAtomOutputs(c.name, c.ins, c.outs, inBits);
@@ -1100,7 +1131,9 @@ class DelayedEngine implements DelayEngine {
     if (!this.started) {
       this.started = true;
       if (this.opts.powerUp === 'settle') this.powerUpSettle();
-      else for (let ci = 0; ci < this.flat.cells.length; ci++) this.trigger(ci, 0);
+      else if (this.opts.powerUp !== 'none') {
+        for (let ci = 0; ci < this.flat.cells.length; ci++) this.trigger(ci, 0);
+      }
     }
   }
 
@@ -1382,6 +1415,14 @@ export const evalGateDelayed = (
    * 判据只看 `capped` —— 能自己稳下来的电路完全不受影响（判定侧向量全属这一类）。
    */
   if (opts.powerUp !== 'delay' && opts.powerUp !== 'settle' && first.capped) {
+    /**
+     * ★ 重跑前**必须清空状态**：第一次尝试（对称自振）已经把中间态写进了 state ——
+     *   门搭的反馈环里"一个时序器件都没有"，它的状态**只住在网值里**（构造函数会把
+     *   `state.netsOf(NET_PATH)` 灌进 `baseVal`/`slotVal`）。带着这些值重跑就不是"上电"，
+     *   而是"接着振"：实测 `s2-d-latch` 冷启动（d=1,en=0）脏状态重跑得 q=0、干净状态得 q=1
+     *   —— 画布（走冷状态）与直调引擎（走 auto）因此对不上（第 ㉓ 轮的三方比对就是这么发现的）。
+     */
+    state.clear();
     const rescue = new GateDelaySim(flat, { ...opts, powerUp: 'settle' });
     rescue.setInputs(inputs);
     const second = rescue.run(undefined, windowPs);
