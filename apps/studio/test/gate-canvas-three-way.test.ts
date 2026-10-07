@@ -16,7 +16,13 @@
  * 两者的引擎是同一条（`evalGateVectorsDelayed` → 每个向量一次 `evalGateDelayed`）。
  */
 import { expandVectors, portWidthsOf, runGateVectors } from '@lc/compiler';
-import { ALL_LEVELS, GATE_SEQ_SPECS, teachingModulesFor, teachingSolutionOf } from '@lc/content';
+import {
+  ALL_LEVELS,
+  GATE_SEQ_SPECS,
+  gateFastEnabledFor,
+  teachingModulesFor,
+  teachingSolutionOf,
+} from '@lc/content';
 import { type Design, DesignSchema, familySpecOf, InMemoryModuleLibrary } from '@lc/schema';
 import { type Bit, evalGateDelayed, evalGateVectorsDelayed, toLogic } from '@lc/sim-core';
 import { describe, expect, it } from 'vitest';
@@ -88,7 +94,27 @@ describe('画布口径 / 直调引擎 / 判定口径 三方比对（20 关）', 
     for (const level of LOGIC_LEVELS) {
       const raw = teachingSolutionOf(level.id, 'rtl');
       if (!raw) {
-        lines.push(`${level.id.padEnd(15)} 没有门版参考解（画布侧走元件口径）`);
+        // 没有门版参考解 ⇒ 无从做"逐网对照"，但**这一关也要被点名验证**（20 关一个不少）：
+        // 它不在门级快路白名单里，所以画布必须走**元件口径**（不许出现任何门级诊断，
+        // 也不许悄悄回落元件引擎以外的口径）。实测 `s3-or-chain` 就是这一档。
+        // 元件版参考解就在关卡数据上（`teachingSolutionOf` 只取 rtl 那一份，这里返回空）
+        const elementRaw = (level as { referenceSolution?: unknown }).referenceSolution ?? null;
+        expect(elementRaw, `${level.id} 至少要有元件版参考解`).not.toBeNull();
+        const elementLevel = DesignSchema.parse(elementRaw) as Design;
+        // ① 产品口径：这一关不在门级快路白名单里 ⇒ App **根本不发** `gateCanvas` 标志
+        expect(gateFastEnabledFor(level.id), `${level.id} 不该在门级快路白名单里`).toBe(false);
+        // ② 兜底口径：就算这里硬把标志打开（元件版参考解 = 4 二极管 + 1 电阻），
+        //    画布也必须**回落元件引擎**、而不是拿门级结论糊弄 —— 诊断必须是 fallback 而不是 gate-canvas。
+        const elSnap = simulate(elementLevel, { gateCanvas: true, gateFresh: true, inputs: {} });
+        const kinds = elSnap.simDiagnostics
+          .filter((d) => d.kind.startsWith('gate-'))
+          .map((d) => d.kind);
+        expect(kinds, `${level.id} 含元件设计必须回落、不许走门级`).toEqual([
+          'gate-canvas-fallback',
+        ]);
+        lines.push(
+          `${level.id.padEnd(15)} 无门版参考解 → 产品不发 gateCanvas 标志；硬开则回落元件引擎（诊断=${kinds.join(',')}）`,
+        );
         continue;
       }
       const design = DesignSchema.parse(raw) as Design;
@@ -124,7 +150,8 @@ describe('画布口径 / 直调引擎 / 判定口径 三方比对（20 关）', 
       compared += 1;
     }
     console.log(`\n${lines.join('\n')}\n`);
-    expect(compared).toBe(19); // 20 个 logic 关里 s3-or-chain 没有门版参考解
+    expect(compared).toBe(19); // 20 个 logic 关里只有 s3-or-chain 没有门版参考解（上面已单独点名验证）
+    expect(LOGIC_LEVELS.length).toBe(20); // 20 关全覆盖：19 关逐网对照 + 1 关元件口径点名
   }, 900_000);
 
   it('③：判定口径（门级快路）逐行读数 == 元件级判定（钉住：18 关 0 差异，s3-calc 1 行=第 0 行上电态）', () => {
