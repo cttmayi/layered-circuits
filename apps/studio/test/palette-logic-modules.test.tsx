@@ -210,7 +210,11 @@ function renderPalette(opts: {
   );
 }
 
-const HINT = '本关判定走门级：含元件的模块用不了，已隐藏 1 个。';
+/**
+ * 用户第 ⑫ 轮追加裁定：**不要**"已隐藏 N 个"这类说明文字（隐藏就是安静地不渲染），
+ * 所以下面一律断言它**不存在**；组头计数照旧是本关实际列出的条数。
+ */
+const NO_HINT = /已隐藏|本关判定走门级|含元件的模块用不了/;
 
 /**
  * 「门级判定为什么跑不了这个模块」——**引擎本人给的理由**（只在测试里取，产品代码不依赖理由字符串）。
@@ -256,9 +260,10 @@ describe('逻辑关隐藏元件级老模块（门级判定跑不了的不列）'
     expect(screen.queryByText(unitMod.name, { exact: false })).toBeNull();
     // 全门模块 → 照旧在
     expect(screen.getByText(gateMod.name, { exact: false })).toBeTruthy();
-    // 计数只数列出来的，并给出"隐藏了几个"的说明
+    // 计数只数列出来的（组头照旧是实际列出的条数）
     expect(screen.getByText('我的模块（1）')).toBeTruthy();
-    expect(screen.getByText(HINT)).toBeTruthy();
+    // 但**不**给"隐藏了几个"的说明文字
+    expect(screen.queryByText(NO_HINT)).toBeNull();
     // 「基础门」那组一个字没动（逻辑关的合法积木清单）
     expect(screen.getByText(/^基础门（\d+）$/)).toBeTruthy();
     expect(screen.getByText('与非门', { exact: false })).toBeTruthy();
@@ -279,15 +284,15 @@ describe('逻辑关隐藏元件级老模块（门级判定跑不了的不列）'
     renderPalette({ level: fakeLevel('logic'), library: [dff] });
     expect(screen.getByText(dff.name, { exact: false })).toBeTruthy();
     expect(screen.getByText('我的模块（1）')).toBeTruthy();
-    expect(screen.queryByText(/已隐藏/)).toBeNull();
+    expect(screen.queryByText(NO_HINT)).toBeNull();
   });
 
-  it('反证：时序关（judgeMode = timing）三个模块都在，计数 3，没有那句提示', () => {
+  it('反证：时序关（judgeMode = timing）三个模块都在，计数 3，没有隐藏说明', () => {
     const mods = [unitNotModule(), nestedOverUnitModule(), gateNotModule()];
     renderPalette({ level: fakeLevel('timing'), library: mods });
     for (const m of mods) expect(screen.getByText(m.name, { exact: false }), m.name).toBeTruthy();
     expect(screen.getByText('我的模块（3）')).toBeTruthy();
-    expect(screen.queryByText(/已隐藏/)).toBeNull();
+    expect(screen.queryByText(NO_HINT)).toBeNull();
   });
 
   it('反证：自由模式（level = null）三个模块都在，逐字不变', () => {
@@ -296,7 +301,7 @@ describe('逻辑关隐藏元件级老模块（门级判定跑不了的不列）'
     for (const m of mods) expect(screen.getByText(m.name, { exact: false }), m.name).toBeTruthy();
     expect(screen.getByText('我的模块（3）')).toBeTruthy();
     expect(screen.queryByLabelText('隐藏本关不可用')).toBeNull(); // 自由模式没有那个过滤器
-    expect(screen.queryByText(/已隐藏/)).toBeNull();
+    expect(screen.queryByText(NO_HINT)).toBeNull();
   });
 
   it('三形态一致：桌面 / 横屏 / 竖屏精简下逻辑关都不列含元件的模块', () => {
@@ -314,13 +319,13 @@ describe('逻辑关隐藏元件级老模块（门级判定跑不了的不列）'
     }
   });
 
-  it('与「隐藏本关不可用」的交互：门级挡掉的不算"已按…过滤"，不误报空列表', () => {
+  it('与「隐藏本关不可用」的交互：门级挡掉的不算"已按…过滤"，也不留任何说明文字', () => {
     // ① 逻辑关 + 过滤器持久化为开 + **所有**玩家模块都被门级挡掉：
-    //    不该说"已按「隐藏本关不可用」过滤"（过滤器没干这事），该说门级那句
+    //    不该说"已按「隐藏本关不可用」过滤"（过滤器没干这事），也不该说"隐藏了几个" —— 安静空着
     localStorage.setItem('lc-ui-palette-hide-locked', '1');
     const onlyUnit = renderPalette({ level: fakeLevel('logic'), library: [unitNotModule()] });
     expect(screen.queryByText(/已按「隐藏本关不可用」过滤/)).toBeNull();
-    expect(screen.getByText(HINT)).toBeTruthy();
+    expect(screen.queryByText(NO_HINT)).toBeNull();
     expect(screen.getByText('我的模块（0）')).toBeTruthy();
     onlyUnit.unmount();
 

@@ -273,6 +273,42 @@ describe('竖屏底部元件库：卡片只留名字', () => {
     ['390×844', 390, 844],
     ['360×640', 360, 640],
     ['430×932', 430, 932],
+  ])('%s：竖屏卡片把**全名**放进 title（44px 宽只能两行，名字要还能认）', (_label, w, h) => {
+    setViewport(w, h);
+    renderApp();
+    startJob('非门');
+    dismissTaskDialog();
+    openPalette();
+    const cards = [...document.querySelectorAll('.palette-item')];
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      const name = card.querySelector('.palette-name')?.textContent?.trim() ?? '';
+      const title = card.getAttribute('title') ?? '';
+      expect(name.length, '卡片里有名字').toBeGreaterThan(0);
+      expect(title.startsWith(name), `${name} → title=「${title}」`).toBe(true);
+    }
+  });
+
+  it('反证：桌面/横屏的卡片 title 逐字不变（没有「名字｜」前缀）', () => {
+    setViewport(1280, 800);
+    renderApp();
+    startJob('非门');
+    dismissTaskDialog();
+    const cards = [...document.querySelectorAll('.palette-item')];
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      const title = card.getAttribute('title') ?? '';
+      expect(title).not.toContain('｜'); // 竖屏才拼「名字｜」，桌面一个字都不加
+      // 未锁的卡片照旧是那句话；锁住的卡片照旧是关卡给的理由
+      if ((card as HTMLButtonElement).disabled) expect(title.length).toBeGreaterThan(0);
+      else expect(title).toMatch(/（拖到画布放置/);
+    }
+  });
+
+  it.each([
+    ['390×844', 390, 844],
+    ['360×640', 360, 640],
+    ['430×932', 430, 932],
   ])('%s：卡片只有名字，价格/说明/引脚数/延迟/状态都不进 DOM', (_label, w, h) => {
     setViewport(w, h);
     renderApp();
@@ -661,7 +697,7 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
     expect(rules.get('.edge-strip.left:not(.closed)')).toMatch(/bottom:\s*calc\(min\(46%, 380px\)/);
   });
 
-  it('竖屏块里的精简卡片：一行横排 + 固定宽度 + 可横滑 + 触屏目标 ≥44px', () => {
+  it('竖屏块里的精简卡片：一行横排 + 可横滑 + 触屏高度 ≥44px + 一行放得下 ≥8 张', () => {
     const rules = parseCss(PORTRAIT_BLOCK).base;
     const strip = rules.get('.palette-section-body') ?? '';
     expect(strip).toContain('display: flex');
@@ -670,14 +706,52 @@ describe('样式表契约：窄屏断点只管窄屏', () => {
     expect(strip).toContain('overflow-y: hidden');
     const item = rules.get('.palette-item') ?? '';
     expect(item).toMatch(/flex:\s*0 0 auto/);
-    expect(item).toMatch(/width:\s*104px/);
-    expect(item).toMatch(/min-width:\s*104px/);
-    expect(item).toMatch(/min-height:\s*48px/); // ≥44px
-    // 名字放不下就折行，不靠截断
-    const name = rules.get('.palette-row .palette-name') ?? '';
+
+    const num = (re: RegExp, css: string): number => {
+      const m = re.exec(css);
+      expect(m, `${re} 没匹配到：${css.slice(0, 60)}`).toBeTruthy();
+      return Number(m?.[1] ?? Number.NaN);
+    };
+    // 用户第 ⑫ 轮：卡片宽 44~46px、卡片间距 ≤4px、抽屉左右内边距 ≤8px。
+    // jsdom 不做真实排版（getBoundingClientRect 恒 0），所以这里断言**样式表声明值**，
+    // 再用注水宽度算出"一行几张"；真实排版数字由 CDP 三尺寸实测给出（见提交信息）。
+    const width = num(/width:\s*(\d+(?:\.\d+)?)px/, item);
+    const minWidth = num(/min-width:\s*(\d+(?:\.\d+)?)px/, item);
+    const minHeight = num(/min-height:\s*(\d+(?:\.\d+)?)px/, item);
+    expect(width).toBeGreaterThanOrEqual(44);
+    expect(width).toBeLessThanOrEqual(46);
+    expect(minWidth).toBe(width);
+    expect(minHeight).toBeGreaterThanOrEqual(44); // 触屏目标：高度一分不让
+    const gap = num(/gap:\s*(\d+(?:\.\d+)?)px/, strip);
+    expect(gap).toBeLessThanOrEqual(4);
+    const palette = rules.get('.palette') ?? '';
+    const pad = /padding:\s*(\d+)px\s+(\d+)px\s+calc\(/.exec(palette);
+    expect(pad, '竖屏抽屉的三段式 padding').toBeTruthy();
+    const sidePad = Number(pad?.[2] ?? Number.NaN);
+    expect(sidePad).toBeLessThanOrEqual(8);
+
+    // 390px 视口（用户点名的尺寸）：可用宽 = 390 − 两侧内边距，n 张要 n×宽 + (n−1)×间距
+    const usable = 390 - 2 * sidePad;
+    const need8 = 8 * width + 7 * gap;
+    expect(usable).toBeGreaterThan(0);
+    expect(need8, '8 张卡 + 7 道缝').toBeLessThanOrEqual(usable);
+    const perRow = Math.floor((usable + gap) / (width + gap));
+    expect(perRow, `390px 一行只放得下 ${perRow} 张`).toBeGreaterThanOrEqual(8);
+    // 更严的一档：自由模式下抽屉内容比抽屉本体高 → 多一条 **15px** 纵向滚动条（CDP 实测 390 上
+    // 抽屉可用宽 374 → 359），扣掉它也要放得下 8 张。
+    const SCROLLBAR_PX = 15;
+    expect(need8, '扣掉 15px 滚动条后仍要放得下 8 张').toBeLessThanOrEqual(usable - SCROLLBAR_PX);
+    expect(Math.floor((usable - SCROLLBAR_PX + gap) / (width + gap))).toBeGreaterThanOrEqual(8);
+
+    // 名字要还能认：字号 10~11px + 折两行 + 超出省略号（全名在 title 里，见下面那条用例）
+    const name = rules.get('.palette-item .palette-name') ?? '';
     expect(name).toContain('white-space: normal');
-    expect(name).toMatch(/text-overflow:\s*clip/);
+    expect(name).toContain('-webkit-line-clamp: 2');
+    expect(name).toContain('overflow: hidden');
     expect(name).toContain('overflow-wrap: anywhere');
+    const nameFont = num(/font-size:\s*(\d+(?:\.\d+)?)px/, name);
+    expect(nameFont).toBeGreaterThanOrEqual(10);
+    expect(nameFont).toBeLessThanOrEqual(11);
   });
 
   it('基础块（非媒体查询）里的桌面布局关键声明原样还在', () => {

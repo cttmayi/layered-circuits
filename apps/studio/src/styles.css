@@ -2550,7 +2550,9 @@ body,
     border-top: 1px solid var(--line);
     border-radius: 14px 14px 0 0;
     /* 顶部 56px 留给浮在抽屉左上角的手柄（和左右抽屉同一套做法） */
-    padding: 56px 12px calc(12px + env(safe-area-inset-bottom));
+    /* 左右内边距 12 → 3（用户第 ⑫ 轮：≤8px）。取 3 而不是 8 是因为**自由模式下抽屉内容更高，
+       会多一条 15px 纵向滚动条**：390 − 6 − 15 = 369px 仍要放得下 8 张卡（见下面 .palette-item）。 */
+    padding: 56px 3px calc(12px + env(safe-area-inset-bottom));
     box-shadow: 0 -16px 32px rgba(0, 0, 0, 0.5);
     animation: lc-sheet-up 0.18s ease;
   }
@@ -2561,7 +2563,8 @@ body,
     display: flex;
     flex-flow: row nowrap;
     align-items: stretch;
-    gap: 8px;
+    /* 间距 8 → 2：8 张卡的算式见下面 .palette-item 的注释（CDP 实测调出来的，不是拍脑袋） */
+    gap: 2px;
     overflow-x: auto; /* 卡片一行横排，滑不完就横滑（分组各一条） */
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch; /* iOS 惯性滑动 */
@@ -2571,14 +2574,16 @@ body,
 
   .palette-item {
     flex: 0 0 auto; /* 固定宽度，不被压缩 */
-    width: 104px;
-    min-width: 104px;
-    min-height: 48px; /* 触屏目标 ≥44px（含高度） */
+    /* 用户第 ⑫ 轮：一行至少 8 张（原来是 104px/间距 8 → 一屏只 3 张多）。
+       算式：8 × 44 + 7 × 3 = 373 ≤ 390 − 8×2 = 374（CDP 三尺寸实测见报告）。 */
+    width: 44px;
+    min-width: 44px;
+    min-height: 48px; /* 触屏目标：**高度一分不让**（48 ≥ 44）；宽度按用户要求压到 44 */
     justify-content: center;
     align-items: center;
     text-align: center;
     scroll-snap-align: start;
-    padding: 8px 6px;
+    padding: 6px 1px; /* 44 − 2(边框) − 2(内边距) = 40px 文字宽（10px 字号 = 4 字/行 ×2 行 = 8 字） */
   }
 
   /* 名字原点居中：底部形态卡片里只有名字这一项 */
@@ -2587,13 +2592,20 @@ body,
     width: 100%;
   }
 
-  /* 名字不截断到看不懂：放不下就折行（最长也就「三极管 NPN」这种，最多两行） */
-  .palette-row .palette-name {
+  /* 名字要还能认（用户第 ⑫ 轮）：字号缩到 10px（允许区间 10~11px）+ 折两行 + 超出省略号。
+     44px 卡 → 文字宽 40px → 一行 4 个汉字、两行 8 个，覆盖最长名字（「数字输入寄存器」7 字、
+     「非门（元件版）」8 字）；万一半个名字还是被截，全名始终在 `title` 里
+     （Palette.tsx 的 cardTitle 会拼成「名字｜说明」），长按/悬停能看全。
+     选择器用 `.palette-item .palette-name`：电源与端口组的名字是按钮的直接子元素，不在 .palette-row 里。 */
+  .palette-item .palette-name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
+    overflow: hidden;
     overflow-wrap: anywhere;
-    line-height: 1.25;
+    line-height: 1.2;
+    font-size: 10px;
   }
 
   /* 空分组提示（「本关没有可用元件。」）在横排里别被挤成窄条，垂直居中 */

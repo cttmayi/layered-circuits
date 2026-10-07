@@ -222,6 +222,12 @@ export function Palette({
   /** 竖屏窄屏 = 底部精简形态：卡片只留名字，且不渲染顶部那个「隐藏本关不可用」开关 */
   const compact = usePortraitNarrow();
   /**
+   * 竖屏底部抽屉的卡片只有 44px 宽（用户第 ⑫ 轮：一行至少 8 张），名牌最多两行 +
+   * 省略号 —— 所以把**全名**拼进 `title`，鼠标/长按都能看到完整名字。
+   * 非竖屏（桌面/横屏）原样返回，`title` 逐字不变。
+   */
+  const cardTitle = (name: string, rest: string): string => (compact ? `${name}｜${rest}` : rest);
+  /**
    * 竖屏底部形态**一律不套**「隐藏本关不可用」的持久化过滤（等于恒为「显示全部」）。
    *
    * 为什么：竖屏下那个开关根本不渲染（见下面 `!compact`），可它存在 localStorage 里 —— 如果
@@ -303,14 +309,15 @@ export function Palette({
    *
    * 时序关与自由模式（`judgeMode !== 'logic'`）走的是同一个 `visibleUserModules = userModules`
    * 分支，列表、计数、提示语逐字不变（见 test/palette-logic-modules.test.tsx 的反证）。
+   *
+   * **不显示"已隐藏 N 个"这类说明文字**（用户明确不要）：隐藏就是安静地不渲染，
+   * 组头计数照旧是本关实际列出的条数。别把它换个地方加回来。
    */
   const logicLevel = level?.judgeMode === 'logic';
   const probeLibrary = useMemo(() => gateProbeLibrary(library), [library]);
   const visibleUserModules = logicLevel
     ? userModules.filter((m) => gateLevelUsable(m, probeLibrary))
     : userModules;
-  /** 被门级判定挡掉的条数（非逻辑关恒为 0）*/
-  const hiddenByGate = userModules.length - visibleUserModules.length;
   /** 基础门：本关提供的门（teaching 积木）。库里注入的是整族（复合门的身体会引用更底层的门），
    *  菜单只列本关允许的门，所以列表里不会出现被锁住的卡片。 */
   /** 本关是否允许在顶层画布摆元件（第 8 关起为 false） */
@@ -359,9 +366,10 @@ export function Palette({
                   e.dataTransfer.effectAllowed = 'copy';
                   e.dataTransfer.setDragImage(dragImage(item.unit), 48, 48);
                 }}
-                title={
-                  locked ? lockReason(item.unit) : `${item.note}（拖到画布放置，或点击后点画布）`
-                }
+                title={cardTitle(
+                  item.name,
+                  locked ? lockReason(item.unit) : `${item.note}（拖到画布放置，或点击后点画布）`,
+                )}
                 className={isArmed('unit', item.unit) ? 'palette-item active' : 'palette-item'}
                 onClick={() => pick('unit', item.unit)}
               >
@@ -437,7 +445,7 @@ export function Palette({
                     e.dataTransfer.effectAllowed = 'copy';
                     e.dataTransfer.setDragImage(dragImage(kind), 48, 48);
                   }}
-                  title={locked ? portLockReason : `${note}（拖到画布放置）`}
+                  title={cardTitle(name, locked ? portLockReason : `${note}（拖到画布放置）`)}
                   className={isArmed(kind) ? 'palette-item active' : 'palette-item'}
                   onClick={() => pick(kind)}
                 >
@@ -484,7 +492,7 @@ export function Palette({
                   e.dataTransfer.setDragImage(dragImage('module'), 48, 48);
                 }}
                 onClick={() => pick('module', undefined, gate.hash)}
-                title={locked ? moduleLockReason(gate.name) : '拖到画布放置'}
+                title={cardTitle(gate.name, locked ? moduleLockReason(gate.name) : '拖到画布放置')}
               >
                 <span className="palette-row">
                   <span className="palette-name">
@@ -546,11 +554,6 @@ export function Palette({
         {hideLockedActive && filteredModules.length === 0 && visibleUserModules.length > 0 && (
           <p className="palette-empty">已按「隐藏本关不可用」过滤，本关没有可用的模块。</p>
         )}
-        {hiddenByGate > 0 && (
-          <p className="palette-empty">
-            本关判定走门级：含元件的模块用不了，已隐藏 {hiddenByGate} 个。
-          </p>
-        )}
         {filteredModules.map((mod) => {
           const locked = !modulesAllowed || !moduleAllowed(mod.name);
           return (
@@ -566,7 +569,7 @@ export function Palette({
                 e.dataTransfer.setDragImage(dragImage('module'), 48, 48);
               }}
               onClick={() => pick('module', undefined, mod.hash)}
-              title={locked ? moduleLockReason(mod.name) : '拖到画布放置'}
+              title={cardTitle(mod.name, locked ? moduleLockReason(mod.name) : '拖到画布放置')}
             >
               <span className="palette-row">
                 <span className="palette-name">
