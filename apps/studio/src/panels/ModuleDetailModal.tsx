@@ -145,8 +145,18 @@ export function fitCamera(doc: Doc, viewW: number, viewH: number): Camera {
   return { x: b.x + b.w / 2, y: b.y + b.h / 2, scale };
 }
 
-/** 只读电路预览：把 Doc 画到小画布上（静态结构图，无电平/无交互） */
-function SchematicView({ doc }: { doc: Doc }): React.JSX.Element {
+/**
+ * 只读电路预览：把 Doc 画到小画布上（静态结构图，**pinSignals 是空 Map、没有电平文字**）。
+ * 仍把 `showStrength` 透给 drawScene，只为"口径只有一个来源"（将来这里若开始画电平，
+ * 不会出现「大画布显示 1、小画布显示 1·强」的不一致）。
+ */
+function SchematicView({
+  doc,
+  showStrength = true,
+}: {
+  doc: Doc;
+  showStrength?: boolean;
+}): React.JSX.Element {
   const ref = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -171,8 +181,9 @@ function SchematicView({ doc }: { doc: Doc }): React.JSX.Element {
       pendingPin: null,
       pendingPoint: null,
       grid: true,
+      showStrength,
     });
-  }, [doc]);
+  }, [doc, showStrength]);
   return <canvas ref={ref} className="schematic-canvas" aria-label="模块内部电路图" />;
 }
 
@@ -214,6 +225,12 @@ export interface ModuleDetailModalProps {
    * （时序版关卡保持原样：那里元件本身就是主角，展开看内部是有意义的。）
    */
   stopAtGates?: boolean;
+  /**
+   * 电平文字要不要带「·强 / ·弱」（缺省 true = 老行为）。逻辑关传 false：
+   * 那里的判定是零延迟布尔口径，`0·强` 是噪音 → 只显示 `1` / `0`。
+   * 时序关与自由模式保持 true（强/弱在那里有意义）。
+   */
+  showStrength?: boolean;
   module: StoredModule;
   /** 画布库（含嵌套模块模板时一并解析；缺省的子模块渲染成空盒，不影响查看） */
   library: StoredModule[];
@@ -222,6 +239,7 @@ export interface ModuleDetailModalProps {
 
 export function ModuleDetailModal({
   stopAtGates = false,
+  showStrength = true,
   module,
   library,
   onClose,
@@ -247,8 +265,8 @@ export function ModuleDetailModal({
   const instCount = template?.body?.instances.length ?? 0;
   const probe: ProbeResult = useMemo(() => {
     if (!template?.body) return { rows: [], stuck: [], skipped: '这个模块没有内部电路' };
-    return probeModule(template, merged);
-  }, [template, merged]);
+    return probeModule(template, merged, { showStrength });
+  }, [template, merged, showStrength]);
 
   // 复制模块 JSON：模块内部电路出问题时（例如画布上放的是「我的模块」里早先封装的坏模块），
   // 玩家可以把这一整份贴出来离线复现 —— 画布导出（复制电路）只带模块哈希，不带模块本体。
@@ -334,7 +352,7 @@ export function ModuleDetailModal({
         {previewDoc && (
           <>
             <h4>内部电路（{instCount} 个元件 · 只读）</h4>
-            <SchematicView doc={previewDoc} />
+            <SchematicView doc={previewDoc} showStrength={showStrength} />
             <p className="dim small">
               这是封装那一刻的电路：模块可以随时拆开看它由什么拼成，成本与延迟也由此递归而来。
             </p>

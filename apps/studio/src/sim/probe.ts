@@ -31,10 +31,16 @@ export interface ProbeResult {
 /** 组合自测的输入位上限：2^n 行真值表，超过就不跑（模块内部元件会爆） */
 const MAX_INPUT_BITS = 4;
 
-function textOf(signal: number | undefined): string {
+/**
+ * 电平文字。逻辑关（`showStrength: false`，第 8 关起）只给 `1` / `0`：
+ * 那里判定是零延迟布尔口径，`0·强` 这种后缀是噪音（用户第 ⑭ 轮）。
+ * 悬空 / 冲突照旧保留（那是状态，不是强度描述）；时序关与自由模式一个字不改。
+ */
+function textOf(signal: number | undefined, showStrength: boolean): string {
   if (signal === undefined) return '—';
   if (signal === 0) return 'Z（悬空）';
   const value = ['0', '1', 'X（冲突）'][signal & 3] ?? '?';
+  if (!showStrength) return value;
   const strength = ['', '·弱', '·强', '·供电'][signal >> 2] ?? '';
   return `${value}${strength}`;
 }
@@ -51,7 +57,12 @@ function inputBits(template: ModuleTemplate): Array<{ key: string; port: string;
   return out;
 }
 
-export function probeModule(template: ModuleTemplate, library: StoredModule[]): ProbeResult {
+export function probeModule(
+  template: ModuleTemplate,
+  library: StoredModule[],
+  options: { showStrength?: boolean } = {},
+): ProbeResult {
+  const showStrength = options.showStrength !== false;
   const bits = inputBits(template);
   // 输出端口的「网」在身体（body）的端口表上 —— 模板自己的端口表只有名字/方向/位宽
   const outPorts = template.body.ports.filter((p) => p.dir === 'out');
@@ -97,7 +108,7 @@ export function probeModule(template: ModuleTemplate, library: StoredModule[]): 
       const width = port.width;
       for (let bit = 0; bit < width; bit++) {
         const label = width > 1 ? `${port.name}[${bit}]` : port.name;
-        const text = textOf(signals.get(port.nets[bit] ?? ''));
+        const text = textOf(signals.get(port.nets[bit] ?? ''), showStrength);
         outputs[label] = text;
         const set = seen.get(label) ?? new Set<string>();
         set.add(text);

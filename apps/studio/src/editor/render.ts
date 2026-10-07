@@ -51,6 +51,15 @@ export interface Scene {
   pendingPin: { inst: string; pin: string; bit?: number } | null;
   pendingPoint: { x: number; y: number } | null;
   grid: boolean;
+  /**
+   * 引脚/节点上的电平文字要不要带「·强 / ·弱」后缀（缺省 true = 老行为）。
+   *
+   * 逻辑关（关卡 `judgeMode === 'logic'`，第 8 关起）传 false：那里的判定是零延迟布尔
+   * 口径，没有"驱动强度"这回事，`1·强` 只是噪音 → 只显示 `1` / `0`。
+   * 时序关（1~7 关，强/弱是教学点）与自由模式（允许用元件，强度确有意义）保持 true。
+   * 悬空 Z / 冲突 X / 输入端口本来就不带后缀，不受影响。
+   */
+  showStrength?: boolean;
 }
 
 export const PALETTE = {
@@ -1830,7 +1839,12 @@ function drawSymbol(ctx: CanvasRenderingContext2D, scene: Scene, sym: Sym): void
       ctx.fillStyle = style.color;
       ctx.font = `bold ${Math.max(10, 13 * camera.scale)}px ui-monospace, monospace`;
       // 输入端口是「用户开关」：永远强驱动，只显示 0/1；输出/电路节点才标强/弱
-      ctx.fillText(signalText(signal, key !== 'input'), 0, 4 * camera.scale);
+      // 逻辑关额外整体关掉强度后缀（scene.showStrength === false）→ 只显示 1 / 0
+      ctx.fillText(
+        signalText(signal, key !== 'input' && scene.showStrength !== false),
+        0,
+        4 * camera.scale,
+      );
       ctx.font = `${Math.max(9, 11 * camera.scale)}px ui-sans-serif, system-ui, sans-serif`;
       ctx.fillStyle = PALETTE.textDim;
       ctx.fillText(sym.label, 0, labelY + 10);

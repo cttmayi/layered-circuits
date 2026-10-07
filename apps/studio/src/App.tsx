@@ -262,6 +262,15 @@ export function App(): React.JSX.Element {
   // 本关自带的判定口径：1~7 关 = timing（走真实时序），第 8 关起 = logic（只判逻辑）。
   // 自由/教学模式没有关卡口径，仍听工具栏那个总开关。
   const levelJudgeMode = levelOf(gameMode, levelId)?.judgeMode;
+  /**
+   * 逻辑关（第 8 关起，关卡自己声明 `judgeMode === 'logic'`）：判定是零延迟布尔口径，
+   * 没有"驱动强度"这回事 → 画布/图例/模块自测里的电平文字只显示 `1` / `0`（用户第 ⑭ 轮）。
+   *
+   * ⚠️ 判据必须用**关卡声明**，不能写成 `simMode === 'logic'`：自由模式恒按逻辑口径仿真，
+   * 但它允许用元件（调色板里有「电源与端口」、上拉/下拉电阻），强/弱在那里是真实且有教学
+   * 意义的信息 → 自由模式与时序关（1~7 关）逐字不变。
+   */
+  const logicLevel = levelJudgeMode === 'logic';
   // 自由模式恒按「零延迟逻辑口径」；关卡口径仍由关卡自己声明（levelJudgeMode 优先）。
   const simMode: 'logic' | 'timing' = levelJudgeMode ?? 'logic';
   const [snapshot, setSnapshot] = useState<SimSnapshot | null>(null);
@@ -565,8 +574,21 @@ export function App(): React.JSX.Element {
       pendingPin,
       pendingPoint,
       grid: true,
+      // 逻辑关（第 8 关起）画布上的电平只显示 1 / 0，不带「·强 / ·弱」（见 Scene.showStrength）
+      showStrength: !logicLevel,
     });
-  }, [doc, camera, size, pinSignals, selection, selectedWires, hover, pendingPin, pendingPoint]);
+  }, [
+    doc,
+    camera,
+    size,
+    pinSignals,
+    selection,
+    selectedWires,
+    hover,
+    pendingPin,
+    pendingPoint,
+    logicLevel,
+  ]);
 
   // ---- 文档变更辅助 ----
   const commit = (next: Doc, options: { history?: boolean } = {}): void => {
@@ -2165,6 +2187,7 @@ export function App(): React.JSX.Element {
               module={expandedModule}
               library={doc.library}
               stopAtGates={currentLevel?.judgeMode === 'logic'}
+              showStrength={!logicLevel}
               onClose={() => setExpandedModule(null)}
             />
           )}
@@ -2175,10 +2198,23 @@ export function App(): React.JSX.Element {
           )}
           {snapshot && (
             <div className="legend">
-              <span style={{ color: '#38d67a' }}>■ 强 1</span>
-              <span style={{ color: '#1d7a48' }}>■ 弱 1</span>
-              <span style={{ color: '#7d8ea3' }}>■ 强 0</span>
-              <span style={{ color: '#414c59' }}>■ 弱 0</span>
+              {/* 逻辑关（第 8 关起）：判定是零延迟布尔口径，没有"驱动强度"这回事 →
+                  图例只给 1 / 0（颜色沿用强驱动的绿/灰，因为逻辑关里所有电平都是强驱动），
+                  X 与悬空照旧保留（那是真的会出现的状态，不是强度描述）。
+                  时序关（1~7 关）与自由模式逐字不变：强/弱是那里的教学点。 */}
+              {logicLevel ? (
+                <>
+                  <span style={{ color: '#38d67a' }}>■ 1</span>
+                  <span style={{ color: '#7d8ea3' }}>■ 0</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ color: '#38d67a' }}>■ 强 1</span>
+                  <span style={{ color: '#1d7a48' }}>■ 弱 1</span>
+                  <span style={{ color: '#7d8ea3' }}>■ 强 0</span>
+                  <span style={{ color: '#414c59' }}>■ 弱 0</span>
+                </>
+              )}
               <span style={{ color: '#ff5f56' }}>┅ X</span>
               <span style={{ color: '#b99530' }}>┅ 悬空</span>
             </div>
