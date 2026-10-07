@@ -504,6 +504,11 @@ export function App(): React.JSX.Element {
           prevSignals,
           prevContribs,
           prevNodeSignals,
+          // ⚠️ 逻辑关画布的门级口径**暂不开**（`gateCanvas: false`）：
+          // 有延迟门级引擎在"电平型锁存器保持态（en=0）"下**不收敛**（实测：每次请求撞 50 万事件上限、
+          // capped=true），会让画布明显变慢且显示不稳定 —— 先把判定侧的口径切过来（已逐关验证结论不变），
+          // 画布侧等这个缺陷修好再开（验收断言见 apps/studio/test/gate-canvas-same-caliber.test.ts）。
+          gateCanvas: false,
           withTiming: false, // 「时序分析」开关已移除
           withWaveform: simMode === 'timing',
         })

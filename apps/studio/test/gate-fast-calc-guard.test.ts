@@ -14,9 +14,10 @@ import { describe, expect, it } from 'vitest';
  * 于是"两边完全一致"其实是元件级跑了两遍的**假绿**（曾经据此误判过一次，见
  * docs/design-gates.md 10.3）。本用例只用生效口径，并断言"门级确实不一致"这一现状。
  *
- * 现状（实测，2026-10）：
+ * 现状（实测，第 ⑲ 轮改口径后 = 有界延迟 + 惯性）：
  * - 元件级 logic：pass=true，row0 显示 0x6f，C 清屏后归 0x3f；
- * - 门级   logic：pass=false，**一直是 0x6f**（"99"），差异 **58/67**；
+ * - 门级   logic：pass=true，**只剩 row0 的上电态不同**（0x4f），差异 **1/67**；
+ *   （历史：零延迟门级 pass=false、差异 58/67 —— 那是"把建立时间抹掉"造成的，现已修好）
  * - 根因定位：门级顶层 `运算控制` 的 `accClk` 网读数是 1，但八位寄存器的 `clk` 引脚读到 0，
  *   ACC 的从锁存器永远等不到上升沿（状态槽 mod8/NN/mod3/q 恒 0、updates 里没有 ACC 写入）；
  *   而元件级 logic 是**无延迟定点求解**，交叉耦合锁存器收敛到的不动点与门级的
@@ -52,18 +53,21 @@ describe('s3-calc：门级快路护栏（未转正）', () => {
   const norm = (v: Record<string, unknown> | undefined): string =>
     JSON.stringify(Object.fromEntries(Object.entries(v ?? {}).map(([k, x]) => [k, String(x)])));
 
-  it('元件级判定通过；门级判定仍与元件级不一致（放行前不许进白名单）', () => {
+  it('元件级判定通过；门级（有延迟口径）只剩「待命」那一行的上电态不同 → 仍不放行（审计判据=逐行全等）', () => {
     const slow = run(false);
-    const fast = run(true);
-    const rows = slow.rows ?? [];
-    const diff = rows.filter((r, i) => norm(r.actual) !== norm(fast.rows?.[i]?.actual)).length;
-
-    // 元件级是权威口径：s3-calc 的参考解必须过
     expect(slow.pass).toBe(true);
+    const rows = slow.rows ?? [];
     expect(rows.length).toBe(67);
 
-    // 现状：门级结论不一致、逐行数值也有差异 → 白名单继续不放行
-    expect(fast.pass).toBe(false);
-    expect(diff).toBeGreaterThan(0);
+    // 第 ⑲ 轮改口径后（有界延迟 + 惯性）：门级与元件级只剩第 0 行「待命（上电先按 C 清零）」不同
+    // （元件收敛到 0x6f/0x6f、门级收敛到 0x4f/0x4f，差 e 段；该行没有期望值，两台上 pass=true）。
+    // 审计判据是"逐行数值全等"，所以白名单**继续不放行**；"门级一直 0x6f、差 58/67"已成历史。
+    const fast = run(true);
+    const diff = rows.filter((r, i) => norm(r.actual) !== norm(fast.rows?.[i]?.actual)).length;
+    console.log(
+      `  元件级 ${rows.length} 行 pass=${String(slow.pass)}｜门级（有延迟）pass=${String(fast.pass)} 差异 ${diff} 行 → 白名单继续不放行`,
+    );
+    expect(diff).toBe(1);
+    expect(Object.keys(rows[0]?.actual ?? {}).length).toBeGreaterThan(0);
   }, 600_000);
 });

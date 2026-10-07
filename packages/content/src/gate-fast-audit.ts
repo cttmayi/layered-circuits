@@ -27,9 +27,10 @@ import { teachingModulesFor, teachingSolutionOf } from './teachings.js';
  */
 export const GATE_FAST_BLOCKED_CAUSES: Readonly<Record<string, string>> = {
   's3-calc':
-    '时钟来自【运算控制】内部的**延迟链环形振荡器**（10 级反相链自己振出写入脉冲，延迟本身就是功能，' +
-    '向量按键行还带 settlePs 1µs）：零延迟求值把这条环路塌成**静态电平**、**塌掉了"沿"**，' +
-    '而八位寄存器靠沿写入 → 门级会有若干行读到旧值',
+    '第 0 行「待命（上电先按 C 清零）」上电态不同：元件级收敛到 0x6f/0x6f，有延迟门级收敛到 0x4f/0x4f（差 e 段），' +
+    '其余 66/67 行逐位相同。该行**没有期望值**（关卡要求玩家先按 C），两台上 pass=true —— 但审计判据是"逐行数值全等"，' +
+    '所以本关仍不放行。注：零延迟口径下本关曾是 29/67 行读旧值（已随"有界延迟+惯性"口径修好，见 gate-seq-specs.ts 注释）。' +
+    '要放行只有两条路（需拍板）：把无期望值的行定义成 不必比对（don’t-care），或改关卡内容。',
   's3-or-chain':
     '没有门版参考解（teachingSolutionOf(id, "rtl") 返回空）→ 门级结论无从比较，也就无从放行',
 };

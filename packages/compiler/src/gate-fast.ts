@@ -1,6 +1,14 @@
 /**
- * 逻辑版门级快路：把关卡的测试向量跑在**门级引擎**上（7 个基础门当原子、无延迟、无强弱），
+ * 逻辑版门级快路：把关卡的测试向量跑在**门级引擎**上（7 个基础门当原子、不看强弱），
  * 产出与 runVectors 同形的结果，供 judgeDesign 直接使用。
+ *
+ * **口径（用户第 ⑲ 轮拍板走 A 路线）**：门级引擎已经**不是零延迟**，而是
+ * **有界延迟 + 惯性语义**的事件驱动模型（`@lc/sim-core` 的 `gate-delay.ts`）：
+ *   - 每个门/原子/时序器件按 `GATE_DELAY_PS` 的**实测传播延迟**（ps）排事件；
+ *   - 惯性语义（短于延迟的毛刺被吃掉）——这是与元件引擎逐行一致的必要条件；
+ *   - 每个向量推一个时间窗（`vector.settlePs`，缺省 1µs），撞事件上限即 capped/unstable。
+ * 为什么必须带延迟：零延迟把"建立时间"抹掉了（如 s3-calc 靠 10 级反相器链把时钟沿推后
+ * 15ns 让累加器数据先稳定），会把 29/67 行读成旧值；带延迟后与元件级逐行一致。
  *
  * 安全第一：**任何不满足条件的情况一律返回 null**，judge 静默回落到原来的元件级引擎。
  * 返回 null 的情形：
@@ -13,35 +21,32 @@
  */
 import type { Design, ModuleLibrary } from '@lc/schema';
 import {
-  type Bit,
+  evalGateVectorsDelayed,
   type GateSeqSpec,
-  GateStateStore,
-  type Logic,
   needsSeqSpec,
-  settleGateSteps,
   type TestVector,
-  type VectorMismatch,
   type VectorRow,
 } from '@lc/sim-core';
 
 export interface GateFastResult {
   pass: boolean;
-  /** 门级没有延迟，也就没有波形（抖动/毛刺这类时序概念不适用）*/
+  /** 门级仍然不产出波形（时间轴是"有延迟"的，但波形面板用元件级波形）*/
   waveform?: undefined;
   rows: VectorRow[];
   diagnostics: never[];
   unstable: boolean;
 }
 
-const laneOf = (lane: string): { port: string; bit: number } => {
-  const m = /^(.+)\[(\d+)\]$/.exec(lane);
-  if (m?.[1] !== undefined && m[2] !== undefined) return { port: m[1], bit: Number(m[2]) };
-  return { port: lane, bit: 0 };
-};
-
-/** 宽 1 的端口用裸名，宽 >1 用 `name[i]`（与 expandVectors 的口径一致）*/
-const laneKey = (port: string, bit: number, width: number): string =>
-  width > 1 ? `${port}[${bit}]` : port;
+/**
+ * **门级引擎口径开关**（用户第 ⑲ 轮要求"保留可回退"）。
+ *
+ *   true  = 有界延迟 + 惯性（新口径，默认；`gate-delay.ts` 的事件驱动模型）
+ *   false = 旧的零延迟求值（`settleGateSteps`，逐网逐行与历史结果完全相同）
+ *
+ * 切到 false 时判定回落到"零延迟门级"，仅用于对照与回归（`apps/studio/test/gate-delay-levels.test.ts`
+ * 会把两档逐关比一遍，`packages/sim-core/test/gate-delay.test.ts` 会证明两档在零延迟下等价）。
+ */
+export const GATE_DELAYED_ENGINE = true;
 
 /**
  * 门级快路**能不能跑这份设计**：能跑返回 null，不能跑返回**人类可读的原因**。
@@ -67,6 +72,9 @@ export const gateFastSupportReason = (
 
 /**
  * 跑门级快路。不适用时返回 null（调用方回落），绝不做"部分正确"的近似。
+ *
+ * 引擎口径由 `GATE_DELAYED_ENGINE` 决定（默认有界延迟 + 惯性），两档共用
+ * `evalGateVectorsDelayed`（输入保持口径、行形状、null 约定都与本文件历史实现一致）。
  */
 export const runGateVectors = (
   design: Design,
@@ -78,77 +86,10 @@ export const runGateVectors = (
   // ── 适用性：全部实例都得是能解析的模块，且时序模块都有 SeqSpec ──
   if (gateFastSupportReason(design, library, seqSpecs) !== null) return null;
 
-  // ── 把真实库包成门级引擎要的最小接口（结构兼容，不改库）──
-  const gateLib = {
-    get: (hash: string) => {
-      const m = library.get(hash);
-      if (!m) return undefined;
-      return {
-        name: m.name,
-        isSequential: m.isSequential,
-        seq: seqSpecs[m.name],
-        ports: m.ports.map((p) => ({ name: p.name, dir: p.dir, width: p.width })),
-        body: m.body,
-      };
-    },
-  };
+  const run = evalGateVectorsDelayed(design, library, vectors, widths, seqSpecs, {
+    zeroDelay: !GATE_DELAYED_ENGINE,
+  });
+  if (run === null) return null; // 引擎说不支持就回落，不硬凑
 
-  const widthOfPort = (port: string): number => widths.get(port) ?? 1;
-  const state = new GateStateStore();
-  const held = new Map<string, Bit[]>();
-  const rows: VectorRow[] = [];
-  let unstable = false;
-
-  for (const [index, vector] of vectors.entries()) {
-    // 未列出的输入**保持上一次的值**（与 runVectors 口径一致，便于测时序保持）
-    for (const [lane, value] of Object.entries(vector.inputs)) {
-      const { port, bit } = laneOf(lane);
-      const w = widthOfPort(port);
-      const bits = held.get(port) ?? Array.from({ length: w }, (): Bit => 'Z');
-      bits[bit] = value as Bit;
-      held.set(port, bits);
-    }
-    const inputs = new Map<string, Bit[]>();
-    for (const [port, bits] of held) inputs.set(port, bits);
-
-    const out = settleGateSteps(design, gateLib, inputs, state);
-    if (!out.ok) return null; // 引擎说不支持就回落，不硬凑
-    if (out.unstable === true) unstable = true;
-
-    const actual: Record<string, Logic> = {};
-    for (const [port, bits] of out.outPorts) {
-      const w = widthOfPort(port);
-      bits.forEach((b, i) => {
-        actual[laneKey(port, i, w)] = String(b) as Logic;
-      });
-    }
-    const expected: Record<string, Logic> = { ...(vector.expect ?? {}) };
-    const mismatches: VectorMismatch[] = [];
-    for (const [lane, exp] of Object.entries(expected)) {
-      const got = actual[lane] ?? ('Z' as Logic);
-      if (String(exp) !== String(got)) {
-        mismatches.push({ port: lane, expected: exp, actual: got });
-      }
-    }
-    const inputLanes: Record<string, Logic> = {};
-    for (const [port, bits] of held) {
-      const w = widthOfPort(port);
-      bits.forEach((b, i) => {
-        inputLanes[laneKey(port, i, w)] = String(b) as Logic;
-      });
-    }
-    rows.push({
-      index,
-      ...(vector.note !== undefined ? { note: vector.note } : {}),
-      inputs: inputLanes as unknown as VectorRow['inputs'],
-      expected: expected as unknown as VectorRow['expected'],
-      actual: actual as unknown as VectorRow['actual'],
-      mismatches,
-      ok: mismatches.length === 0,
-      timePs: 0, // 逻辑版没有延迟，谈不上时间
-      window: { fromPs: 0, toPs: 0 },
-    });
-  }
-
-  return { pass: rows.every((r) => r.ok), rows, diagnostics: [], unstable };
+  return { pass: run.pass, rows: run.rows, diagnostics: [], unstable: run.unstable };
 };

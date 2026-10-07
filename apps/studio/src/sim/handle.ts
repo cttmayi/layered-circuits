@@ -13,6 +13,7 @@ import {
   wrapModule,
 } from '@lc/compiler';
 import { GATE_SEQ_SPECS, gateFastEnabledFor } from '@lc/content';
+import type { Design } from '@lc/schema';
 import {
   costHalfOf,
   familySpecOf,
@@ -22,7 +23,19 @@ import {
   ModuleTemplateSchema,
   parseLevel,
 } from '@lc/schema';
-import { type Logic, SIG_Z, Simulator, toWaveform } from '@lc/sim-core';
+import {
+  type Bit,
+  evalGateDelayed,
+  type GateDelayRun,
+  GateStateStore,
+  gateDelaySupport,
+  type Logic,
+  logicToSignal,
+  S_STRONG,
+  SIG_Z,
+  Simulator,
+  toWaveform,
+} from '@lc/sim-core';
 import type {
   DriveValue,
   SimSnapshot,
@@ -46,6 +59,59 @@ function buildLibrary(raw: unknown[]): ModuleLibrary {
   }
   return library;
 }
+
+/* ── 逻辑关画布：**有界延迟 + 惯性**门级引擎（与判定同口径，用户第 ⑲ 轮拍板走 A 路线）────────
+ *
+ * 为什么画布也要换：判定（白名单关）走的是门级引擎，画布若还走元件引擎，同一份电路会出现
+ * "判定说对、画布显示另一个电路"的分歧；而且零延迟门级把"建立时间"抹掉（s3-calc 靠 10 级
+ * 反相器链把时钟沿推后 15ns），画布读到的就是错的中间态。
+ *
+ * 边界（一处都不含糊）：
+ *   · 只有**逻辑关**画布走这条（请求里 `gateCanvas: true`）；时序关 1~7 与自由模式**不受影响**；
+ *   · 设计里含元件、或有缺 SeqSpec 的时序模块 → `gateDelaySupport` 说不支持 → **原样回落元件引擎**
+ *     （老存档、元件电路照旧显示，Z/X 也不变）；
+ *   · 门级状态跨请求保存在**本模块作用域**里（按电路哈希索引，只留最近几个），不往协议里塞类实例。
+ *
+ * 验收口径（apps/studio/test/gate-canvas-same-caliber.test.ts 钉住）：
+ *   画布 `netSignals` 里每条顶层网的电平 == 门级引擎 `evalGateDelayed().nets` 的同名网电平。
+ */
+const GATE_CANVAS_WINDOW_PS = 1_000_000; // 1µs：够慢路径走完（关卡向量 settlePs 的上限也是它）
+const GATE_CANVAS_MAX_EVENTS = 500_000; // 与 harness.ts 的 maxEventsPerVector 同量级
+const GATE_CANVAS_STATE_KEEP = 8; // 状态缓存只留最近 8 份电路
+
+const gateCanvasStates = new Map<string, GateStateStore>();
+
+const gateCanvasState = (key: string): GateStateStore => {
+  const hit = gateCanvasStates.get(key);
+  if (hit) {
+    // LRU：命中即挪到队尾
+    gateCanvasStates.delete(key);
+    gateCanvasStates.set(key, hit);
+    return hit;
+  }
+  const fresh = new GateStateStore();
+  gateCanvasStates.set(key, fresh);
+  while (gateCanvasStates.size > GATE_CANVAS_STATE_KEEP) {
+    const oldest = gateCanvasStates.keys().next().value;
+    if (oldest === undefined) break;
+    gateCanvasStates.delete(oldest);
+  }
+  return fresh;
+};
+
+/** 把请求里的驱动值摊成门级要的「端口 → 逐位 Bit」*/
+const gateInputsOf = (design: Design, inputs: Record<string, DriveValue>): Map<string, Bit[]> => {
+  const out = new Map<string, Bit[]>();
+  for (const port of design.ports) {
+    if (port.dir !== 'in') continue;
+    const bit = paramToLogic(inputs[port.name] ?? 3) as Bit;
+    out.set(
+      port.name,
+      Array.from({ length: Math.max(1, port.width ?? 1) }, () => bit),
+    );
+  }
+  return out;
+};
 
 export function handleRequest(req: StudioRequest): StudioResponse {
   try {
@@ -163,6 +229,40 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       contrib.push([netId, vals]);
     }
 
+    // ── 逻辑关画布：门级（有界延迟 + 惯性）覆盖顶层网电平 ──────────────────────────
+    let gateRun: GateDelayRun | null = null;
+    let gateReason = '';
+    if (mode === 'logic' && req.gateCanvas === true) {
+      const support = gateDelaySupport(design, library);
+      if (!support.ok) {
+        gateReason = support.reason ?? '门级不支持这份设计';
+      } else {
+        const run = evalGateDelayed(design, library, gateInputsOf(design, inputs), {
+          state: gateCanvasState(hashDesign(design)),
+          seqSpecs: GATE_SEQ_SPECS,
+          windowPs: GATE_CANVAS_WINDOW_PS,
+          maxEvents: GATE_CANVAS_MAX_EVENTS,
+        });
+        if (run.ok) gateRun = run;
+        else gateReason = run.reason ?? '门级引擎跑不了这份设计';
+      }
+      const run = gateRun;
+      if (run) {
+        // 门级只保证「有驱动/被绑定的网」有值；**无驱动的网按 Z 报**（画布上=悬空土黄虚线，
+        // 与元件引擎对无驱动网的读数一致），而不是"缺 key 画灰"——那会把"没接"显示成"接了但没电"。
+        // ⚠️ 遍历 `design.nets` 而不是 `netIds`：compileDesign 会把等价网并成一个节点，
+        // `netIds` 里因此缺掉一部分顶层网名（例如锁存器的 q/qn、全加器的中间网），
+        // 用 netIds 覆盖就会让那些网在画布上消失。
+        const gated: Array<[string, number]> = design.nets.map((n) => {
+          const bit = run.nets.get(n.id);
+          // 位 → 强驱动信号：逻辑关图例只承诺 1/0 两色，门级没有强弱，必须给强驱动
+          return [n.id, bit === undefined ? SIG_Z : logicToSignal(bit as Logic, S_STRONG)];
+        });
+        netSignals.length = 0;
+        netSignals.push(...gated);
+      }
+    }
+
     const { counts, diagnostics: costDiagnostics } = computeCosts(design, library);
     const half = costHalfOf(counts);
 
@@ -209,6 +309,26 @@ export function handleRequest(req: StudioRequest): StudioResponse {
           : null,
       timing,
     };
+    if (gateRun) {
+      snapshot.simDiagnostics.push({
+        kind: 'gate-canvas',
+        severity: 'info',
+        message: `画布走门级引擎（有界延迟 ${GATE_CANVAS_WINDOW_PS / 1000}ns 窗口 + 惯性语义，与判定同口径）：事件 ${gateRun.events}，终态时刻 ${gateRun.timePs}ps`,
+      });
+      if (gateRun.capped) {
+        snapshot.simDiagnostics.push({
+          kind: 'unstable',
+          severity: 'warning',
+          message: `门级仿真撞到事件上限（${GATE_CANVAS_MAX_EVENTS}）—— 电路仍在活动（可能是自搭环路在振荡），已停在窗口结束时刻`,
+        });
+      }
+    } else if (mode === 'logic' && req.gateCanvas === true) {
+      snapshot.simDiagnostics.push({
+        kind: 'gate-canvas-fallback',
+        severity: 'info',
+        message: `画布回落元件引擎（门级不支持这份设计）：${gateReason}`,
+      });
+    }
     if (unstable) {
       snapshot.simDiagnostics.push({
         kind: 'unstable',

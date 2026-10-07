@@ -1,4 +1,5 @@
 export * from './engine.js';
+export * from './gate-delay.js';
 export * from './gate-logic.js';
 export * from './gate-netlist.js';
 export * from './gate-seq.js';

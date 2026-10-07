@@ -44,6 +44,11 @@ export const seqSpecOf = (moduleName: string): GateSeqSpec | undefined =>
  *   · s3-half-adder：元件级 2ms(pass=true) / 带快路 1ms(pass=true) → 一致，可以启用；
  *   · s3-calc     ：元件级 108ms(pass=true) / 带快路 4928ms(**pass=false**) → **结论不一致**，
  *     而且慢 45 倍。在查清原因并修好之前，它**不许**走快路 —— 宁可不快，不能算错。
+ *
+ * ⚠️ 第 ⑲ 轮（用户拍板走 A 路线）之后，**门级引擎本身已换成"有界延迟 + 惯性"**
+ * （`packages/sim-core/src/gate-delay.ts`），所以上表名单是按**新口径**逐关复算过的：
+ * `apps/studio/test/gate-delay-levels.test.ts` 把 20 关的 pass/错行/行数/得分钉住，
+ * 并逐关与元件级比对（18 关逐行 0 差异；s3-calc 66/67，仅"待命"那一行的上电态不同）。
  */
 export const GATE_FAST_LEVELS: readonly string[] = [
   // 下面这些关已由 apps/studio/test/gate-fast-report.test.ts（对照表）实测：
@@ -67,26 +72,32 @@ export const GATE_FAST_LEVELS: readonly string[] = [
   's3-reg-8',
   's3-digit-entry',
   // 暂不放行（对照表里仍有差异，宁可不快不能算错）：
-  //   s3-calc：**根因已查清（实测，不是推断）**，是"这一关的时钟靠延迟振荡"这个建模缺口，
-  //     不是接线/引脚 bug：
-  //       · 门级 67 行里 **29 行读到旧值/错值**（左位 disp_t 明显滞后，disp_u 常还是对的），
-  //         元件级 67 行全对；典型行：按 C 清屏（期望 3f,3f）门级读 6f,6f。
-  //         （pin↔net 多网名那个真 bug 早前已修掉，读数不再整片相反。）
-  //       · 本关时钟**不是外部时钟口**：是【运算控制】内部一条**延迟链构成的环形振荡器**。
-  //         元件级时序口径实测：上电窗口里 accClk 跳变 **12 次**（500ps 一跳 1→0→1→0…），
-  //         按 C 再补一个沿（112400ps=1）—— 八位寄存器就是靠这些**沿**写入的。
-  //       · 门级是**零延迟**求值：同一条环路代数上**收敛到静态电平**（实测每个向量
-  //         unstable=false，accClk 稳定在 0 或 1），"振荡"消失 → 寄存器要么一直保持
-  //         （clk 停在 1）要么一直透明（clk 停在 0），两者都不是设计意图 → 29 行错。
-  //       · 关卡按键向量都带 **settlePs: 1_000_000**：这一关本来就按时序口径设计。
-  //       · 顺带：本关门级比元件级**还慢 6 倍**（553ms vs 87ms），放行连"快"都换不到。
+  //   s3-calc：**根因已查清，并已随第 ⑲ 轮"有界延迟门级"口径改动更新（全部实测）**：
+  //     · 全项目口径已从"零延迟门级"改成**有界延迟 + 惯性语义**的事件驱动模型
+  //       （packages/sim-core/src/gate-delay.ts，延迟取自各门 rtl 身体电路的 criticalPathPs 实测值）。
+  //       **零延迟把"建立时间"抹掉了**：本关 67 行里 **29 行**读到旧值（左位 disp_t 滞后），
+  //       因为【运算控制】里 `clk1 = op∨eq∨c` 要经 **10 级反相器链**（≈15ns）才推出 accClk，
+  //       这 15ns 是**功能**——保证 op/eq/c 沿上 accD 已稳定，八位寄存器靠它的**沿**写入。
+  //       （`teachings.ts:1105/1128-1137`、`references-calc.ts:331/380-392`）
+  //     ⚠️ 早前记录里"延迟链构成的**环形振荡器**"是**误名**，已实测纠正：clk1 只由按钮输入驱动、
+  //       **没有反馈回路**（原型自检"自环单元 0"）；元件时序口径下 accClk 只在**上电瞬态**里跳变
+  //       12 次（500ps…17500ps）然后停在 0，逐微秒推进 2~6µs 新增 **0** 次；有延迟门级同样只在
+  //       [0,1e6] 跳 16 次、之后 `[1e6,1e7]`/`[1e7,1e8]` 新增 **0** 次（瞬态，不是持续振荡）。
+  //     · **有延迟门级下本关 67 行里有 66 行与元件级逐位相同**，只剩 **第 0 行「待命（上电先按 C 清零）」**：
+  //       两台上电收敛到不同的数码管态（元件 0x6f/0x6f vs 门级 0x4f/0x4f，差在 e 段）。
+  //       该行**没有期望值**（关卡本来要求先按 C），两台引擎都 pass=true，结论不受影响。
+  //     · 所以本关**仍然不放行**：审计判据是"逐行数值全等"，这一行不全等 → 放行会让审计第 ② 道闸红。
+  //       要放行只有两条路（**都需先拍板**）：把"无期望值的行"定义成 don't-care，或改关卡内容。
+  //     · 判定今天仍走元件引擎：实测 pass=true、67 行全对、得分 100（与放行前逐项一致）。
+  //     · 顺带：有延迟门级在本关比零延迟门级**快得多**（原型 12~15ms vs 官方零延迟 507.7ms/67 行）。
   //     ⚠️ 曾经的误判（已用实测纠正）：① "网是 1 而引脚读到 0" **不存在** —— 真设计上逐轮
   //     逐脚核对不变量得到 **0 处真不一致**（唯一"不一致"是 net 尚未赋值 'Z' 按约定读 0）；
   //     ② "组合环 64 轮不收敛、accClk 反复横跳" 也是仪器假象（在赋值前打印 settled）。
   //     ⚠️ 另一个坑：`mode:'timing'` 下 judge 里的门级快路**不会执行**（只在 mode==='logic'），
   //     会静默回落元件级 —— 所以"timing 口径下门级 0/67、完全一致"是**假读数**（元件级跑了两遍）。
   //     详见 docs/design-gates.md 第 10 节；可执行凭据见
-  //     apps/studio/test/gate-calc-delay-clock.test.ts 与 packages/sim-core/test/gate-net-boundary.test.ts。
+  //     apps/studio/test/gate-calc-delay-clock.test.ts、apps/studio/test/gate-delay-levels.test.ts 与
+  //     packages/sim-core/test/gate-delay.test.ts。
   //     ⚠️ 前置条件是**自动**守住的：apps/studio/test/gate-fast-whitelist-precondition.test.ts
   //     会遍历本名单逐关核对"门级 pass 与元件级相同、且逐行数值相同"，把 s3-calc 加进来它必红。
   //   s3-or-chain（没有门版参考解）

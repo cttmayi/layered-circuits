@@ -1,7 +1,7 @@
-import { compileDesign, judgeDesign } from '@lc/compiler';
+import { compileDesign, expandVectors, judgeDesign, portWidthsOf } from '@lc/compiler';
 import { ALL_LEVELS, GATE_SEQ_SPECS, teachingModulesFor, teachingSolutionOf } from '@lc/content';
 import { familySpecOf, InMemoryModuleLibrary } from '@lc/schema';
-import { logicValueOf, Simulator } from '@lc/sim-core';
+import { evalGateVectorsDelayed, logicValueOf, Simulator } from '@lc/sim-core';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -85,7 +85,7 @@ describe('s3-calc：时钟来自延迟链（环形振荡器）—— 元件级�
     expect(pressEdges.length).toBeGreaterThan(0);
   }, 600_000);
 
-  it('门级零延迟口径：同一份设计上 accClk 塌成静态电平 → 29/67 行不对（已知限制）', () => {
+  it('门级**新口径（有界延迟 + 惯性）**：同一份设计上 accClk 出现真实的"沿"→ 67 行里 0 行读旧值', () => {
     const spec = familySpecOf(level, 'rtl');
     const r = judgeDesign(design as never, level, {
       library: new InMemoryModuleLibrary([...teachingModulesFor('rtl')]),
@@ -99,8 +99,26 @@ describe('s3-calc：时钟来自延迟链（环形振荡器）—— 元件级�
     }) as unknown as { pass?: boolean; rows?: { ok: boolean }[] };
     const rows = r.rows ?? [];
     const bad = rows.filter((x) => !x.ok).length;
-    console.log(`  门级：pass=${String(r.pass)} 不通过 ${bad}/${rows.length} 行`);
-    expect(r.pass).toBe(false);
-    expect(bad).toBeGreaterThan(0);
+    console.log(`  门级（有延迟）：pass=${String(r.pass)} 不通过 ${bad}/${rows.length} 行`);
+    expect(r.pass).toBe(true);
+    expect(bad).toBe(0);
+  }, 600_000);
+
+  it('门级**零延迟回退档**：历史事实可复现 —— 同一份设计 29/67 行不对（这就是这次口径改动的理由）', () => {
+    const widths = portWidthsOf(level);
+    const zero = evalGateVectorsDelayed(
+      design as never,
+      new InMemoryModuleLibrary([...teachingModulesFor('rtl')]),
+      expandVectors(level.vectors, widths),
+      widths,
+      GATE_SEQ_SPECS,
+      { zeroDelay: true },
+    );
+    const bad = zero?.rows.filter((x) => !x.ok).length ?? -1;
+    console.log(
+      `  门级（零延迟档）：pass=${String(zero?.pass)} 不通过 ${bad}/${zero?.rows.length ?? 0} 行`,
+    );
+    expect(zero?.pass).toBe(false);
+    expect(bad).toBe(29);
   }, 600_000);
 });
