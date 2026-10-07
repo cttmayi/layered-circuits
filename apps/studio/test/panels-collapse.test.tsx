@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /**
- * 元件库「展开/收起」与分组折叠（我的元件 / 电源与端口 / 我的模块）：
+ * 元件库「展开/收起」与分组折叠（关卡模式下是「我的元件 / 我的模块」两组 ——
+ * 「电源与端口」按用户第 ⑪ 轮要求**只在自由模式渲染**，契约与依据见 palette-power-group.test.tsx）：
  *  - 组头可折叠，折叠后元件列表隐藏；
  *  - 元件库整体收起 → 元件库消失、画布腾出空间；再点展开回来；
  *  - **右侧「验收/属性」面板已按用户要求整块移除**（连同右侧开合手柄与右侧避让逻辑），
@@ -20,16 +21,18 @@ describe('左右侧面板展开/收起', () => {
   it('左侧分组可折叠：收「我的元件」后三极管不可见，再点展开恢复', () => {
     renderApp();
     startJob('非门');
-    // 三个分组都在
+    // 关卡模式：只有「我的元件 / 我的模块」两组，「电源与端口」整组不渲染
     expect(screen.getByText('我的元件')).toBeTruthy();
-    expect(screen.getByText('电源与端口')).toBeTruthy();
     expect(screen.getByText('我的模块（0）')).toBeTruthy();
+    expect(screen.queryByText('电源与端口')).toBeNull();
+    expect(screen.queryByText('VCC 电源')).toBeNull();
     // 默认展开：元件列表可见
     expect(screen.getByText('三极管 NPN')).toBeTruthy();
     // 点组头收起
     fireEvent.click(screen.getByText('我的元件').closest('button') as HTMLButtonElement);
     expect(screen.queryByText('三极管 NPN')).toBeNull();
-    expect(screen.getByText('电源与端口')).toBeTruthy(); // 其它组不受影响
+    expect(screen.getByText('我的模块（0）')).toBeTruthy(); // 其它组不受影响
+    expect(screen.queryByText('电源与端口')).toBeNull(); // 关卡模式一如既往不渲染该组
     // 再点展开
     fireEvent.click(screen.getByText('我的元件').closest('button') as HTMLButtonElement);
     expect(screen.getByText('三极管 NPN')).toBeTruthy();

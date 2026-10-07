@@ -39,9 +39,10 @@ describe('双击连线删除', () => {
   it('搭一条线 → 双击它 → 线消失', async () => {
     renderApp();
     startJob('非门');
-    place('电阻', 690, 180); // R：引脚在上下两端
-    place('VCC 电源', 690, 80); // VCC：引脚在下方
-    wire(690, 158, 690, 94); // R.a → VCC.p（一条竖线）
+    place('电阻', 40, 140); // R：引脚在上下两端，摆在预置 VCC 轨正下方（不压到输入端口 a）
+    // 第 ⑪ 轮起关卡模式不再提供「电源与端口」组，改用关卡**预置**的 VCC 轨
+    // （世界 (40,60)，引脚在下方 +14）；实测走线就是一条直线 (40,118)→(40,74)
+    wire(40, 118, 40, 74); // R.a → 预置 VCC.p
     await waitFor(
       () => {
         const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { wires?: unknown[] };
@@ -49,10 +50,10 @@ describe('双击连线删除', () => {
       },
       { timeout: 5000 },
     );
-    // 双击线的中点（690, 126）
+    // 双击线的中点（R.a (40,118) → VCC.p (40,74) 的中点 = (40,96)）
     fireEvent.doubleClick(document.querySelector('canvas') as HTMLCanvasElement, {
       button: 0,
-      ...screenOf(690, 126),
+      ...screenOf(40, 96),
     });
     await waitFor(
       () => {
@@ -66,9 +67,8 @@ describe('双击连线删除', () => {
   it('双击空白处不会误删', async () => {
     renderApp();
     startJob('非门');
-    place('电阻', 690, 180);
-    place('VCC 电源', 690, 80);
-    wire(690, 158, 690, 94);
+    place('电阻', 40, 140);
+    wire(40, 118, 40, 74); // R.a → 预置 VCC.p（一条直线）
     await waitFor(
       () => {
         const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { wires?: unknown[] };

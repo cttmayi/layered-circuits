@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /**
- * 左侧元件库顶部的「隐藏本关不可用」筛选：
+ * 左侧元件库顶部的「隐藏本关不可用」筛选（**关卡模式**；该模式下「电源与端口」整组不渲染，
+ * 见 palette-power-group.test.tsx）：
  *  - 默认全部显示（可用 + 锁定都列出，锁定项灰置）；
  *  - 勾上后锁定元件整卡消失，可用元件不受影响；
  *  - 勾选状态写入 localStorage，重挂载保持。
@@ -41,17 +42,17 @@ describe('元件库「隐藏本关不可用」', () => {
     expect(screen.getByText('三极管 NPN')).toBeTruthy();
     expect(screen.getByText('二极管')).toBeTruthy();
     expect(screen.getByText('N-MOS')).toBeTruthy();
-    // 电源与端口：VCC 可用、输入引脚在关卡模式下锁定
-    expect(screen.getByText('VCC 电源')).toBeTruthy();
-    expect(screen.getByText('输入引脚')).toBeTruthy();
+    // 「电源与端口」在关卡模式下整组不渲染（连组头都没有），所以这里一条都查不到
+    expect(screen.queryByText('电源与端口')).toBeNull();
+    expect(screen.queryByText('VCC 电源')).toBeNull();
+    expect(screen.queryByText('输入引脚')).toBeNull();
 
     fireEvent.click(screen.getByLabelText('隐藏本关不可用'));
 
     expect(screen.queryByText('二极管')).toBeNull();
     expect(screen.queryByText('N-MOS')).toBeNull();
-    expect(screen.queryByText('输入引脚')).toBeNull();
     expect(screen.getByText('三极管 NPN')).toBeTruthy();
-    expect(screen.getByText('VCC 电源')).toBeTruthy();
+    expect(screen.queryByText('VCC 电源')).toBeNull(); // 与该开关无关：关卡模式下这一组本就不渲染
   });
 
   it('勾选状态持久化：重新打开元件库仍生效', () => {

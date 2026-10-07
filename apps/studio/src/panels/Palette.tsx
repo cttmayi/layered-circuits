@@ -204,7 +204,10 @@ function Section({
   );
 }
 
-/** 左侧元件库：可折叠分组（我的元件 / 电源与端口 / 我的模块）+ 整体可收起（见 App 的 edge-strip） */
+/**
+ * 左侧元件库：可折叠分组（我的元件 / 电源与端口 / 我的模块）+ 整体可收起（见 App 的 edge-strip）。
+ * 「电源与端口」这一组**只在自由模式渲染**（关卡模式的依据见下方 Section 处的注释）。
+ */
 export function Palette({
   placing,
   onPick,
@@ -250,7 +253,11 @@ export function Palette({
     if (unit === 'cap') return '时钟专用元件，本阶段不开放';
     return '本关卡不允许使用该元件';
   };
-  /** 输入/输出引脚：关卡模式下端口已预置（a/b/y 是契约），不开放自加 */
+  /**
+   * 「电源与端口」这一组**只在自由模式出现**（见下面 Section 处的注释与审计结论）：
+   * 关卡模式下整组不渲染，所以这里的锁定分支在两种模式下都到不了（自由模式 `level` 为空）。
+   * 留着是为了不让这次改动扩散到自由模式的渲染代码 —— 那边与改动前逐字相同。
+   */
   const portLockReason = '本关端口已预置（a/b/y），不能自己加';
 
   const isArmed = (kind: string, extra?: string): boolean => {
@@ -367,53 +374,67 @@ export function Palette({
         </Section>
       )}
 
-      <Section
-        open={openSections.has(SECTIONS.power)}
-        onToggle={() => toggleSection(SECTIONS.power)}
-        title="电源与端口"
-        badge="6"
-      >
-        {(
-          [
-            ['vcc', 'VCC 电源', '免费端口'],
-            ['gnd', 'GND 地', '免费端口'],
-            ['input', '输入引脚', '可点击切换电平'],
-            ['output', '输出引脚', '显示实时电平'],
-            ['button', '按钮', '瞬时按键：点击 = 电平 1，自动弹回 0'],
-            ['segment', '七段数码管', '按端口值（BCD 0-9）点亮段'],
-          ] as Array<[string, string, string]>
-        )
-          .filter(([kind]) => !hideLockedActive || !portLocked(kind))
-          .map(([kind, name, note]) => {
-            const locked = portLocked(kind);
-            return (
-              <button
-                key={kind}
-                type="button"
-                disabled={locked}
-                draggable={!locked}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(DRAG_MIME, kind);
-                  e.dataTransfer.effectAllowed = 'copy';
-                  e.dataTransfer.setDragImage(dragImage(kind), 48, 48);
-                }}
-                title={locked ? portLockReason : `${note}（拖到画布放置）`}
-                className={isArmed(kind) ? 'palette-item active' : 'palette-item'}
-                onClick={() => pick(kind)}
-              >
-                <span className="palette-name">
-                  {name}{' '}
+      {/* ---- 「电源与端口」：**只有自由模式才有这一组** ----
+          关卡模式下整组**不渲染**（不是置灰、不是折叠：DOM 里连组头都没有）。
+          依据（27 关逐关审计，见 test/palette-power-group.test.tsx 的同名守卫）：
+            · `docForLevel` 对**每一关**都预置并锁定 rail-vcc / rail-gnd，以及关卡声明的所有
+              in/out 端口（按钮 = 端口上的 `button` 标记、七段数码管 = 端口上的 `display` 标记，
+              都由它一并预置）；
+            · 27 关的**参考解**没有一关用到的 vcc/gnd/端口超出初始画布（最多的关也是 vcc1/gnd1，
+              多数参考解连 vcc/gnd 都不声明，直接用预置轨）；
+            · 该组的 4 个端口类条目（输入/输出引脚、按钮、七段数码管）在关卡模式下本来就是锁定态
+              （「本关端口已预置」），唯一还能点的只有 VCC/GND，而它们同样已被预置。
+          所以关卡模式下这一组对玩家是**纯冗余**（还会把"要不要自己加电源"当成伪问题），
+          自由模式则照旧、逐字不变（没有 level 就没有预置，必须自己加电源与端口）。 */}
+      {!level && (
+        <Section
+          open={openSections.has(SECTIONS.power)}
+          onToggle={() => toggleSection(SECTIONS.power)}
+          title="电源与端口"
+          badge="6"
+        >
+          {(
+            [
+              ['vcc', 'VCC 电源', '免费端口'],
+              ['gnd', 'GND 地', '免费端口'],
+              ['input', '输入引脚', '可点击切换电平'],
+              ['output', '输出引脚', '显示实时电平'],
+              ['button', '按钮', '瞬时按键：点击 = 电平 1，自动弹回 0'],
+              ['segment', '七段数码管', '按端口值（BCD 0-9）点亮段'],
+            ] as Array<[string, string, string]>
+          )
+            .filter(([kind]) => !hideLockedActive || !portLocked(kind))
+            .map(([kind, name, note]) => {
+              const locked = portLocked(kind);
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  disabled={locked}
+                  draggable={!locked}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(DRAG_MIME, kind);
+                    e.dataTransfer.effectAllowed = 'copy';
+                    e.dataTransfer.setDragImage(dragImage(kind), 48, 48);
+                  }}
+                  title={locked ? portLockReason : `${note}（拖到画布放置）`}
+                  className={isArmed(kind) ? 'palette-item active' : 'palette-item'}
+                  onClick={() => pick(kind)}
+                >
+                  <span className="palette-name">
+                    {name}{' '}
+                    <CardExtra compact={compact}>
+                      {locked && <em className="locked">本关不可用</em>}
+                    </CardExtra>
+                  </span>
                   <CardExtra compact={compact}>
-                    {locked && <em className="locked">本关不可用</em>}
+                    <span className="palette-note">{locked ? portLockReason : note}</span>
                   </CardExtra>
-                </span>
-                <CardExtra compact={compact}>
-                  <span className="palette-note">{locked ? portLockReason : note}</span>
-                </CardExtra>
-              </button>
-            );
-          })}
-      </Section>
+                </button>
+              );
+            })}
+        </Section>
+      )}
 
       {/* 基础门：本关提供的门。契约在门的内部，这里只按白名单列出来。
           库里注入的是整族（复合门的身体会引用更底层的门，只注入白名单会 unknown-module），

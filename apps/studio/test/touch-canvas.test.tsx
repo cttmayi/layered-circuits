@@ -135,44 +135,43 @@ describe('触屏手势：画布接线', () => {
   it('轻点两个引脚 = 连线', async () => {
     renderApp();
     startJob('非门');
-    await place('电阻', 690, 180); // R：引脚在上下两端
-    await place('VCC 电源', 690, 80); // VCC：引脚在下方
-    await waitPlaced(2);
+    await place('电阻', 40, 140); // R：引脚在上下两端（摆在预置 VCC 轨正下方，且不压到输入端口 a）
+    await waitPlaced(1);
 
-    tap(690, 158); // R.a
-    tap(690, 94); // VCC.p
+    // 第 ⑪ 轮起关卡模式不再提供「电源与端口」组，用关卡**预置**的 VCC 轨（世界 (40,60)，引脚在下方 +14）；
+    // 走线实测是一条直线 (40,118)→(40,74)，所以线中点就是 (40,96)
+    tap(40, 118); // R.a
+    tap(40, 74); // 预置 VCC.p
     await waitWires(1);
   });
 
   it('双击（两次轻点）= 双击语义：删除连线', async () => {
     renderApp();
     startJob('非门');
-    await place('电阻', 690, 180);
-    await place('VCC 电源', 690, 80);
-    await waitPlaced(2);
-    tap(690, 158);
-    tap(690, 94);
+    await place('电阻', 40, 140); // 摆在预置 VCC 轨正下方 → 走线是一条直线，中点好命中
+    await waitPlaced(1);
+    tap(40, 118);
+    tap(40, 74); // 预置 VCC.p
     await waitWires(1);
 
-    tap(690, 126); // 线的中点
-    tap(690, 126); // 320ms 内的第二次轻点 = 双击
+    tap(40, 96); // 这条线的中点 (40,118)–(40,74)
+    tap(40, 96); // 320ms 内的第二次轻点 = 双击
     await waitWires(0);
   });
 
   it('长按后原地松手 = 双击语义：删除连线', async () => {
     renderApp();
     startJob('非门');
-    await place('电阻', 690, 180);
-    await place('VCC 电源', 690, 80);
-    await waitPlaced(2);
-    tap(690, 158);
-    tap(690, 94);
+    await place('电阻', 40, 140);
+    await waitPlaced(1);
+    tap(40, 118);
+    tap(40, 74); // 预置 VCC.p
     await waitWires(1);
 
     const id = nextId++;
-    down(690, 126, id); // 按住线中点
+    down(40, 96, id); // 按住这条线的中点
     await sleep(500); // 越过 420ms 长按阈值
-    up(690, 126, id); // 原地松手
+    up(40, 96, id); // 原地松手
     await waitWires(0);
   });
 
@@ -199,7 +198,7 @@ describe('触屏手势：画布接线', () => {
     renderApp();
     startJob('非门');
     await place('电阻', 690, 180);
-    await place('VCC 电源', 690, 80);
+    await place('电阻', 690, 300); // 缩放后预置电源轨会跑出画布，所以这条用两个自己放的电阻
     await waitPlaced(2);
 
     // 两指拉开一倍 → 缩放 ×2（进关自适应后的 scale 不确定，所以下面按"当前相机"点引脚）
@@ -217,8 +216,8 @@ describe('触屏手势：画布接线', () => {
     down(690, 158, id1);
     up(690, 158, id1);
     const id2 = nextId++;
-    down(690, 94, id2);
-    up(690, 94, id2);
+    down(690, 278, id2);
+    up(690, 278, id2);
     await waitWires(1);
   });
 });

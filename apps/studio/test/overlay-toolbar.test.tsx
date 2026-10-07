@@ -194,14 +194,14 @@ describe('画布浮动工具条：旋转 / 删除只在有选中时出现', () =
   it('选中一条连线 → 出现删除（旋转与顶栏时一样对连线置灰）', async () => {
     renderApp();
     startJob('非门');
-    place('电阻', 690, 180); // R：引脚在上下两端
-    place('VCC 电源', 690, 80); // VCC：引脚在下方
-    await waitPlaced(2);
-    clickWorld(690, 158); // R.a
-    clickWorld(690, 94); // VCC.p
+    place('电阻', 40, 140); // R：引脚在上下两端，摆在预置 VCC 轨正下方（不压到输入端口 a）
+    // 第 ⑪ 轮起关卡模式不再提供「电源与端口」组，改用关卡**预置**的 VCC 轨（世界 (40,60)，引脚在下方 +14）
+    await waitPlaced(1);
+    clickWorld(40, 118); // R.a
+    clickWorld(40, 74); // 预置 VCC.p
     await waitFor(() => expect(readDoc().wires?.length).toBe(1), { timeout: 5000 });
 
-    clickWorld(690, 126); // 点线的中点 = 选中这条线
+    clickWorld(40, 96); // 点这条线的中点 = 选中这条线
     const del = deleteBtn();
     expect(del).toBeTruthy();
     // 旋转对连线仍旧不可用（与顶栏时的 disabled 口径一致：只看 selection）
