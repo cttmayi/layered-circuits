@@ -18,6 +18,8 @@
  *   · 反证：1~7 关本身进入时，这些模块照旧列着（玩家在原关卡里的东西不许被藏）。
  */
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { designToModulePorts, wrapModule } from '@lc/compiler';
 import { ALL_LEVELS, teachingModulesFor } from '@lc/content';
 import {
@@ -33,6 +35,7 @@ import { App } from '../src/App';
 import type { StoredModule } from '../src/editor/model';
 import {
   bodyHasUnit,
+  builtOutsideLevels,
   gateCatalogFor,
   producedInElementLevel,
   storeModule,
@@ -281,7 +284,7 @@ describe('逻辑关不列"元件/时序关产出的模块"（用户第 ⑰ 轮�
     );
   }, 300000);
 
-  it('⑤ 判据单测：provenance 优先，无 provenance 时按 stage + 含元件代理（含明确的反例）', () => {
+  it('⑤ 判据单测：产出处 provenance 优先；"关卡之外搭的"用 stage 兜（含明确的反例）', () => {
     const mk = (over: Partial<StoredModule> & { hash: string }): StoredModule =>
       ({
         name: 'x',
@@ -295,26 +298,85 @@ describe('逻辑关不列"元件/时序关产出的模块"（用户第 ⑰ 轮�
         createdAt: 0,
         ...over,
       }) as StoredModule;
+    /** 逻辑关不做跨族隐藏的判据：只看产出那一关的 judgeMode */
     const cases: Array<[string, StoredModule, boolean]> = [
       ['教学积木（不参与）', mk({ hash: 't', teaching: true }), false],
-      ['levelId=元件关（s1-not, timing）', mk({ hash: 'a', levelId: 's1-not', stage: 1 }), true],
       [
-        'levelId=逻辑关时序（s2-d-latch）但身体含元件',
+        'levelId=元件关（s1-not, timing）→ 逻辑关不列',
+        mk({ hash: 'a', levelId: 's1-not', stage: 1 }),
+        true,
+      ],
+      [
+        'levelId=逻辑关时序（s2-d-latch）→ 逻辑关照旧列（即使身体含元件）',
         mk({ hash: 'b', levelId: 's2-d-latch', stage: 2 }),
         false,
       ],
-      ['无 provenance + stage1 + 含元件（老存档的元件门）', mk({ hash: 'c', stage: 1 }), true],
-      ['无 provenance + stage2 + 含元件（老存档的逻辑关产出）', mk({ hash: 'd', stage: 2 }), false],
+      // 关卡 id 在本版内容里查不到（跨版本/导入存档）→ 按"非逻辑关"处理（保守：宁可少列，不误导）
       [
-        '无 provenance + stage1 + 全门搭（门级吃得下）',
-        mk({ hash: 'e', stage: 1, template: { body: { instances: [{ kind: 'module' }] } } }),
+        'levelId 查不到（跨版本存档）→ 保守地按非逻辑关处理',
+        mk({ hash: 'b2', levelId: 'zz-gone', stage: 2 }),
+        true,
+      ],
+      [
+        '无 provenance（关卡模式里已被 builtOutsideLevels 拦掉）→ 这里返回 false',
+        mk({ hash: 'c', stage: 1 }),
         false,
       ],
-      ['无 provenance + stage1 + 无身体', mk({ hash: 'f', stage: 1, template: null }), false],
     ];
     for (const [tag, mod, expected] of cases) {
-      console.log(`[⑤ ] ${tag} → ${producedInElementLevel(mod)}（期望 ${expected}）`);
+      console.log(
+        `[⑤ ] producedInElementLevel：${tag} → ${producedInElementLevel(mod)}（期望 ${expected}）`,
+      );
       expect(producedInElementLevel(mod), tag).toBe(expected);
     }
+    /** 关卡模式"只列有 levelId 的"判据（第 ⑰ 轮用户拍板：自由模式搭的在关卡中全面不可见） */
+    const outside: Array<[string, StoredModule, boolean]> = [
+      [
+        '自由模式搭的（无 levelId + stage1 + 全用门搭）',
+        mk({ hash: 'f1', stage: 1, template: { body: { instances: [{ kind: 'module' }] } } }),
+        true,
+      ],
+      ['自由模式搭的（无 levelId + stage1 + 元件搭）', mk({ hash: 'f2', stage: 1 }), true],
+      [
+        '老存档：无 levelId + stage2（逻辑关产出的 D 锁存器）→ 例外，照旧列',
+        mk({ hash: 'l1', stage: 2 }),
+        false,
+      ],
+      ['老存档：无 levelId + stage3 → 例外，照旧列', mk({ hash: 'l2', stage: 3 }), false],
+      [
+        '关卡产出（有 levelId）→ 不是"关卡之外搭的"',
+        mk({ hash: 'k1', levelId: 's2-dff', stage: 2 }),
+        false,
+      ],
+      ['教学积木（本来就不进我的模块）', mk({ hash: 'k2', teaching: true }), false],
+    ];
+    for (const [tag, mod, expected] of outside) {
+      console.log(
+        `[⑤ ] builtOutsideLevels：${tag} → ${builtOutsideLevels(mod)}（期望 ${expected}）`,
+      );
+      expect(builtOutsideLevels(mod), tag).toBe(expected);
+    }
+  });
+
+  it('⑥ 前提断言：关卡封装一定写 levelId、自由模式封装 stage 恒为 1（内容/代码改了会先红）', () => {
+    // ① 代码前提（App.tsx 原文断言）：
+    //    · 交付验收后的**自动封装**写 `levelId: currentLevel.id` → 关卡产出带得到 provenance；
+    //    · **手动封装**不写 levelId，stage = `currentLevel?.stage ?? 1` → 在关卡里手动封的是
+    //      stage 2/3（落进"老存档例外"那一档，照旧列）；在**自由模式**里封的就是 stage 1
+    //      （与电路内容是元件搭的还是全用门搭的**无关**，stage 来自当前关卡）。
+    const app = readFileSync(path.resolve(import.meta.dirname, '../src/App.tsx'), 'utf8');
+    expect(
+      (app.match(/levelId: currentLevel\.id/g) ?? []).length,
+      '自动封装写 levelId 的路径数',
+    ).toBeGreaterThanOrEqual(1);
+    expect(app, '封装时的 stage 口径').toContain('stage: currentLevel?.stage ?? 1');
+    // ② 内容前提：关卡产出必有 stage（>=1），且逻辑关的 stage 全是 2/3（"stage=1 只可能来自关卡之外"）
+    const stages = new Set(ALL_LEVELS.map((l) => l.stage));
+    const logicStages = new Set(logicLevels.map((l) => l.stage));
+    console.log(
+      `[⑥ ] 全部关卡 stage=${[...stages].join('/')}｜逻辑关 stage=${[...logicStages].join('/')}｜关卡数=${ALL_LEVELS.length}`,
+    );
+    expect(ALL_LEVELS.every((l) => l.stage >= 1)).toBe(true);
+    expect(logicLevels.filter((l) => l.stage === 1)).toEqual([]);
   });
 });

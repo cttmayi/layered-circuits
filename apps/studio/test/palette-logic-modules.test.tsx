@@ -48,12 +48,18 @@ const teachingLibrary = (): StoredModule[] =>
   teachingModulesFor('rtl').map((m) => ({ ...stored(m), teaching: true }));
 
 /** 把模板包成画布库里的 StoredModule（字段与 App 存档里的模块同形） */
-function stored(template: ModuleTemplate): StoredModule {
+/**
+ * 夹具一律带**产出处 provenance**：第 ⑰ 轮起，关卡模式只列"有 `levelId` 的模块"（自由模式搭的
+ * 在关卡里全面不可见），所以"某个模块在关卡里该不该出现"的用例，必须像真存档一样写清楚它是
+ * 哪一关产出的 —— 老写法（没有 levelId、stage=1）现在等同于"自由模式搭的"，在关卡里一律不列。
+ */
+function stored(template: ModuleTemplate, levelId?: string): StoredModule {
   return {
     hash: template.hash,
     name: template.name,
     version: template.version,
-    stage: template.stage,
+    stage: levelId ? (template.stage >= 2 ? template.stage : 2) : template.stage,
+    ...(levelId !== undefined ? { levelId } : {}),
     costHalf: template.costHalf,
     isSequential: template.isSequential,
     ports: template.ports.map((p) => ({ id: p.id, name: p.name, dir: p.dir, width: p.width })),
@@ -63,12 +69,12 @@ function stored(template: ModuleTemplate): StoredModule {
   };
 }
 
-function wrap(name: string, body: Design): StoredModule {
+function wrap(name: string, body: Design, levelId = 's2-dff'): StoredModule {
   const { template } = wrapModule(
     { name, stage: 1, kind: 'logic', ports: designToModulePorts(body), body },
     RTL_LIB,
   );
-  return stored(template);
+  return stored(template, levelId);
 }
 
 /** 第 1~7 关那种"用元件搭的非门"：两个电阻 + 一只 NPN（**身体里含元件**） */
@@ -98,7 +104,7 @@ function unitNotModule(): StoredModule {
       { id: 'y', name: 'y', dir: 'out', width: 1, nets: ['n2'] },
     ],
   });
-  return wrap('非门（元件版）', body);
+  return wrap('非门（元件版）', body, 's1-not'); // 第 1 关那种元件版
 }
 
 /** 全由基础门搭的模块：一只与非门的两个输入并起来 = 非门（**只有 module 实例**） */
@@ -139,7 +145,7 @@ function gateNotModule(): StoredModule {
       { id: 'y', name: 'y', dir: 'out', width: 1, nets: ['n3'] },
     ],
   });
-  return wrap('非门（门版）', body);
+  return wrap('非门（门版）', body, 's2-dff'); // 逻辑关产出的全门模块
 }
 
 /** 递归反证：身体里嵌了上面那个**含元件**模块的模块（自己一个元件都没有） */
@@ -155,7 +161,7 @@ function nestedOverUnitModule(): StoredModule {
       { id: 'y', name: 'y', dir: 'out', width: 1, nets: ['n1'] },
     ],
   });
-  return wrap('套在元件版外面的缓冲', body);
+  return wrap('套在元件版外面的缓冲', body, 's1-nand'); // 元件关产出（身体里嵌了元件版）
 }
 
 /** 时序积木（带 SeqSpec）当积木用：本身是复合积木，不是"含元件" */
@@ -171,7 +177,7 @@ function dffModule(): StoredModule {
       { id: 'y', name: 'y', dir: 'out', width: 1, nets: ['n1'] },
     ],
   });
-  return wrap('主从D触发器（包一层）', body);
+  return wrap('主从D触发器（包一层）', body, 's2-dff'); // 逻辑关产出的时序积木
 }
 
 /**
@@ -184,7 +190,7 @@ function playerLatchNamed(name: string): StoredModule {
     { name, stage: 2, kind: 'logic', ports: designToModulePorts(tpl.body), body: tpl.body },
     RTL_LIB,
   );
-  return stored(template);
+  return stored(template, 's2-d-latch'); // 第 10 关（逻辑关）产出的时序积木
 }
 
 function fakeLevel(judgeMode: 'logic' | 'timing', bannedModules: string[] = []): Level {
@@ -480,7 +486,7 @@ describe('逻辑关隐藏元件级老模块（门级判定跑不了的不列）'
     expect(screen.getByText('我的模块（1）')).toBeTruthy();
     expect(screen.queryByText('非门（元件版）', { exact: false })).toBeNull();
     // 「基础门」那组照旧（本关给的门，非门在里面）
-    expect(screen.getByText('基础门（5）')).toBeTruthy();
+    expect(screen.getByText(`基础门（${gateCatalogFor('rtl').length}）`)).toBeTruthy();
     expect(sectionCardNames('基础门')).toContain('非门');
     expect(screen.queryByText(NO_HINT)).toBeNull();
   });

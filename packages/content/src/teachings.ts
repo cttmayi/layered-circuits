@@ -36,6 +36,7 @@ import {
   cmosInvRef,
   cmosNandRef,
   nandGateRef,
+  norFastRef,
   notGateRef,
   or4Ref,
   orGateRef,
@@ -45,11 +46,13 @@ import {
 import { fullAdderRef } from './references-ari.js';
 import {
   cmosAndRef,
+  cmosNorRef,
   cmosOrRef,
   cmosXnorRef,
   cmosXorRef,
   ttlAndRef,
   ttlNandRef,
+  ttlNorRef,
   ttlNotRef,
   ttlOrRef,
 } from './references-family.js';
@@ -108,9 +111,14 @@ function dLatchQnRef(id = 'ref-dlatch-qn'): Design {
 const TEACHING_MODULES_BASE: readonly ModuleTemplate[] = [
   wrapGate('非门', notGateRef(), 'logic'),
   wrapGate('与非门', nandGateRef(), 'logic'),
+  // 或非门 / 同或门：用户第 ⑰ 轮批准补进基础门清单。**复用第 5 关 / 第 7 关参考解那一份电路**
+  // （norFastRef / xnorGateRef 就是那两关的 reference，hash 与玩家在第 5/7 关亲手搭出来的产出
+  // 逐字相同：rtl 或非门 78a1c650… / rtl 同或门 75d5cdb9…）—— 不另造一份新电路。
+  wrapGate('或非门', norFastRef('teach-nor'), 'logic'),
   wrapGate('或门', orGateRef(), 'logic'),
   wrapGate('多输入或门', or4Ref(), 'logic'), // s3-or-chain 产出；编码器 or 矩阵的砖块
   wrapGate('异或门', xorGateRef(), 'logic'),
+  wrapGate('同或门', xnorGateRef(), 'logic'),
   wrapGate('与门', andGateRef(), 'logic'),
   wrapGate('D锁存器', dLatchQnRef(), 'seq'),
   wrapGate('全加器', fullAdderRef(), 'arith'),
@@ -125,6 +133,7 @@ type GateRef = (id?: string) => Design;
 const FAMILY_GATES: Record<string, Partial<Record<LogicFamily, GateRef>>> = {
   非门: { rtl: notGateRef, ttl: ttlNotRef, cmos: cmosInvRef },
   与非门: { rtl: nandGateRef, ttl: ttlNandRef, cmos: cmosNandRef },
+  或非门: { rtl: norFastRef, ttl: ttlNorRef, cmos: cmosNorRef }, // 三族各自的或非门参考解，与第 5 关同源
   与门: { rtl: andGateRef, ttl: ttlAndRef, cmos: cmosAndRef },
   或门: { rtl: orGateRef, ttl: ttlOrRef, cmos: cmosOrRef },
   多输入或门: { rtl: or4Ref }, // 二极管并联扩展；TTL/CMOS 契约回退 RTL（encoder 关为 rtl 契约）
@@ -137,6 +146,7 @@ const FAMILY_GATES: Record<string, Partial<Record<LogicFamily, GateRef>>> = {
 const GATE_KIND: Record<string, ModuleKind> = {
   非门: 'logic',
   与非门: 'logic',
+  或非门: 'logic',
   或门: 'logic',
   多输入或门: 'logic',
   与门: 'logic',
@@ -261,11 +271,14 @@ export const TEACHING_MODULES: readonly ModuleTemplate[] = [
  * **必须与 `teachingModulesFor` 区分开** —— 后者是"一键出答案"用的整套教学积木，
  * 里面混着复合积木（全加器 90 元、七段译码器 430 元、二进制→BCD 3084 元、
  * 显示控制 1500 元…），把它们列进元件库菜单等于把答案摆在玩家面前。
- * 各 family 有的门不一样（rtl 没有同或门），按名单过滤即可。
+ * 各 family 有的门不一样，按名单过滤即可 —— 名单是"允许列为基础门"的名字集合，**不是**每族都齐全
+ * （缺哪一族的那一份，那一族的「基础门」组里就没有那张卡）。第 ⑰ 轮用户批准补进「或非门」，
+ * 并给 rtl 补上「同或门」（此前 rtl 教学集里两种都没有、ttl/cmos 只缺或非门）。
  */
 export const BASIC_GATES: readonly string[] = [
   '非门',
   '与非门',
+  '或非门',
   '或门',
   '与门',
   '异或门',

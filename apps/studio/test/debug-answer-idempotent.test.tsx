@@ -25,6 +25,7 @@ import { ALL_LEVELS, teachingModulesFor } from '@lc/content';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
+import { gateCatalogFor } from '../src/level/library';
 import { disableDebugUrl, dismissTaskDialog, enableDebugUrl, startJob } from './helpers';
 
 interface GroupSnapshot {
@@ -143,7 +144,8 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
       `[幂等 A] 初始：基础门「${before.基础门?.head}」=${JSON.stringify(before.基础门?.names)}`,
     );
     // 反证：这一关确实有门版答案可搭（否则下面的"不变"可能是"什么都没发生"）
-    expect(before.基础门?.names.length).toBe(5);
+    // 条数跟内容走（第 ⑰ 轮给基础门清单补进 或非门/同或门 → 第 6 关这一族由 5 张变 7 张）
+    expect(before.基础门?.names.length).toBe(gateCatalogFor('rtl').length);
 
     for (let i = 1; i <= 3; i++) {
       await clickAnswer();
@@ -212,7 +214,7 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
     );
     // 修前实测：8 张里 3 张重复（非门×2 / 与非门×2 / 与门×2）
     const names = now.基础门?.names ?? [];
-    expect(names.length).toBe(5);
+    expect(names.length).toBe(gateCatalogFor('rtl').length); // 条数跟内容走（别写死）
     expect(new Set(names).size, `出现重复卡片：${JSON.stringify(names)}`).toBe(names.length);
   }, 60000);
 

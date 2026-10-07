@@ -72,10 +72,13 @@ const JUNK = [
   junk('乱码门', 'cafebabe'.repeat(8)),
   junk('非门', '0badf00d'.repeat(8), false), // 非教学的同名条目 → 属「我的模块」
 ];
-/** 用户形态的历史遗留：cmos 六个基础门 + rtl/ttl 异或门 = 7 条同名不同 hash 的混装 */
+/**
+ * 用户形态的历史遗留：某一族**整族基础门** + 另一族的一个门 = 同名不同 hash 的混装。
+ * 条数跟着内容走（第 ⑰ 轮给 cmos 族补上或非门后从 7 变 8）—— 别写死数字。
+ */
 const LEGACY_7 = [...gatesOf('cmos'), storedModule('ttl', '异或门')];
 const POLLUTIONS: Array<{ tag: string; library: unknown[] }> = [
-  { tag: 'A 遗留 7 条 + 垃圾', library: [...LEGACY_7, ...JUNK] },
+  { tag: `A 遗留 ${LEGACY_7.length} 条 + 垃圾`, library: [...LEGACY_7, ...JUNK] },
   {
     tag: 'B 全部重复两遍',
     library: [...gatesOf('cmos'), ...gatesOf('cmos'), ...gatesOf('rtl'), ...gatesOf('ttl')],
@@ -224,9 +227,9 @@ describe('逻辑关基础门 = 本关清单（与库无关）', () => {
   }, 300000);
 
   it('③ 用户形态（工艺 cmos + 逻辑关 + 遗留 7 条）：点击前就干净，连点 3 次逐字不变', async () => {
-    expect(LEGACY_7).toHaveLength(7); // 用户看到的那 7 张卡
+    expect(LEGACY_7).toHaveLength(gatesOf('cmos').length + 1); // 用户当时看到的那批混装卡（条数随内容走）
     console.log(
-      `[seed] 遗留库 7 条：${LEGACY_7.map((m) => `${m.name}@${m.hash.slice(0, 8)}`).join('、')}`,
+      `[seed] 遗留库 ${LEGACY_7.length} 条：${LEGACY_7.map((m) => `${m.name}@${m.hash.slice(0, 8)}`).join('、')}`,
     );
     await enterLevel('主从 D 触发器', [...LEGACY_7, ...JUNK], 'cmos');
     const before = assertGateGroupEqualsCatalog('点击前');
@@ -262,7 +265,8 @@ describe('逻辑关基础门 = 本关清单（与库无关）', () => {
       hash,
       name,
       version,
-      stage: 1,
+      stage: 2,
+      levelId: 's2-d-latch', // 第 ⑰ 轮起：关卡模式只列"有产出处 provenance"的模块
       costHalf: 10,
       isSequential: true,
       ports: [{ name: 'd', dir: 'in', width: 1 }],
@@ -305,9 +309,8 @@ describe('逻辑关基础门 = 本关清单（与库无关）', () => {
     console.log(
       `[时机关·干净库] ${groupTitle('基础门')}｜${clean.map((c) => `${c.name}:${c.hash.slice(0, 8)}`).join('、')}`,
     );
-    expect(clean.map((c) => c.name)).toEqual(['非门', '与非门', '或门', '异或门', '与门']);
-    expect(clean.map((c) => c.hash)).toEqual(
-      ['非门', '与非门', '或门', '异或门', '与门'].map((n) => storedModule('rtl', n).hash),
-    );
+    // 干净存档 = 本族教学门注入库，所以时机关列的就是本族那几个门（条数/顺序都跟内容走）
+    expect(clean.map((c) => c.name)).toEqual(gateCatalogFor('rtl').map((m) => m.name));
+    expect(clean.map((c) => c.hash)).toEqual(gateCatalogFor('rtl').map((m) => m.hash));
   }, 120000);
 });

@@ -120,36 +120,52 @@ export function bodyHasUnit(template: unknown): boolean {
 }
 
 /**
- * 这个模块是不是「**元件/时序关产出的**」（= 产出它的那一关 `judgeMode !== 'logic'`）？
+ * 这个模块是不是「**元件/时序关（第 1~7 关与教学关）产出的**」？
+ * （= 产出它的那一关 `judgeMode !== 'logic'`；用户第 ⑰ 轮拍板：这类模块不该出现在逻辑关）
  *
- * 用户第 ⑰ 轮拍板：「1~7 关创建的模块就不要往 8 关之后放了」。
- * 逻辑关的画布只吃**契约门与积木**（元件关产出的门在门级引擎里是"含元件的组合模块"，会被如实拒绝、
- * 静默回落元件引擎，延迟/强弱语义就跟着变了），所以第 8 关起「我的模块」不该再列它们。
- *
- * **判据 ①（优先）：产出处 provenance**。关卡里交付验收后的自动封装会把 `levelId` 写进存档
- * （`App.tsx` 的 storeModule 调用 + 本文件 storeModule 落字段）→ 拿它查那一关的 `judgeMode`，
- * 非 `logic` 就是元件/时序关产出。这是**事实**判据，不猜内容。
- *
- * **判据 ②（兜底）：内容代理**，用于存档里没有 `levelId` 的两种情况 —— 自由模式的手动封装
- * （本来就没有关卡）、以及**加这个字段之前的老存档**。代理 = 「`stage === 1` **且** 身体里含元件」：
- *   · `stage` 是内容自己的进度字段（"产出这一版时的阶段"，阶段 3 的层级复用也按它过滤）。
- *     **内容结构保证**：第 1~7 关（元件/时序关）都是 stage 1，逻辑关（第 8 关起）是 stage 2/3
- *     —— 测试 `logic-gate-identity.test.ts` 有一条断言钉住"没有任何逻辑关是 stage 1"，
- *     将来内容改了这条会先红。
- *   · 身体里含 `unit`：rtl 族**连门版积木的身体都是元件搭的**（非门=npn+2res），所以只看
- *     "含元件"会把逻辑关自己产出的积木也误伤（实测：这样会把玩家第 10 关产出的 D 锁存器藏掉）
- *     —— 必须叠加 `stage` 才可用。
- *
- * **代理会判错的两种情况（明确写在这里，别当它准）**：
- *   ① 自由模式里用元件搭的模块（stage 也是 1）→ 在逻辑关被隐藏。这是**有意的收窄**：
- *      逻辑关只吃契约门，和"元件版不参与门级判定"是同一条口径。
- *   ② 手改存档把 stage 写成 1（或把关卡字段抹掉）→ 会被误判。正常玩法下不会发生。
- * 反过来，**逻辑关产出**的模块带 `levelId`（判据 ① 直接放行），老存档里也有 stage ≥ 2 兜住。
+ * 判据是**产出处 provenance**（自动封装写进存档的 `levelId` → 那关的 `judgeMode`），不猜内容。
+ * 没有 `levelId` 的模块在**关卡模式里根本不会被列**（见 `builtOutsideLevels`，它先拦一道），
+ * 所以这里对"无 provenance"直接返回 false —— 老存档里 `stage >= 2` 的关卡产出照样按这条规则处理：
+ * 它们的 `levelId` 虽然缺，但既然 stage >= 2 说明是第 8 关以后的成果，`judgeMode` 必然是 logic，
+ * 结论同样是不隐藏。
  */
 export function producedInElementLevel(mod: StoredModule): boolean {
   if (mod.teaching) return false; // 教学积木不走这条路（它们本来就不在「我的模块」里）
-  if (mod.levelId !== undefined) return findLevel(mod.levelId)?.judgeMode !== 'logic';
-  return mod.stage === 1 && bodyHasUnit(mod.template); // 无 provenance → 内容代理（见上面两条）
+  if (mod.levelId === undefined) return false; // 无 provenance：关卡模式里已被 builtOutsideLevels 拦掉
+  return findLevel(mod.levelId)?.judgeMode !== 'logic';
+}
+
+/**
+ * 这个模块是不是「**在关卡之外搭的**」（自由模式手动封装、或加 `levelId` 之前的老存档里没有
+ * provenance、且 `stage === 1` 的那批）？用户第 ⑰ 轮拍板：**关卡模式里一律不列**。
+ *
+ * 用户原话：「自由模式搭建的模块 —— 在关卡中**全面不可见**」，并把判据统一成：
+ *   · **关卡模式（任何一关，逻辑关与时序关都算）**：只列**有 `levelId`** 的模块（关卡里自动封装
+ *     产出的）；**没有 `levelId` 的一律不列**。
+ *   · **老存档例外**：加 `levelId` 字段之前的老存档也没有这个字段 → 用内容代理兜住：
+ *     **无 `levelId` 且 `stage >= 2`** 视为关卡产出（照旧走原来的规则，别让老存档的 D 锁存器消失）；
+ *     **无 `levelId` 且 `stage === 1`** 一律不列。
+ *   · **自由模式本身**（没有关卡）照旧全列，不受影响。
+ *
+ * 为什么 `stage === 1` 就能代表"没进过关卡"（**这是前提，测试里钉住了**）：
+ *   · 关卡封装**一定**写 `levelId`（App 的两条封装路径都是 `storeModule({..., levelId: currentLevel.id})`
+ *     —— 一条是交付验收自动封装、一条是手动封装），所以关卡产出永远不会落到这个分支；
+ *   · 自由模式的封装用 `stage: currentLevel?.stage ?? 1` —— 自由模式没有关卡 → **stage 恒为 1**，
+ *     和电路是"全用门搭的"还是"元件搭的"**无关**（stage 来自当前关卡，不来自内容）；
+ *   · 第 1~7 关的产出在**新存档**里也带 `levelId`（老存档才缺），所以这里不会误伤它们的老存档版本
+ *     —— 但**老存档**里第 1~7 关的产出（stage 1、无 levelId）在关卡里**也会被隐藏**：同 hash 的门
+ *     仍能从「基础门」拿到（rtl 族两者同 hash），只是"我自己的那一份"不再重复出现在关卡里。
+ *
+ * **会判错 / 已知局限（写在这里，别当它准）**：
+ *   ① 手改存档把 `stage` 从 1 改成 ≥ 2（或反过来）→ 判据失效；
+ *   ② 老存档里**别族**（ttl/cmos）的第 1~7 关产出被隐藏后，玩家在该族关卡里只剩契约门可用
+ *     （rtl 因为同 hash 不丢东西）——自由模式里它们照旧可选、照旧能用；
+ *   ③ 导入的第三方存档若没有 `levelId` 且 stage >= 2，会被当成关卡产出而列出（保守方向：宁可多列）。
+ */
+export function builtOutsideLevels(mod: StoredModule): boolean {
+  if (mod.teaching) return false;
+  if (mod.levelId !== undefined) return false;
+  return mod.stage < 2;
 }
 
 /** 教学积木（整个族）→ 画布库条目：`teaching: true` 使其不进「我的模块」（见 editor/model.ts） */

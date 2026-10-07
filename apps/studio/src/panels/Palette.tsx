@@ -5,7 +5,11 @@ import { type ReactNode, useMemo, useState } from 'react';
 import type { PlaceKind, StoredModule, UnitKind } from '../editor/model';
 import { drawIcon } from '../editor/render';
 import { usePortraitNarrow } from '../layout/viewport';
-import { dedupeByNameForDisplay, producedInElementLevel } from '../level/library';
+import {
+  builtOutsideLevels,
+  dedupeByNameForDisplay,
+  producedInElementLevel,
+} from '../level/library';
 import { gateLevelUsable, gateProbeLibrary } from '../sim/gate-usable';
 
 /**
@@ -361,20 +365,36 @@ export function Palette({
    * 每次渲染都是新数组（既有情况），所以这个 memo 与它之前的开销特征一致。
    */
   const visibleUserModules = useMemo(() => {
-    if (!logicLevel) return userModules; // 时序关/自由模式：库 + 按名字去重，一行不动
-    // 与「基础门」渲染同一口径（catalog 本来就是 teaching + 白名单内的门，见下面的 inGateList）
+    // 自由模式（没有关卡）：全列，一行不动 —— 用户第 ⑰ 轮："自由模式本身照旧全列"
+    if (!level) return userModules;
+    /**
+     * 关卡模式（任何一关，逻辑关与时序关都算）：**只列有 `levelId` 的模块**
+     * —— 也就是"在关卡里自动封装产出的那些"。用户原话：「自由模式搭建的模块 —— 在关卡中**全面不可见**」。
+     * 老存档（加 `levelId` 字段之前）没有这个字段 → 用内容代理兜住：`stage >= 2` 视为关卡产出，
+     * `stage === 1` 一律不列（自由模式的封装 stage 恒为 1，与电路内容无关）。
+     * 判据与全部已知局限见 `builtOutsideLevels` 的注释。
+     */
+    const inLevel = userModules.filter((m) => !builtOutsideLevels(m));
+    // 时序关：到此为止（库 + 按名字去重，其余一行不动）
+    if (!logicLevel) return inLevel;
+    /**
+     * 逻辑关再拦两道（用户第 ⑰ 轮）：
+     *   ① 「1~7 关创建的模块不要往 8 关之后放」→ `producedInElementLevel`（按产出处的 `judgeMode`）；
+     *   ② 「同一份不要两组各出一张卡」→ 与基础门清单**同 hash** 的副本不再重复列（基础门那份照旧在）。
+     * 玩家**内容不同**的同名作品照旧列（第 ⑯ 轮口径：玩家作品同名并存）。
+     */
     const gateHashes = new Set(
       (gateCatalog ?? [])
         .filter((m) => m.teaching === true && BASIC_GATES.includes(m.name))
         .map((m) => m.hash),
     );
-    return userModules.filter(
+    return inLevel.filter(
       (m) =>
         !gateHashes.has(m.hash) && // ← 同 hash 跨组两张：只留基础门那一张
         !producedInElementLevel(m) &&
         gateLevelUsable(m, probeLibrary),
     );
-  }, [logicLevel, userModules, probeLibrary, gateCatalog]);
+  }, [level, logicLevel, userModules, probeLibrary, gateCatalog]);
   /** 基础门：本关提供的门（teaching 积木）。库里注入的是整族（复合门的身体会引用更底层的门），
    *  菜单只列本关允许的门，所以列表里不会出现被锁住的卡片。 */
   /** 本关是否允许在顶层画布摆元件（第 8 关起为 false） */
