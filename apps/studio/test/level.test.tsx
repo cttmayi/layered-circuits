@@ -7,7 +7,7 @@
  *  - 判定一侧验证关卡数据能通过工作台自己的请求通道（Worker/主线程共用）判定通过。
  */
 
-import { ALL_LEVELS, findLevel, TEACHING_MODULES } from '@lc/content';
+import { ALL_LEVELS, contractOf, findLevel, TEACHING_MODULES } from '@lc/content';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
@@ -21,9 +21,9 @@ import {
   recordClear,
 } from '../src/level/index';
 import { docFor } from '../src/level/session';
-import { LevelCard } from '../src/panels/LevelCard';
+import { LevelTaskDialog } from '../src/panels/TaskDialog';
 import { handleRequest } from '../src/sim/handle';
-import { goToLevel, renderApp, startJob, teachCleared } from './helpers';
+import { goToLevel, renderApp, startJob, teachCleared, topBarTaskTitle } from './helpers';
 
 beforeEach(() => {
   localStorage.clear();
@@ -51,15 +51,15 @@ describe('关卡内容与进度', () => {
 
   it('SR 锁存器：真值表带「说明」列，sn=rn=1 出现两次也能看懂哪次是保持', () => {
     const srLevel = findLevel('s2-sr-latch')!;
-    render(<LevelCard level={srLevel} costHalf={0} />);
-    // 任务卡正面是大白话（高中生读得懂）：先说清这是什么功能，再说规则
-    const brief = document.querySelector('.level-card .task-brief')?.textContent ?? '';
+    // 任务对话框（进关首次自动弹的那个；顶栏「详情」打开的也是它）
+    render(<LevelTaskDialog level={srLevel} onClose={() => {}} />);
+    // 任务描述是大白话（高中生读得懂）：先说清这是什么功能，再说规则
+    const brief = document.querySelector('.task-full .task-brief')?.textContent ?? '';
     expect(brief).toContain('一个会记忆的开关');
     expect(brief).toContain('sn 和 rn 地位一样');
     expect(brief).toContain('都为 1 时 q 保持不动');
     expect(brief).toContain('都为 0 时没有正确答案');
     expect(brief).not.toContain('低有效');
-    fireEvent.click(screen.getByText(/任务详情/));
     const table = document.querySelector('.task-full .truth') as HTMLTableElement;
     expect([...table.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
       'sn',
@@ -252,10 +252,13 @@ describe('关卡界面', () => {
     renderApp();
     startJob('非门');
 
-    // 关卡卡片：任务标题 + 直接需求（不做场景话术）；真值表放「任务详情」弹窗
-    expect(screen.getByText(/任务 · 非门/)).toBeTruthy();
-    expect(document.querySelector('.level-card .truth')).toBeNull();
-    fireEvent.click(screen.getByText(/任务详情/));
+    // 顶栏常驻任务信息（右侧面板已移除）：标题 + 一句话任务，真值表不塞进顶栏
+    // 注：「任务 · 非门」这串文字在首次进关的任务对话框标题里也有一份（「本关任务 · 非门」），
+    // 所以这里指名取顶栏那一块，不用 getByText
+    expect(topBarTaskTitle()).toBe('任务 · 非门');
+    expect(document.querySelector('.task-bar')?.textContent).toContain('任务 · 非门');
+    expect(document.querySelector('.task-bar .truth')).toBeNull();
+    // 真值表在任务对话框里：进关**首次**会自动弹出来（本测试就是首次进关）
     const targetTable = document.querySelector('.task-full .truth') as HTMLTableElement;
     expect(targetTable).toBeTruthy();
     const cells = [...targetTable.querySelectorAll('tbody tr')].map((tr) =>
@@ -271,10 +274,13 @@ describe('关卡界面', () => {
     expect(capButton.disabled).toBe(true);
     expect(capButton.getAttribute('title')).toContain('时钟专用');
 
-    // 用料进度：材料费 0 / 款项 12 元（成本线 = 满分线 6 × 2）
-    const budgetText = document.querySelector('.budget-text')?.textContent ?? '';
-    expect(budgetText).toContain('款项');
-    expect(budgetText).toContain('12');
+    // 材料费/成本表随右侧面板移除（用户要求）→ 合同条款（成本上限）还在任务对话框里
+    const notLevel = findLevel('s1-not')!;
+    const cap = contractOf(notLevel).costCap;
+    expect(cap).not.toBeNull();
+    const taskText = document.querySelector('.task-full')?.textContent ?? '';
+    expect(taskText).toContain('元件成本');
+    expect(taskText).toContain(`≤ ${(cap ?? 0).toFixed(1)} 元`);
     expect(screen.queryByText(/已通关/)).toBeNull(); // 顶栏进度显示已按用户要求移除
 
     // 关卡地图：非门是进行中（已开工可继续），与门是锁定的灰态（不能点）
@@ -325,9 +331,7 @@ describe('关卡界面', () => {
     render(<App />);
     // 主菜单应显示「继续上次」直达第 2 关之前的会话？没有开工记录时走地图选关
     goToLevel('与门'); // 进关即开工（不再弹「新委托」）
-    await waitFor(() => expect(screen.getByText(/任务 · 与门/)).toBeTruthy(), {
-      timeout: 5000,
-    });
+    await waitFor(() => expect(topBarTaskTitle()).toBe('任务 · 与门'), { timeout: 5000 });
     expect(screen.queryByText(/已通关/)).toBeNull(); // 顶栏进度显示已按用户要求移除
     // 地图：非门已通关，与门是进行中（已解锁可接）
     fireEvent.click(screen.getByText('← 返回地图'));

@@ -12,7 +12,6 @@ import { InMemoryModuleLibrary } from '@lc/schema';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { JudgePanel } from '../src/panels/JudgePanel';
-import { LevelCard } from '../src/panels/LevelCard';
 import { WaveformPanel } from '../src/panels/WaveformPanel';
 
 const dffLevel = ALL_LEVELS.find((l) => l.id === 's2-dff');
@@ -35,15 +34,17 @@ describe('时序关卡的向量说明列', () => {
   const srLevel = ALL_LEVELS.find((l) => l.id === 's2-sr-latch');
   if (!srLevel) throw new Error('缺少 SR 锁存器关卡');
 
-  it('任务卡正面用大白话讲清规则，不出现低有效/置位/复位这些行话（行话在教学说明里）', () => {
-    const html = renderToStaticMarkup(<LevelCard level={srLevel} costHalf={0} />);
-    expect(html).toContain('一个会记忆的开关');
-    expect(html).toContain('sn 和 rn 地位一样');
-    expect(html).toContain('都为 1 时 q 保持不动');
-    expect(html).toContain('都为 0 时没有正确答案');
-    expect(html).toContain('qn 是 q 的反相');
+  // 右侧任务卡（LevelCard）随右侧面板整块移除 → 这条改成直接盯任务文案本身
+  // （brief 就是任务对话框与顶栏那块显示的那份文案；组件层渲染见 task-bar.test.tsx）
+  it('任务描述用大白话讲清规则，不出现低有效/置位/复位这些行话（行话在教学说明里）', () => {
+    const brief = srLevel.brief;
+    expect(brief).toContain('一个会记忆的开关');
+    expect(brief).toContain('sn 和 rn 地位一样');
+    expect(brief).toContain('都为 1 时 q 保持不动');
+    expect(brief).toContain('都为 0 时没有正确答案');
+    expect(brief).toContain('qn 是 q 的反相');
     for (const jargon of ['低有效', '置位', '复位', '互补', '拉低']) {
-      expect(html).not.toContain(jargon);
+      expect(brief).not.toContain(jargon);
     }
   });
 
@@ -68,11 +69,13 @@ describe('时序关卡的向量说明列', () => {
     expect(html).toContain('保持：沿用上一次的 q=1');
   });
 
+  // 真值表现在只在任务对话框里画（右侧面板已移除）→ 「没有说明列的关卡不补空列」这条
+  // 直接盯数据：没有任何向量的 note 时，对话框里的真值表就不该出现「说明」表头
   it('没有写说明的关卡不出现多余的列（非门真值表仍是两列）', () => {
     const notLevel = ALL_LEVELS.find((l) => l.id === 's1-not');
     if (!notLevel) throw new Error('缺少非门关卡');
-    const html = renderToStaticMarkup(<LevelCard level={notLevel} costHalf={0} />);
-    expect(html).not.toContain('说明');
+    expect(notLevel.vectors.some((v) => v.note)).toBe(false);
+    expect(notLevel.vectors[0]?.note).toBeUndefined();
   });
 });
 

@@ -41,14 +41,10 @@ import {
   fromDesign,
   type InputDrive,
   inputValues,
-  moduleBox,
   type PlaceKind,
-  pinOffsets,
   type StoredModule,
-  type Sym,
   samePin,
   toDesign,
-  UNIT_LABEL,
   type UnitKind,
 } from './editor/model';
 import {
@@ -92,15 +88,14 @@ import {
 } from './level/session';
 import { ClassroomModal } from './panels/ClassroomModal';
 import { FamilyPicker } from './panels/FamilyPicker';
-import { Inspector } from './panels/Inspector';
 import { JudgePanel } from './panels/JudgePanel';
-import { LevelCard } from './panels/LevelCard';
 import { LibraryPanel } from './panels/LibraryPanel';
 import { MainMenu } from './panels/MainMenu';
 import { Modal } from './panels/Modal';
 import { ModuleDetailModal } from './panels/ModuleDetailModal';
 import { Palette } from './panels/Palette';
 import { SettlementPanel } from './panels/SettlementPanel';
+import { LevelTaskDialog } from './panels/TaskDialog';
 import { TeachPanel } from './panels/TeachPanel';
 import { WaveformPanel } from './panels/WaveformPanel';
 import { WorldMap } from './panels/WorldMap';
@@ -217,12 +212,12 @@ export function App(): React.JSX.Element {
     setLiveWave(null);
   }, [levelId]);
 
-  /** 左右侧面板整体收起/展开（体验：布线时把侧栏收起来腾画布），选择记忆在 localStorage */
+  /** 元件库整体收起/展开（体验：布线时把侧栏收起来腾画布），选择记忆在 localStorage。
+   *  右侧「验收/属性」面板已按用户要求整块移除（顶栏保留「交付验收」入口、任务信息进顶栏）。 */
   const [leftOpen, setLeftOpen] = usePersistentBool('lc-ui-left-open', true);
-  const [rightOpen, setRightOpen] = usePersistentBool('lc-ui-right-open', true);
-  /** 窄屏（手机 / 竖屏平板，≤ 900px）：布局换成覆盖抽屉（见 styles.css 的 @media 块）。
-   *  窄屏上两块面板铺在画布之上，两个都开着的话画布就被盖满了 —— 所以判定到窄屏时先收起，
-   *  画布优先，玩家点左上/右上那两颗 44px 手柄再拉出来。
+  /** 窄屏（手机 / 竖屏平板，≤ 900px）：元件库换成覆盖抽屉（见 styles.css 的 @media 块）。
+   *  窄屏上抽屉铺在画布之上，开着就把画布盖住 —— 所以判定到窄屏时先收起，画布优先，
+   *  玩家点那颗 44px 手柄再拉出来（右侧验收面板已整块移除，这里只剩元件库一个抽屉）。
    *  只在「是否窄屏」变化时执行一次：玩家在窄屏里自己展开的面板不会被反复关掉；
    *  桌面宽屏下 narrow 恒为 false，这个 effect 什么都不做，桌面行为逐字不变。
    *  代价：窄屏收起会写进 localStorage（开合偏好），下次在桌面打开时也是收起状态 —— 相比
@@ -231,25 +226,14 @@ export function App(): React.JSX.Element {
   /** 窄屏且竖屏：竖屏时元件库是**底部**抽屉、左侧开合手柄也挪到了画布左下角，
    *  浮动工具条要让开它们（桌面与横屏手机读到的都是 false，行为不变） */
   const portraitNarrow = usePortraitNarrow();
-  /**
-   * 竖屏下两个面板都是**底部抽屉**，同开必然叠在一起 —— 所以开一个就自动关另一个。
-   * 桌面与横屏（portraitNarrow = false）完全不进这两个分支，两边仍可同时展开。
-   */
+  // 元件库开合；竖屏曾有的「开一个自动关另一个」互斥随右侧面板一起删了（只剩一个抽屉）
   const toggleLeftPanel = (): void => {
     setLeftOpen(!leftOpen);
-    if (portraitNarrow) setRightOpen(false);
   };
-  const toggleRightPanel = (): void => {
-    setRightOpen(!rightOpen);
-    if (portraitNarrow) setLeftOpen(false);
-  };
-  /** 竖屏时两颗手柄并排在同一行（都在底部），行里只要有任一个抽屉开着就一起抬到抽屉顶沿 */
-  const handleRowOpen = portraitNarrow ? leftOpen || rightOpen : leftOpen;
   useEffect(() => {
     if (!narrow) return;
     setLeftOpen(false);
-    setRightOpen(false);
-  }, [narrow, setLeftOpen, setRightOpen]);
+  }, [narrow, setLeftOpen]);
   /** 调试开关是否可见：只有 URL 带 ?debug=1 才显示「调试模式」按钮 —— 正式玩法里
    *  连这个按钮都不该出现（存档里残留 lc-ui-debug=true 也不行）。挂载时判一次即可。 */
   const [debugFlag] = useState(
@@ -298,6 +282,10 @@ export function App(): React.JSX.Element {
   const [size, setSize] = useState({ width: 900, height: 600 });
   /** 双击模块展开的模块详情（null = 弹窗关闭） */
   const [expandedModule, setExpandedModule] = useState<StoredModule | null>(null);
+  /** 任务对话框：'intro' = 进关首次自动弹（每关只弹一次，标记持久化），'detail' = 顶栏「详情」打开 */
+  const [taskDialog, setTaskDialog] = useState<'intro' | 'detail' | null>(null);
+  /** 验收结果弹窗：右侧验收面板已整块移除，判定结果（逐行对比/问题清单/结算）改在这里给 */
+  const [judgeOpen, setJudgeOpen] = useState(false);
 
   // ---- 画布尺寸自适应（含 HiDPI）：主菜单→工作台时容器才出现，所以要跟 screen 重新量 ----
   useEffect(() => {
@@ -356,9 +344,7 @@ export function App(): React.JSX.Element {
       narrow,
       portrait: portraitNarrow,
       leftOpen,
-      rightOpen,
-      bottomSheet: rectOf(document.querySelector<HTMLElement>('.palette, .side')),
-      sidePanel: rectOf(document.querySelector<HTMLElement>('.side')),
+      bottomSheet: rectOf(document.querySelector<HTMLElement>('.palette')),
     });
     const { camera: next } = fitCamera({
       width: area.width,
@@ -369,7 +355,7 @@ export function App(): React.JSX.Element {
     setCamera((prev) =>
       prev.x === next.x && prev.y === next.y && prev.scale === next.scale ? prev : next,
     );
-  }, [screen, size.width, size.height, narrow, portraitNarrow, leftOpen, rightOpen]);
+  }, [screen, size.width, size.height, narrow, portraitNarrow, leftOpen]);
 
   // ---- 浮动工具条要避让的范围（每次都重量，值没变就不 setState） ----
   /**
@@ -379,7 +365,6 @@ export function App(): React.JSX.Element {
    *  - 竖屏的元件库**底部抽屉**（.palette）：它一拉开浮动条就整体上移避让 —— 用 offsetHeight
    *    （布局高度，**不含**入场动画的 transform，否则动画那 180ms 会量出一个偏小的值）；
    *  - 横屏/竖屏平板的元件库是**左侧**覆盖抽屉：浮动条整体右移一个抽屉宽；
-   *  - 右侧面板开着时，把"可视区"的右边界收窄；
    *  - 顶部浮起的开合手柄（窄屏 56px 带）与右上角图例。
    *
    * 这里**不碰**任何既有元素的样式：所有值都是"读"，浮动条自己是绝对定位，
@@ -392,8 +377,8 @@ export function App(): React.JSX.Element {
     const hint = wrap.querySelector('.hint');
     const legend = wrap.querySelector('.legend');
     const strip = document.querySelector<HTMLElement>('.edge-strip.left');
-    // 竖屏的底部抽屉：元件库和验收面板是同一个形态、且互斥（只会有一个在 DOM 里）
-    const palette = document.querySelector<HTMLElement>('.palette, .side');
+    // 竖屏的底部抽屉：元件库（右侧验收面板已整块移除）
+    const palette = document.querySelector<HTMLElement>('.palette');
 
     let bottom = 8;
     const hintRect = hint?.getBoundingClientRect();
@@ -403,7 +388,7 @@ export function App(): React.JSX.Element {
       const stripRect = strip.getBoundingClientRect();
       if (stripRect.height > 0) bottom = Math.max(bottom, wrapRect.bottom - stripRect.top + 8);
       // 抽屉只在竖屏是"底部抽屉"，也只有它开着时才要避让
-      if ((leftOpen || rightOpen) && palette && palette.offsetHeight > 0)
+      if (leftOpen && palette && palette.offsetHeight > 0)
         bottom = Math.max(bottom, palette.offsetHeight + 8);
     }
 
@@ -413,18 +398,13 @@ export function App(): React.JSX.Element {
       top = Math.max(top, legendRect.bottom - wrapRect.top + 8);
 
     // 左右：窄屏的元件库是**左侧**覆盖抽屉（横屏/竖屏平板：width min(320px, 86vw)，占满整高），
-    // 会把画布左下角整个盖住 → 左下浮动条整体右移一个抽屉宽（marginLeft，见 JSX）；
-    // 右侧面板同理，用它收窄"可视区"的右边界。桌面（非窄屏）的元件库是常驻栏不是覆盖层，不用躲。
+    // 会把画布左下角整个盖住 → 左下浮动条整体右移一个抽屉宽（marginLeft，见 JSX）。
+    // 桌面（非窄屏）的元件库是常驻栏不是覆盖层，不用躲；右侧面板已整块移除，右边界恒为默认值。
     const side = narrow ? 8 : 12;
     let left = side;
-    let right = side;
+    const right = side;
     if (narrow && !portraitNarrow && leftOpen && palette && palette.offsetWidth > 0)
       left = side + palette.offsetWidth;
-    const sidePanel = document.querySelector<HTMLElement>('.side');
-    // 竖屏的验收面板是**底部**抽屉（占满宽度），不是右侧覆盖层 → 不再收窄右边界，
-    // 改为和元件库一样由上面的 bottom 让位（Desktop/横屏读到的 portraitNarrow 恒 false）
-    if (narrow && !portraitNarrow && rightOpen && sidePanel && sidePanel.offsetWidth > 0)
-      right = side + sidePanel.offsetWidth;
 
     const next = { top, bottom, left, right };
     setOverlayInsets((prev) =>
@@ -1419,6 +1399,23 @@ export function App(): React.JSX.Element {
   // 教学关按玩家契约换内容（CMOS 契约下「认识三极管」→「认识 MOS」等）；id 不变
   const currentLevel = currentLevelRaw ? levelViewOf(currentLevelRaw, progress.family) : null;
 
+  /**
+   * 首次进关弹「本关任务」说明：**每关只弹一次**（标记按关卡 id 持久化，见 taskSeenKey）。
+   *  - 判定到工作台（screen === 'bench'）且有关卡时才看标记：自由沙盒没有任务，不弹；
+   *  - 打开的同时就写标记：同一关第二次进入不再弹，不同关各自第一次都会弹；
+   *  - 拖过/关掉都不影响操作（弹窗可关、关掉就没了）；换关时把弹窗关掉，别盖住新关。
+   */
+  const enterKey = `${screen}:${gameMode}:${levelId}`;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 只在「进了哪一关」变化时判一次（enterKey 就是 screen+gameMode+levelId 的组合键）；doc/仿真/进度变化不该反复弹
+  useEffect(() => {
+    setTaskDialog(null);
+    setJudgeOpen(false);
+    if (screen !== 'bench' || !currentLevel) return;
+    if (taskSeen(currentLevel.id)) return;
+    markTaskSeen(currentLevel.id);
+    setTaskDialog('intro');
+  }, [enterKey]);
+
   /** 清掉跨关卡残留的临时状态 */
   const clearTransient = (): void => {
     setJudgeResult(null);
@@ -1490,6 +1487,8 @@ export function App(): React.JSX.Element {
     localStorage.removeItem(PROGRESS_KEY);
     localStorage.removeItem(FREE_STORAGE_KEY);
     for (const lvl of ALL_LEVELS) localStorage.removeItem(storageKeyFor('level', lvl.id));
+    clearTaskSeen(); // 新游戏 = 从头开始：每关的「任务说明」第一次进入要重新弹
+
     setProgress(emptyProgress(family));
     setSettlement(null);
     setSettlementStars(0);
@@ -1529,12 +1528,16 @@ export function App(): React.JSX.Element {
         return;
       }
       setJudgeResult(response.judge);
+      // 判定结果（逐行对比/问题清单）在弹窗里给：右侧面板已整块移除；
+      // 顺手把任务对话框收掉，别让两个弹窗叠在一起
+      setTaskDialog(null);
+      setJudgeOpen(true);
       const judge = response.judge;
       if (judge.pass) {
         // 验收通过 → 自动封装进组件库并弹出结算（不用再点「交付并封装」）
         await wrapAndSettle(judge);
       } else {
-        setToast(judge.errors[0] ?? '还没通过，看看下方对比表');
+        setToast(judge.errors[0] ?? '还没通过，验收详情里有逐行对比与问题清单');
       }
     } finally {
       setJudging(false);
@@ -1670,20 +1673,6 @@ export function App(): React.JSX.Element {
     );
   };
 
-  // ---- 面板数据 ----
-  const units: Array<[UnitKind, number]> = snapshot
-    ? ([
-        ['npn', snapshot.cost.counts.npn ?? 0],
-        ['res', snapshot.cost.counts.res ?? 0],
-        ['dio', snapshot.cost.counts.dio ?? 0],
-        ['cap', snapshot.cost.counts.cap ?? 0],
-        ['nmos', snapshot.cost.counts.nmos ?? 0],
-        ['pmos', snapshot.cost.counts.pmos ?? 0],
-      ] as Array<[UnitKind, number]>)
-    : [];
-
-  const selectedSyms = doc.syms.filter((s) => selection.includes(s.id));
-
   // ---- 浮动工具条：位置全部由画布实测 rect + 既有视图变换算出来，不另外存一份 pan/zoom ----
   /** 选中对象（元件或连线，口径就是 selection / selectedWires）的屏幕锚点；没选中 → null */
   const selAnchorPos: OverlayAnchor | null = selectionAnchor(
@@ -1712,7 +1701,7 @@ export function App(): React.JSX.Element {
   }, []);
 
   const levelRecord = currentLevel ? progress.cleared[currentLevel.id] : undefined;
-  /** 单选中的模块（Inspector 里给出「展开内部电路」入口） */
+  /** 单选中的模块（双击元件展开内部电路；右侧 Inspector 面板已整块移除） */
   // ---- 主菜单（开场）：模式只在这是选 ----
   if (screen === 'menu') {
     const resumeLevelRaw = findLevel(session.levelId);
@@ -1806,6 +1795,22 @@ export function App(): React.JSX.Element {
             >
               ← 主菜单
             </button>
+          )}
+          {currentLevel && (
+            // 任务信息常驻顶栏（右侧验收面板整块移除后，任务从这里看）：
+            // 标题 + 一句话任务默认可见、过长截断（title 里给全文），「详情」开完整任务对话框
+            <div className="task-bar" title={currentLevel.brief}>
+              <span className="task-bar-title">任务 · {currentLevel.title}</span>
+              <span className="task-bar-brief">{currentLevel.brief}</span>
+              <button
+                type="button"
+                className="task-bar-detail"
+                onClick={() => setTaskDialog('detail')}
+                title="任务详情：合同条款、真值表、教学说明与提示"
+              >
+                详情
+              </button>
+            </div>
           )}
           {gameMode !== 'free' && (
             <div className="group">
@@ -1911,7 +1916,7 @@ export function App(): React.JSX.Element {
             }
           />
         )}
-        <div className={`edge-strip left${handleRowOpen ? '' : ' closed'}`}>
+        <div className={`edge-strip left${leftOpen ? '' : ' closed'}`}>
           <button
             type="button"
             onClick={toggleLeftPanel}
@@ -1927,20 +1932,6 @@ export function App(): React.JSX.Element {
               元件库
             </span>
           </button>
-          {/* 竖屏：验收手柄也在这行里（两颗并排贴底，见 styles.css 竖屏块 ⑥）。
-              横屏/桌面走下面那颗独立手柄，DOM 与位置逐字不变。 */}
-          {portraitNarrow && (
-            <button
-              type="button"
-              onClick={toggleRightPanel}
-              title={rightOpen ? '收起右侧面板（验收/属性）' : '展开右侧面板（验收/属性）'}
-              aria-label={rightOpen ? '收起右侧面板' : '展开右侧面板'}
-            >
-              <span className="edge-strip-label" aria-hidden="true">
-                验收
-              </span>
-            </button>
-          )}
         </div>
 
         <div className="canvas-wrap" ref={containerRef}>
@@ -2065,6 +2056,65 @@ export function App(): React.JSX.Element {
             </Modal>
           )}
 
+          {/* 本关任务说明：进关首次自动弹一次（每关一次，标记持久化），顶栏「详情」随时再开。
+              语气/结构与既有「知道了」弹窗、教学关课堂弹窗同源。 */}
+          {taskDialog && currentLevel && (
+            <LevelTaskDialog
+              level={currentLevel}
+              mode={simMode}
+              intro={taskDialog === 'intro'}
+              onClose={() => setTaskDialog(null)}
+            />
+          )}
+          {/* 验收结果：右侧验收面板已整块移除 → 判定详情（逐行对比/问题清单）与结算改在弹窗里给 */}
+          {judgeOpen && judgedLevel && (
+            <Modal
+              title={`验收 · ${judgedLevel.title}`}
+              onClose={() => {
+                setJudgeOpen(false);
+                setSettlement(null); // 关掉弹窗 = 收下结算（与过去面板上那颗「知道了」等价）
+              }}
+            >
+              <JudgePanel
+                mode={simMode}
+                level={judgedLevel}
+                result={judgeResult}
+                record={levelRecord}
+                attempts={progress.attempts[judgedLevel.id] ?? 0}
+              />
+              {settlement && currentLevel && (
+                <SettlementPanel
+                  level={currentLevel}
+                  stars={settlementStars}
+                  levelName={currentLevel.unlock?.name ?? currentLevel.title}
+                  result={settlement}
+                  previousScore={levelRecord?.score ?? null}
+                  walletHalf={progress.walletHalf}
+                  nextLevelTitle={
+                    ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) >= 0
+                      ? ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]?.title
+                      : undefined // 教学关：没有下一关
+                  }
+                  onNextLevel={() => {
+                    // 教学关不在关卡链上：结算页的按钮是「回到教学模式」
+                    if (currentLevel.classroom) {
+                      goToTeach();
+                      return;
+                    }
+                    const next =
+                      ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) >= 0
+                        ? ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]
+                        : undefined;
+                    if (next) enterLevel(next.id);
+                  }}
+                  onDismiss={() => {
+                    setSettlement(null);
+                    setJudgeOpen(false);
+                  }}
+                />
+              )}
+            </Modal>
+          )}
           {notice && (
             <Modal title={notice.title} onClose={() => setNotice(null)}>
               <p>{notice.body}</p>
@@ -2108,69 +2158,6 @@ export function App(): React.JSX.Element {
           )}
         </div>
 
-        {rightOpen && (
-          <div className="side">
-            {currentLevel && (
-              <LevelCard level={currentLevel} costHalf={snapshot?.cost.half ?? 0} mode={simMode} />
-            )}
-            {currentLevel && (
-              <JudgePanel
-                mode={simMode}
-                level={judgedLevel ?? currentLevel}
-                result={judgeResult}
-                record={levelRecord}
-                attempts={progress.attempts[currentLevel.id] ?? 0}
-              />
-            )}
-            {currentLevel && settlement && (
-              <SettlementPanel
-                level={currentLevel}
-                stars={settlementStars}
-                levelName={currentLevel.unlock?.name ?? currentLevel.title}
-                result={settlement}
-                previousScore={levelRecord?.score ?? null}
-                walletHalf={progress.walletHalf}
-                nextLevelTitle={
-                  ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) >= 0
-                    ? ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]?.title
-                    : undefined // 教学关：没有下一关
-                }
-                onNextLevel={() => {
-                  // 教学关不在关卡链上：结算页的按钮是「回到教学模式」
-                  if (currentLevel.classroom) {
-                    goToTeach();
-                    return;
-                  }
-                  const next =
-                    ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) >= 0
-                      ? ALL_LEVELS[ALL_LEVELS.findIndex((l) => l.id === currentLevel.id) + 1]
-                      : undefined;
-                  if (next) enterLevel(next.id);
-                }}
-                onDismiss={() => setSettlement(null)}
-              />
-            )}
-            <Inspector
-              snapshot={snapshot}
-              units={units}
-              selectionLabel={
-                selectedSyms.length === 0
-                  ? null
-                  : selectedSyms.length === 1
-                    ? describeSym(selectedSyms[0] as Sym, doc)
-                    : `已选中 ${selectedSyms.length} 个元件`
-              }
-            />
-            {panelOpen === 'wave' && judgeResult && (
-              <WaveformPanel
-                waveform={judgeWaveform}
-                portNames={judgePortNames}
-                marks={judgeMarks}
-              />
-            )}
-          </div>
-        )}
-
         {panelOpen === 'library' && (
           <Modal title="组件库与成绩" onClose={() => setPanelOpen(null)}>
             <LibraryPanel
@@ -2192,24 +2179,6 @@ export function App(): React.JSX.Element {
           </Modal>
         )}
         {/* 竖屏下验收手柄已经并到左下那行里（见上面的 edge-strip left），这里只在宽屏/横屏渲染 */}
-        {!portraitNarrow && (
-          <div className={`edge-strip right${rightOpen ? '' : ' closed'}`}>
-            <button
-              type="button"
-              onClick={toggleRightPanel}
-              title={rightOpen ? '收起右侧面板（验收/属性）' : '展开右侧面板（验收/属性）'}
-              aria-label={rightOpen ? '收起右侧面板' : '展开右侧面板'}
-            >
-              <span className="edge-strip-glyph" aria-hidden="true">
-                {rightOpen ? '▶' : '◀'}
-              </span>
-              {/* 窄屏才显示的文字标签，理由同左侧 */}
-              <span className="edge-strip-label" aria-hidden="true">
-                验收
-              </span>
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -2284,6 +2253,46 @@ const teachingDepsOf = (
 };
 
 /** 面板开合等 UI 偏好的持久化：刷新后保持用户上次的选择 */
+/**
+ * 「本关任务说明」是否已经弹过：key 按关卡 id 分开（各关各弹一次，互不影响），
+ * 沿用 lc-ui-* 那套偏好键的写法（localStorage 直读直写，读失败当没弹过）。
+ */
+const TASK_SEEN_PREFIX = 'lc-ui-task-seen-';
+
+export function taskSeenKey(levelId: string): string {
+  return `${TASK_SEEN_PREFIX}${levelId}`;
+}
+
+function taskSeen(levelId: string): boolean {
+  try {
+    return localStorage.getItem(taskSeenKey(levelId)) === '1';
+  } catch {
+    return false; // 读失败当没弹过（隐私模式下会走到这里，弹一次总比不弹好）
+  }
+}
+
+function markTaskSeen(levelId: string): void {
+  try {
+    localStorage.setItem(taskSeenKey(levelId), '1');
+  } catch {
+    // 忽略写失败：写不进就每次进关都弹一次，不影响操作
+  }
+}
+
+/** 新游戏清档：把所有关卡的「任务说明已弹过」标记一起清掉 */
+function clearTaskSeen(): void {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(TASK_SEEN_PREFIX)) keys.push(k);
+    }
+    for (const k of keys) localStorage.removeItem(k);
+  } catch {
+    // 忽略：清不掉就沿用旧标记
+  }
+}
+
 function usePersistentBool(key: string, def: boolean): [boolean, (v: boolean) => void] {
   const [value, setValue] = useState<boolean>(() => {
     try {
@@ -2335,19 +2344,4 @@ const swallowOverlayEvent = (event: Event): void => {
 function swallowOverlayPointer(el: HTMLDivElement | null): void {
   if (!el) return;
   for (const type of OVL_SWALLOWED_EVENTS) el.addEventListener(type, swallowOverlayEvent);
-}
-
-function describeSym(sym: Sym, doc: Doc): string {
-  if (sym.kind === 'unit' && sym.unit) {
-    const pins = pinOffsets(sym, doc.library)
-      .map((p) => p.name)
-      .join('/');
-    return `${sym.label}（${UNIT_LABEL[sym.unit]}，引脚 ${pins}）`;
-  }
-  if (sym.kind === 'module') {
-    const stored = doc.library.find((m) => m.hash === sym.module);
-    const box = moduleBox(sym, doc.library);
-    return `${sym.label}（模块 ${box.w}×${box.h}，成本 ${stored ? stored.costHalf / 2 : '?'}）`;
-  }
-  return sym.label;
 }

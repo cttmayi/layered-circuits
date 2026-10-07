@@ -180,6 +180,9 @@ describe('内容优先', () => {
 });
 
 describe('usableArea：可用区扣掉覆盖式面板', () => {
+  // 右侧「验收/属性」面板已按用户要求整块移除 → UsableAreaInput 里不再有 rightOpen/sidePanel
+  // 这两个输入项（改动见 App.tsx：右侧面板、右侧开合手柄、右侧避让全部删除）。
+
   it('桌面：面板是流内布局，可用区不动（size 本来就不含它们）', () => {
     const a = usableArea({
       width: 1280,
@@ -187,21 +190,18 @@ describe('usableArea：可用区扣掉覆盖式面板', () => {
       narrow: false,
       portrait: false,
       leftOpen: true,
-      rightOpen: true,
       bottomSheet: { w: 240, h: 754 },
-      sidePanel: { w: 316, h: 754 },
     });
     expect(a).toEqual({ width: 1280, height: 754 });
   });
 
-  it('竖屏：元件库/验收是底部抽屉 → 扣高度（抽屉关着不扣）', () => {
+  it('竖屏：元件库是底部抽屉 → 扣高度（抽屉关着不扣）', () => {
     const open = usableArea({
       width: 390,
       height: 787,
       narrow: true,
       portrait: true,
       leftOpen: true,
-      rightOpen: false,
       bottomSheet: { w: 390, h: 362 },
     });
     expect(open).toEqual({ width: 390, height: 425 });
@@ -211,45 +211,30 @@ describe('usableArea：可用区扣掉覆盖式面板', () => {
       narrow: true,
       portrait: true,
       leftOpen: false,
-      rightOpen: false,
       bottomSheet: { w: 390, h: 362 }, // 元素不在了也量不到；这里给 0 表示量不到
     });
     expect(closed).toEqual({ width: 390, height: 787 });
-    // 验收抽屉开着也一样扣高度（两块是同一种底部抽屉）
-    const side = usableArea({
-      width: 390,
-      height: 787,
-      narrow: true,
-      portrait: true,
-      leftOpen: false,
-      rightOpen: true,
-      bottomSheet: { w: 390, h: 362 },
-    });
-    expect(side).toEqual({ width: 390, height: 425 });
   });
 
-  it('窄屏横屏：左右都是覆盖抽屉 → 扣宽度', () => {
-    const both = usableArea({
+  it('窄屏横屏：只有元件库是覆盖抽屉 → 扣宽度（右侧面板已移除，不再扣右边）', () => {
+    const leftOnly = usableArea({
       width: 844,
       height: 333,
       narrow: true,
       portrait: false,
       leftOpen: true,
-      rightOpen: true,
       bottomSheet: { w: 320, h: 333 },
-      sidePanel: { w: 360, h: 333 },
     });
-    expect(both).toEqual({ width: 164, height: 333 });
-    const rightOnly = usableArea({
+    expect(leftOnly).toEqual({ width: 524, height: 333 });
+    const closed = usableArea({
       width: 844,
       height: 333,
       narrow: true,
       portrait: false,
       leftOpen: false,
-      rightOpen: true,
-      sidePanel: { w: 360, h: 333 },
+      bottomSheet: { w: 320, h: 333 },
     });
-    expect(rightOnly).toEqual({ width: 484, height: 333 });
+    expect(closed).toEqual({ width: 844, height: 333 });
   });
 
   it('竖屏扣掉抽屉后：面积口径仍落在 175 格²（实得）', () => {
@@ -259,7 +244,6 @@ describe('usableArea：可用区扣掉覆盖式面板', () => {
       narrow: true,
       portrait: true,
       leftOpen: true,
-      rightOpen: false,
       bottomSheet: { w: 390, h: 362 },
     });
     const r = fitCamera({ width: a.width, height: a.height, content: SMALL });
@@ -276,7 +260,6 @@ describe('usableArea：可用区扣掉覆盖式面板', () => {
       narrow: true,
       portrait: true,
       leftOpen: true,
-      rightOpen: false,
       bottomSheet: { w: 390, h: 362 },
     });
     expect(a).toEqual({ width: 390, height: 120 });

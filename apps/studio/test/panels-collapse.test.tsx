@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 /**
- * 左右侧面板「展开/收起」与分组折叠（我的元件 / 电源与端口 / 我的模块）：
+ * 元件库「展开/收起」与分组折叠（我的元件 / 电源与端口 / 我的模块）：
  *  - 组头可折叠，折叠后元件列表隐藏；
- *  - 左侧整体收起 → 元件库消失、画布腾出空间；再点展开回来；
- *  - 右侧整体收起 → 验收/属性面板隐藏，但迷你侧栏（任务墙等）仍在；
+ *  - 元件库整体收起 → 元件库消失、画布腾出空间；再点展开回来；
+ *  - **右侧「验收/属性」面板已按用户要求整块移除**（连同右侧开合手柄与右侧避让逻辑），
+ *    所以这里只断言「右侧那套确实不在 DOM 里、顶栏判定入口还在」；
  *  - 开合选择写入 localStorage，重进工作台保持。
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -44,19 +45,22 @@ describe('左右侧面板展开/收起', () => {
     expect(screen.getByText('三极管 NPN')).toBeTruthy();
   });
 
-  it('右侧整体收起：验收/属性面板隐藏，顶栏按钮不受影响；展开恢复', async () => {
+  it('右侧面板已整块移除：DOM 里没有验收/属性面板，也没有右侧开合手柄；判定入口留在顶栏', async () => {
     renderApp();
     startJob('非门');
-    // 右侧面板默认展开：右侧检查器（材料费）与顶栏「交付验收」都在
-    expect(screen.getAllByText('材料费').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('交付验收')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '收起右侧面板' }));
-    // 右侧检查器隐藏，但顶栏按钮（交付验收）仍在
+    // 面板本身、它的手柄、以及面板里的成本表（材料费）都不在 DOM 里
+    expect(document.querySelector('.side')).toBeNull();
+    expect(document.querySelector('.edge-strip.right')).toBeNull();
+    expect(screen.queryByRole('button', { name: /右侧面板/ })).toBeNull();
     expect(screen.queryByText('材料费')).toBeNull();
-    expect(screen.getByText('交付验收')).toBeTruthy();
-    // 收起弹窗、展开右侧面板
-    fireEvent.click(screen.getByRole('button', { name: '展开右侧面板' }));
-    await waitFor(() => expect(screen.getAllByText('材料费').length).toBeGreaterThanOrEqual(1));
+    // 判定入口不能丢：顶栏「交付验收」还在、可点（结果改在弹窗里给）
+    const judge = screen.getByText('交付验收') as HTMLButtonElement;
+    expect(judge.disabled).toBe(false);
+    fireEvent.click(judge);
+    // 点下去能弹出验收结果弹窗（逐行对比 / 问题清单）
+    await waitFor(() => expect(document.querySelector('.modal-box .judge')).toBeTruthy(), {
+      timeout: 5000,
+    });
   });
 
   it('开合选择持久化：收起左侧后重进工作台仍是收起', () => {

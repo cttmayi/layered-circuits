@@ -6,7 +6,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
-import { goToLevel, renderApp, startJob } from './helpers';
+import { dismissTaskDialog, goToLevel, renderApp, startJob, topBarTaskTitle } from './helpers';
 
 describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
   beforeEach(() => localStorage.clear());
@@ -42,7 +42,7 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     expect(within(dialog).getByRole('img', { name: /示意图/ })).toBeTruthy();
     // 点「去搭一下试试」→ 工作台：委托单 + 引导条（跟着做）
     fireEvent.click(screen.getByText(/去搭一下试试/));
-    expect(screen.getByText(/任务 · 认识三极管/)).toBeTruthy();
+    expect(topBarTaskTitle()).toBe('任务 · 认识三极管'); // 顶栏任务块（同名文字在任务对话框标题里也有）
     expect(screen.getByText(/动手搭 · 跟着做/)).toBeTruthy();
     expect(screen.getByText(/第一步：把三极管的基极/)).toBeTruthy();
   });
@@ -75,9 +75,10 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     render(<App />);
     expect(screen.getByText(/继续上次/)).toBeTruthy();
     fireEvent.click(screen.getByText(/继续上次/));
-    // 直接进工作台：不弹「新委托」，图纸卡在
+    // 直接进工作台：不弹「新委托」
     expect(screen.queryByText('新委托')).toBeNull();
-    expect(screen.getByText(/任务 · 非门/)).toBeTruthy();
+    // 任务信息在顶栏（本轮改动：右侧面板移除后任务进顶栏；首次进关还会弹一次「本关任务」）
+    expect(topBarTaskTitle()).toBe('任务 · 非门');
   });
 
   it('自由搭建从主菜单进：工作台出现，但没有「交付验收」（关卡专属）', () => {
@@ -87,16 +88,20 @@ describe('游戏壳：主菜单 / 关卡地图 / 会话恢复', () => {
     expect(screen.queryByText('交付验收')).toBeNull();
   });
 
-  it('进关即开工：新单不再弹「新委托」，直接进工作台；刷新后不重弹', () => {
+  it('进关即开工：不弹「新委托」，直接进工作台（首次会弹一次「本关任务」）；刷新后不重弹', () => {
     const first = renderApp();
     goToLevel('非门'); // 第一关：新单也直接开工
     expect(screen.queryByText('新委托')).toBeNull();
-    expect(screen.getByText(/任务 · 非门/)).toBeTruthy();
+    // 本轮新增（用户要求）：**每关第一次进关**弹一次任务说明；同一关第二次、刷新后都不再弹
+    expect(document.querySelector('.task-full')).toBeTruthy();
+    dismissTaskDialog();
+    expect(topBarTaskTitle()).toBe('任务 · 非门');
     first.unmount();
-    render(<App />); // 模拟刷新：started 已持久化
+    render(<App />); // 模拟刷新：started 与「任务说明已弹过」都已持久化
     fireEvent.click(screen.getByText(/继续上次/));
     expect(screen.queryByText('新委托')).toBeNull();
-    expect(screen.getByText(/任务 · 非门/)).toBeTruthy();
+    expect(document.querySelector('.task-full')).toBeNull(); // 刷新后不重弹
+    expect(topBarTaskTitle()).toBe('任务 · 非门');
   });
 
   it('主菜单「新游戏」：确认后先选工艺契约，选定后清空存档、回到全新主菜单', () => {

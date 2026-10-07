@@ -152,7 +152,7 @@ describe('仿真通道（Worker 与主线程共用 handleRequest）', () => {
 });
 
 describe('工作台界面', () => {
-  it('渲染工具栏与成本面板（载入非门示例后自动仿真）', async () => {
+  it('渲染工具栏（载入非门示例后自动仿真跑出图例）', async () => {
     renderApp();
     // 主菜单 → 自由搭建 → 工作台
     fireEvent.click(screen.getByText('自由搭建'));
@@ -160,13 +160,9 @@ describe('工作台界面', () => {
     fireEvent.click(screen.getByText('载入非门示例'));
     expect(screen.getByText('封装为模块')).toBeTruthy();
 
-    // 自动仿真后（测试环境下走主线程回退路径），成本面板出现（材料费合计 10）
-    await waitFor(
-      () => {
-        const costRows = [...document.querySelectorAll('.kv tr')].map((tr) => tr.textContent ?? '');
-        expect(costRows.some((row) => row.includes('合计') && row.includes('10'))).toBe(true);
-      },
-      { timeout: 5000 },
-    );
+    // 自动仿真后（测试环境下走主线程回退路径）画布右上角出现电平图例。
+    // 注：原来这里靠右侧面板的成本表（材料费合计）当信号，成本表已随右侧面板移除，
+    // 改用同一次快照驱动的图例（只有拿到 snapshot 才渲染）。
+    await waitFor(() => expect(document.querySelector('.legend')).toBeTruthy(), { timeout: 5000 });
   });
 });

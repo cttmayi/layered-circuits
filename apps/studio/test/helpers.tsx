@@ -36,6 +36,23 @@ export function seedTeachCleared(): void {
 }
 
 /**
+ * 收掉「本关任务」对话框：**每关第一次进关会自动弹**（见 App.tsx 的 lc-ui-task-seen-*）。
+ * 后续要断言「工作台上有什么」的测试先调它 —— 否则弹窗里的合同条款（元件成本/传播延迟）
+ * 与标题里的「任务 · 关卡名」会混进断言。
+ */
+export function dismissTaskDialog(): void {
+  const btn = [...document.querySelectorAll('button')].find((b) =>
+    /开始干活/.test(b.textContent ?? ''),
+  );
+  if (btn) fireEvent.click(btn);
+}
+
+/** 顶栏「任务」块里的标题文字（「任务 · 非门」）—— 弹窗标题里也有一份同名文字，所以要指名取 */
+export function topBarTaskTitle(): string {
+  return document.querySelector('.task-bar-title')?.textContent?.trim() ?? '';
+}
+
+/**
  * 「调试模式」按钮只在 URL 带 ?debug=1 时出现（正式玩法里连按钮都不该有）。
  * 需要点「一键出答案」的测试要在 render 之前调用它 —— 开关在挂载时判定。
  */

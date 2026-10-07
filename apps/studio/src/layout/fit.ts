@@ -100,28 +100,26 @@ export interface UsableAreaInput {
   narrow: boolean;
   portrait: boolean;
   leftOpen: boolean;
-  rightOpen: boolean;
-  /** 覆盖式面板的实测尺寸（px）；量不到就传 null/0 */
+  /** 覆盖式面板的实测尺寸（px）；量不到就传 null/0（右侧验收面板已整块移除，只剩元件库） */
   bottomSheet?: { w: number; h: number } | null;
-  sidePanel?: { w: number; h: number } | null;
   /** 可用区下限，避免离谱输入（抽屉比画布还高时的兜底） */
   floor?: number;
 }
 
 /**
  * 可用区 = 画布可视区**扣掉覆盖式面板**：
- *  - 竖屏：元件库/验收都是**底部抽屉** → 扣高度；
- *  - 窄屏横屏：左右两块都是覆盖抽屉 → 扣宽度；
- *  - 桌面：面板是流内布局（.canvas-wrap 本来就不含它们）→ 不用扣。
+ *  - 竖屏：元件库是**底部抽屉** → 扣高度；
+ *  - 窄屏横屏：元件库是**左侧**覆盖抽屉 → 扣宽度；
+ *  - 桌面：元件库是流内布局（.canvas-wrap 本来就不含它）→ 不用扣。
+ *  （右侧验收面板整块移除后，这里不再有右侧避让项。）
  */
 export function usableArea(input: UsableAreaInput): { width: number; height: number } {
   const floor = input.floor ?? 120;
   let { width, height } = input;
-  if (input.narrow && input.portrait && (input.leftOpen || input.rightOpen)) {
+  if (input.narrow && input.portrait && input.leftOpen) {
     const h = input.bottomSheet?.h ?? 0;
     if (h > 0) height -= h;
   } else if (input.narrow) {
-    if (input.rightOpen) width -= input.sidePanel?.w ?? 0;
     if (input.leftOpen) width -= input.bottomSheet?.w ?? 0;
   }
   return { width: Math.max(floor, width), height: Math.max(floor, height) };

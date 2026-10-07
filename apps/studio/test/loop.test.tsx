@@ -13,7 +13,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROGRESS_KEY } from '../src/level/progress';
 import { atWorld, stubCanvasSize, unstubCanvasSize } from './camera-probe';
-import { renderApp, startJob } from './helpers';
+import { renderApp, startJob, topBarTaskTitle } from './helpers';
 
 vi.mock('../src/editor/render.ts', async (importOriginal) => {
   const { withCameraProbe } = await import('./camera-probe');
@@ -54,7 +54,7 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
   it('用鼠标搭出第 1 关的标准解并通过校验，通关闭环产生可复用的【非门】模块', async () => {
     renderApp();
     startJob('非门');
-    expect(screen.getByText(/任务 · 非门/)).toBeTruthy();
+    expect(topBarTaskTitle()).toBe('任务 · 非门'); // 顶栏任务块（同名文字在任务对话框标题里也有）
 
     // ---- 1. 摆放元件（画布上只有关卡预置的 a / y 端口）----
     place('电阻', 280, 240); // R1 基极限流
@@ -82,14 +82,10 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
       { timeout: 5000 },
     );
 
-    // 成本面板应该已经算出 6（1 三极管 + 2 电阻）
-    await waitFor(
-      () => {
-        const rows = [...document.querySelectorAll('.kv tr')].map((tr) => tr.textContent ?? '');
-        expect(rows.some((row) => row.includes('合计') && row.includes('6'))).toBe(true);
-      },
-      { timeout: 5000 },
-    );
+    // 自动仿真跑完了：画布图例出现（只有拿到仿真快照才渲染）。
+    // 注：原来这里读的是右侧面板成本表里的「合计 6」，成本表已随右侧面板整块移除；
+    // 成本照样算得很准 —— 下面验收弹窗的判定结果里就有「材料费 3 / 款项 6」（6 半 = 3 元）
+    await waitFor(() => expect(document.querySelector('.legend')).toBeTruthy(), { timeout: 5000 });
 
     // ---- 3. 交付验收 ----
     fireEvent.click(screen.getAllByText('交付验收')[0] as HTMLButtonElement);
@@ -100,6 +96,8 @@ describe('M1 核心循环：手搭非门 → 校验 → 通关封装 → 解锁�
     // 逐行对比四要素：功能 / 成本 / 关键路径都达标
     const judgeText = document.querySelector('.judge')?.textContent ?? '';
     expect(judgeText).toContain('全部符合');
+    expect(judgeText).toContain('材料费');
+    expect(judgeText).toContain('6 / 款项 12'); // 1 三极管 + 2 电阻 = 12 半 = 6 元；款项 24 半 = 12 元
     expect(judgeText).toContain('1.50 ns');
     expect(judgeText).toContain('客户验收通过！100 分');
     // 判定面板逐行对比：0→1 与 1→0 都是 ✓
