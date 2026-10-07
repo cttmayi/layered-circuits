@@ -78,6 +78,17 @@ function buildLibrary(raw: unknown[]): ModuleLibrary {
 const GATE_CANVAS_WINDOW_PS = 1_000_000; // 1µs：够慢路径走完（关卡向量 settlePs 的上限也是它）
 const GATE_CANVAS_MAX_EVENTS = 500_000; // 与 harness.ts 的 maxEventsPerVector 同量级
 const GATE_CANVAS_STATE_KEEP = 8; // 状态缓存只留最近 8 份电路
+/**
+ * "这份电路的上电是对称自振，必须用 settle 口径" 的**备忘**（按电路 hash）。
+ *
+ * 为什么需要：默认 `powerUp:'delay'` 能保住判定侧的逐行结论，但对称环（电平型锁存器上电即
+ * `en=0`）会在那一次尝试里烧满事件预算 —— 实测 50 万事件 ≈ **280ms/帧**。备忘之后只有这一关的
+ * **第一帧**付这个代价，而且第一帧用下面的小预算探（撞上限就立刻改用 settle 重跑，≈11ms）。
+ */
+const gateCanvasNeedsSettle = new Set<string>();
+/** 探"上电自振"用的小事件预算：正常电路一轮远用不到（18 关实测最大 292 事件），
+ *  撞上它基本就是对称环 —— 真的需要更多事件的电路只会在这一帧走 settle 口径，不影响判定。*/
+const GATE_CANVAS_PROBE_EVENTS = 20_000;
 
 const gateCanvasStates = new Map<string, GateStateStore>();
 
@@ -104,10 +115,20 @@ const gateInputsOf = (design: Design, inputs: Record<string, DriveValue>): Map<s
   const out = new Map<string, Bit[]>();
   for (const port of design.ports) {
     if (port.dir !== 'in') continue;
-    const bit = paramToLogic(inputs[port.name] ?? 3) as Bit;
+    const width = Math.max(1, port.width ?? 1);
+    /**
+     * ⚠️ 多 bit 输入必须**逐 lane 取**：画布送的 `inputValues(doc)` 对 width>1 的端口只给
+     * `名字[bit]` 这种 lane 键（与编译器命名一致），没有裸名 —— 只读裸名会全部落到兜底值
+     * `3`，门级就看到一份"输入全是 X"的设计（实测：数码管关点 bcd，门级 netSignals 里的
+     * seg 全是 0，画布段码不跟随）。裸名作兜底，兼容 width=1 与老调用方。
+     */
     out.set(
       port.name,
-      Array.from({ length: Math.max(1, port.width ?? 1) }, () => bit),
+      Array.from({ length: width }, (_, b) =>
+        paramToLogic(
+          inputs[width > 1 ? `${port.name}[${b}]` : port.name] ?? inputs[port.name] ?? 3,
+        ),
+      ) as Bit[],
     );
   }
   return out;
@@ -232,17 +253,40 @@ export function handleRequest(req: StudioRequest): StudioResponse {
     // ── 逻辑关画布：门级（有界延迟 + 惯性）覆盖顶层网电平 ──────────────────────────
     let gateRun: GateDelayRun | null = null;
     let gateReason = '';
+    let gatePowerUpRescued = false;
     if (mode === 'logic' && req.gateCanvas === true) {
-      const support = gateDelaySupport(design, library);
+      // ⚠️ 必须把 `GATE_SEQ_SPECS` 一起传进预检：不传时它是**保守**判定（"带时序器件一律报
+      //    没有 SeqSpec"），会把 s2-dff / s3-reg-8 / s3-digit-entry 这三关误判成"门级不支持"
+      //    而回落元件引擎 —— 判定侧（runGateVectors）一直带着这张表，两边口径必须一致。
+      const support = gateDelaySupport(design, library, GATE_SEQ_SPECS);
       if (!support.ok) {
         gateReason = support.reason ?? '门级不支持这份设计';
       } else {
-        const run = evalGateDelayed(design, library, gateInputsOf(design, inputs), {
-          state: gateCanvasState(hashDesign(design)),
+        const designHash = hashDesign(design);
+        const state = gateCanvasState(designHash);
+        const common = {
+          state,
           seqSpecs: GATE_SEQ_SPECS,
           windowPs: GATE_CANVAS_WINDOW_PS,
-          maxEvents: GATE_CANVAS_MAX_EVENTS,
+        } as const;
+        // 已经在备忘里（上电对称自振）→ 直接用 settle 口径，不再白烧事件预算
+        let run = evalGateDelayed(design, library, gateInputsOf(design, inputs), {
+          ...common,
+          maxEvents: gateCanvasNeedsSettle.has(designHash)
+            ? GATE_CANVAS_MAX_EVENTS
+            : GATE_CANVAS_PROBE_EVENTS,
+          powerUp: gateCanvasNeedsSettle.has(designHash) ? 'settle' : 'delay',
         });
+        if (!gateCanvasNeedsSettle.has(designHash) && run.ok && run.capped) {
+          // 上电对称自振（延迟完全匹配的交叉耦合环）：记下来，用确定性顺序上电重跑
+          gateCanvasNeedsSettle.add(designHash);
+          run = evalGateDelayed(design, library, gateInputsOf(design, inputs), {
+            ...common,
+            maxEvents: GATE_CANVAS_MAX_EVENTS,
+            powerUp: 'settle',
+          });
+          gatePowerUpRescued = true;
+        }
         if (run.ok) gateRun = run;
         else gateReason = run.reason ?? '门级引擎跑不了这份设计';
       }
@@ -313,7 +357,7 @@ export function handleRequest(req: StudioRequest): StudioResponse {
       snapshot.simDiagnostics.push({
         kind: 'gate-canvas',
         severity: 'info',
-        message: `画布走门级引擎（有界延迟 ${GATE_CANVAS_WINDOW_PS / 1000}ns 窗口 + 惯性语义，与判定同口径）：事件 ${gateRun.events}，终态时刻 ${gateRun.timePs}ps`,
+        message: `画布走门级引擎（有界延迟 ${GATE_CANVAS_WINDOW_PS / 1000}ns 窗口 + 惯性语义，与判定同口径）：事件 ${gateRun.events}，终态时刻 ${gateRun.timePs}ps${gatePowerUpRescued ? '（上电改按确定性顺序铺一遍：这份电路的交叉耦合环在完全相同的延迟下会对称自振）' : ''}`,
       });
       if (gateRun.capped) {
         snapshot.simDiagnostics.push({

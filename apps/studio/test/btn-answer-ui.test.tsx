@@ -97,6 +97,17 @@ function enterBtnLatch(): void {
 const sigOf = (resp: StudioResponse | undefined, net: string): number | undefined =>
   resp?.snapshot?.netSignals.find(([k]) => k === net)?.[1];
 
+/**
+ * **逻辑关画布自第 ㉑ 轮起走有延迟门级**（白名单 18 关），门级口径**没有强弱**
+ * （用户早已拍板"逻辑关去掉强/弱"）—— 门级输出一律按**强驱动**打包，所以画布上的电平
+ * 只剩下**逻辑值**这一个自由维度。这里按逻辑位判定，不再断言"弱 1/强 0"的强度编码
+ * （改动前的读数：松开=5 弱 1、按住=8 强 0；改动后：松开=9 强 1、按住=8 强 0）。
+ */
+const logicOf = (resp: StudioResponse | undefined, net: string): number | undefined => {
+  const sig = sigOf(resp, net);
+  return sig === undefined ? undefined : sig & 1;
+};
+
 describe('一键出答案后点按钮（端到端）', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -114,8 +125,7 @@ describe('一键出答案后点按钮（端到端）', () => {
     // 等一键出答案的仿真跑完（至少一次 simulate 响应）
     await waitFor(() => expect(responses.length).toBeGreaterThan(0), { timeout: 4000 });
     const before = responses[responses.length - 1];
-    const beforeSig = sigOf(before.resp, notNet!.id);
-    expect(beforeSig).toBe(5); // 松开按钮：非门输出弱 1
+    expect(logicOf(before.resp, notNet!.id), '松开按钮：非门输出 = 逻辑 1').toBe(1);
 
     // 点按钮（按住）：必须发出 btn=1 的新仿真，且非门输出翻到强 0
     clickWorld(btnSym.x, btnSym.y);
@@ -127,7 +137,7 @@ describe('一键出答案后点按钮（端到端）', () => {
     );
     const press = responses.find((x) => 'inputs' in x.req && x.req.inputs.btn === 1);
     expect(press).toBeDefined();
-    expect(sigOf(press?.resp, notNet!.id)).toBe(8); // 非门输出强 0
+    expect(logicOf(press?.resp, notNet!.id), '按住按钮：非门输出 = 逻辑 0').toBe(0);
 
     // 松开按钮 → 归 0：非门输出回到弱 1
     releaseWorld();
@@ -139,6 +149,6 @@ describe('一键出答案后点按钮（端到端）', () => {
     );
     const release = responses.find((x) => 'inputs' in x.req && x.req.inputs.btn === 0);
     expect(release).toBeDefined();
-    expect(sigOf(release?.resp, notNet!.id)).toBe(5);
+    expect(logicOf(release?.resp, notNet!.id), '松开：回到逻辑 1').toBe(1);
   });
 });

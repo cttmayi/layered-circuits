@@ -131,6 +131,24 @@ export interface GateDelayOptions {
   zeroDelay?: boolean;
   /** vcc/gnd 的算法；缺省按 zeroDelay 自动取（false→'constant' / true→'ignore'）*/
   rails?: GateDelayRails;
+  /**
+   * **上电（power-up）怎样落地**，默认 `'auto'`：
+   *
+   * · `'delay'`：老行为 —— 所有单元同时按各自的延迟排队，彼此都只看得到**上一时刻的全 0 快照**。
+   * · `'settle'`：上电按**确定性顺序**把每个单元的输出立刻算进去（零延迟地"顺一遍"），
+   *   后面的单元看得见前面单元刚算出的值（网值就地刷新）。
+   * · `'auto'`（**默认**）：先按 `'delay'` 跑；**只有撞上事件上限**（= 延迟完全相同的对称环
+   *   在上电处自振）才从头按 `'settle'` 重跑一次并采用它的结果。
+   *
+   * 为什么需要它（实测）：延迟完全相同的交叉耦合环在 `'delay'` 下会**对称振荡到事件上限**
+   * （`s2-d-latch` 冷启动 `en=0`：events=500000 / capped=true，transport 口径同样）。
+   * 那是"延迟完全匹配"的物理理想化产物，现实里器件微失配会打破对称 —— 按**确定性顺序**上电
+   * 就是这个失配的等价物（顺序 = 网表顺序，可复现、可回退）。
+   * 为什么默认不是 `'settle'`：`'settle'` 会改掉**能自己稳下来的电路**的逐行结论
+   * （实测 `s2-sr-latch` 由 pass=true/0 错行 变成 pass=false/2 错行 —— 那是结论变化，不能默认）。
+   * `'auto'` 下判定侧的向量全走 `'delay'` 那条路，逐行结论与老口径逐位相同。
+   */
+  powerUp?: 'auto' | 'settle' | 'delay';
 }
 
 /** 入口选项 = 引擎选项 + 单次运行要带的东西（窗口长度、跨请求携带的状态）*/
@@ -149,6 +167,7 @@ interface ResolvedDelayOptions {
   defaultDelayPs: number;
   zeroDelay: boolean;
   rails: GateDelayRails;
+  powerUp: 'auto' | 'settle' | 'delay';
 }
 
 const resolveOptions = (opts: GateDelayOptions = {}): ResolvedDelayOptions => {
@@ -160,6 +179,7 @@ const resolveOptions = (opts: GateDelayOptions = {}): ResolvedDelayOptions => {
     defaultDelayPs: opts.defaultDelayPs ?? DEFAULT_GATE_DELAY_PS,
     zeroDelay,
     rails: opts.rails ?? (zeroDelay ? 'ignore' : 'constant'),
+    powerUp: opts.powerUp ?? 'auto',
   };
 };
 
@@ -1019,6 +1039,44 @@ class DelayedEngine implements DelayEngine {
     }
   }
 
+  /**
+   * 上电顺一遍（零延迟、按网表顺序）：见 `GateDelayOptions.powerUp` 的实测依据。
+   * 顺序确定 ⇒ 结果可复现；只有**首次**运行做这一步，之后的传播一律走正常延迟。
+   */
+  private powerUpSettle(): void {
+    const dirty = new Set<number>();
+    for (let ci = 0; ci < this.flat.cells.length; ci++) {
+      const c = this.flat.cells[ci] as GateDelayCell;
+      const payload = this.evalCell(ci);
+      const last = this.cellLast[ci] as Bit[];
+      const touched = new Set<number>();
+      for (let k = 0; k < c.outSlots.length; k++) {
+        const s = c.outSlots[k];
+        if (s === undefined) continue;
+        const v = payload[k] as Bit;
+        last[k] = v;
+        if (this.slotVal[s.slot] === v) continue;
+        this.slotVal[s.slot] = v;
+        const net = this.flat.slotNet[s.slot] as number;
+        if (net >= 0) touched.add(net);
+      }
+      // ★ 必须**就地**把网值刷新 —— 单元之间靠 `netVal` 互相读取（`read` 就是 `netVal`），
+      //   如果攒到最后再刷，后面的单元照样只看得到上电快照，对称环就还会振（实测过：那样
+      //   settle 与 delay 都是 capped=true）。
+      for (const net of touched) {
+        const v = this.mergedValue(net);
+        if (this.netVal[net] === v) continue;
+        this.netVal[net] = v;
+        this.watched.get(net)?.push({ atPs: 0, value: v });
+        dirty.add(net);
+      }
+    }
+    // 上电就变过的网：扇出单元从 t=0 起按各自的延迟正常传播（不再是零延迟）
+    for (const net of dirty) {
+      for (const ci of this.flat.netReaders[net] as readonly number[]) this.trigger(ci, 0);
+    }
+  }
+
   /** 绑输入（未给的位按 Z）+ 首次调用时做上电触发 */
   setInputs(inputs: ReadonlyMap<string, Bit[]>): void {
     for (const p of this.flat.ports) {
@@ -1041,7 +1099,8 @@ class DelayedEngine implements DelayEngine {
     }
     if (!this.started) {
       this.started = true;
-      for (let ci = 0; ci < this.flat.cells.length; ci++) this.trigger(ci, 0);
+      if (this.opts.powerUp === 'settle') this.powerUpSettle();
+      else for (let ci = 0; ci < this.flat.cells.length; ci++) this.trigger(ci, 0);
     }
   }
 
@@ -1314,9 +1373,22 @@ export const evalGateDelayed = (
   if (unsupported.length > 0) {
     return failedRun(`门级引擎跑不了这份设计：${unsupported.join('；')}`, state);
   }
+  const windowPs = opts.windowPs ?? DEFAULT_WINDOW_PS;
   const sim = new GateDelaySim(flat, opts);
   sim.setInputs(inputs);
-  return sim.run(undefined, opts.windowPs ?? DEFAULT_WINDOW_PS);
+  const first = sim.run(undefined, windowPs);
+  /**
+   * `'auto'`：只有**上电对称环自振**（撞事件上限）才用 `'settle'` 从头重跑一次。
+   * 判据只看 `capped` —— 能自己稳下来的电路完全不受影响（判定侧向量全属这一类）。
+   */
+  if (opts.powerUp !== 'delay' && opts.powerUp !== 'settle' && first.capped) {
+    const rescue = new GateDelaySim(flat, { ...opts, powerUp: 'settle' });
+    rescue.setInputs(inputs);
+    const second = rescue.run(undefined, windowPs);
+    // 只有确实救下来了（不再撞上限）才采用；否则保留第一次的有界结果并如实报告不稳定
+    if (!second.capped) return second;
+  }
+  return first;
 };
 
 /* ── 向量级入口（给 compiler 的 runGateVectors 换引擎用）── */

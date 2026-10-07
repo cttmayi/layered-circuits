@@ -43,23 +43,32 @@ const simulate = (
 const canvasLevels = (snap: SimSnapshot): Record<string, string> =>
   Object.fromEntries(snap.netSignals.map(([id, sig]) => [id, String(toLogic(sig))]));
 
-// ⚠️ 暂不启用（describe.skip）：跑起来能过 5/7，剩两条**已定位未修**的缺陷（原始读数在下面）：
-//   ① s2-d-latch（电平型锁存器保持态）在画布通路里撞事件上限：events=499999 / capped=true；
-//   ② 经 handleRequest 的门级跑出 **0 事件**（直接调 evalGateDelayed 是 9 事件）→ s3-alu/s3-calc
-//      有 15~40 条网与直跑不一致（画布恒 0）。差异起点在 `evalGateDelayed(..., {state})` 这条
-//      带状态通路，尚未定位到具体语句 —— 已排除"传入的是空 store"（带空 store 直跑同样是 9 事件）、
-//      "两套库不一致"（模块库与模板库逐网 0 差异）。
-// 修好后把 skip 去掉即可（那时它应 7/7 全绿；同口径断言、回落断言、状态保持断言都已验证有效）。
-describe.skip('逻辑关画布 = 有界延迟门级（同口径断言）', () => {
+// 已启用（原 describe.skip 的两条"缺陷"复核结果，见 2026-01 第 ㉑ 轮）：
+//   ① 锁存器保持态撞事件上限 —— **真缺陷**，已修：`GateDelayOptions.powerUp` 默认 `'auto'`
+//      （先按老口径跑，只有撞上限才用"确定性顺序上电"重跑）⇒ `s2-d-latch`/`s2-btn-latch`
+//      冷启动 events=0 / capped=false，而判定侧的向量逐行结论**一位没变**（复审计 5 文件全绿）。
+//   ② "经 handleRequest 跑出 0 事件、15~40 条网不一致" —— **是我的度量方式错**，不是引擎缺陷：
+//      · 0 事件是正常的（全 0 输入、电路本来就静止 ⇒ 直跑同样 0 事件）；
+//      · 那 15~40 条差异来自**我的对照直跑把宽端口的向量写成 1 位**（s3-alu 的 a/b 是 4 bit），
+//        改成按端口宽度铺满后逐网一致（本文件下方直接按 `p.width` 铺）。
+describe('逻辑关画布 = 有界延迟门级（同口径断言）', () => {
   for (const id of ['s3-half-adder', 's2-d-latch', 's3-alu', 's3-calc']) {
     it(`${id}：画布每条顶层网都在、且电平 == 门级引擎 nets`, () => {
       const design = designOf(id);
       const inputs = allZeroInputs(design);
       const snap = simulate(design, { gateCanvas: true, inputs });
+      // ⚠️ 对照直跑必须**按端口宽度铺满**（s3-alu 的 a/b 是 4 bit）：只写 1 位会让门级引擎
+      //    看到不同的输入向量，从而得出"15~40 条网不一致"的假差异（第 ㉑ 轮复核结论）。
+      const widthOf = new Map(design.ports.map((p) => [p.name, p.width ?? 1]));
       const run = evalGateDelayed(
         design,
         LIB,
-        new Map(Object.entries(inputs).map(([k, v]) => [k, [v as 0 | 1]])),
+        new Map(
+          Object.entries(inputs).map(([k, v]) => [
+            k,
+            Array.from({ length: widthOf.get(k) ?? 1 }, () => v as 0 | 1),
+          ]),
+        ),
         { seqSpecs: GATE_SEQ_SPECS, windowPs: 1_000_000 },
       );
       expect(run.ok).toBe(true);

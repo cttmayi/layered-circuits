@@ -4,6 +4,7 @@ import {
   elementEdgeOf,
   findLevel,
   findTeachLevel,
+  gateFastEnabledFor,
   isTeachLevel,
   teachingSolutionOf,
 } from '@lc/content';
@@ -474,7 +475,8 @@ export function App(): React.JSX.Element {
 
   // ---- 自动仿真（Worker 优先，防抖 40ms） ----
   // currentLevel/gameMode 声明在本 effect 之后（TDZ，不能进 deps 数组）；关卡/教学模式切换
-  // 必然产生新 doc，由 doc 依赖覆盖重跑。
+  // 必然产生新 doc，由 doc 依赖覆盖重跑。`levelId` 是普通 state、也在 TDZ 之外，且在
+  // `gateCanvas` 的计算里被读到（白名单关才开画布门级）→ 按 lint 要求显式列进 deps。
   useEffect(() => {
     // recomputeNonce 只作「重新计算」按钮的触发信号：值本身不参与计算，仅靠它在依赖
     // 列表里变化来重跑仿真（读一下避免被判定为多余依赖——删除它会让按钮失效）。
@@ -504,11 +506,12 @@ export function App(): React.JSX.Element {
           prevSignals,
           prevContribs,
           prevNodeSignals,
-          // ⚠️ 逻辑关画布的门级口径**暂不开**（`gateCanvas: false`）：
-          // 有延迟门级引擎在"电平型锁存器保持态（en=0）"下**不收敛**（实测：每次请求撞 50 万事件上限、
-          // capped=true），会让画布明显变慢且显示不稳定 —— 先把判定侧的口径切过来（已逐关验证结论不变），
-          // 画布侧等这个缺陷修好再开（验收断言见 apps/studio/test/gate-canvas-same-caliber.test.ts）。
-          gateCanvas: false,
+          // 逻辑关画布走**有延迟门级**（与判定同口径）：只对**白名单 18 关**（`GATE_FAST_LEVELS`，
+          // 用户第 ⑲ 轮的口径）开，`s3-calc`/`s3-or-chain` 暂时例外（仍是元件口径）。
+          // 回落实测有效：含元件的设计（老存档、元件电路）与门级 `ok=false` 的设计都会**原样回落
+          // 元件引擎**（诊断 `gate-canvas-fallback`，见 apps/studio/src/sim/handle.ts）。
+          // 时序关（judgeMode !== 'logic'）与自由模式**一律不发这个标志**（画布仍是元件引擎）。
+          gateCanvas: simMode === 'logic' && gateFastEnabledFor(levelId),
           withTiming: false, // 「时序分析」开关已移除
           withWaveform: simMode === 'timing',
         })
@@ -534,7 +537,7 @@ export function App(): React.JSX.Element {
         .catch((error: unknown) => setToast(`仿真失败：${String(error)}`));
     }, 40);
     return () => clearTimeout(timer);
-  }, [doc, simMode, runner, recomputeNonce]);
+  }, [doc, simMode, runner, recomputeNonce, levelId]);
 
   // ---- 本地自动存档（按模式 + 关卡分开存） ----
   const storageKey = storageKeyFor(gameMode, levelId);
