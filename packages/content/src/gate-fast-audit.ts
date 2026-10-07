@@ -28,7 +28,7 @@ import { teachingModulesFor, teachingSolutionOf } from './teachings.js';
 export const GATE_FAST_BLOCKED_CAUSES: Readonly<Record<string, string>> = {
   's3-calc':
     '第 0 行「待命（上电先按 C 清零）」上电态不同：元件级收敛到 0x6f/0x6f，有延迟门级收敛到 0x4f/0x4f（差 e 段），' +
-    '其余 66/67 行逐位相同。该行**没有期望值**（关卡要求玩家先按 C），两台上 pass=true —— 但审计判据是"逐行数值全等"，' +
+    '其余 66/67 行逐位相同 ⇒ **逐行数值差异 = 1/67**（就是这一行）。该行**没有期望值**（关卡要求玩家先按 C），两台上 pass=true —— 但审计判据是"逐行数值全等"，' +
     '所以本关仍不放行。注：零延迟口径下本关曾是 29/67 行读旧值（已随"有界延迟+惯性"口径修好，见 gate-seq-specs.ts 注释）。' +
     '要放行只有两条路（需拍板）：把无期望值的行定义成 不必比对（don’t-care），或改关卡内容。',
   's3-or-chain':
