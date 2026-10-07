@@ -31,6 +31,7 @@ import { GateStateStore, settleGateSteps } from '@lc/sim-core';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { StoredModule } from '../src/editor/model.ts';
+import { gateCatalogFor } from '../src/level/library.ts';
 import { Palette } from '../src/panels/Palette.tsx';
 import { gateLevelUsable, gateProbeLibrary, specByShape } from '../src/sim/gate-usable.ts';
 
@@ -225,6 +226,8 @@ function renderPalette(opts: {
       library={[...teachingLibrary(), ...opts.library]}
       level={opts.level}
       mode={opts.level?.judgeMode === 'logic' ? 'logic' : 'timing'}
+      // 逻辑关的「基础门」= 本关权威清单（App 传的就是这个，见 gateCatalogFor 注释）
+      gateCatalog={gateCatalogFor('rtl')}
     />,
   );
 }
@@ -493,6 +496,7 @@ describe('逻辑关隐藏元件级老模块（门级判定跑不了的不列）'
         library={[...teachingLibrary(), gateMod, unitNotModule()]}
         level={fakeLevel('logic')}
         mode="logic"
+        gateCatalog={gateCatalogFor('rtl')}
       />,
     );
     const card = screen.getByText(gateMod.name, { exact: false }).closest('button');

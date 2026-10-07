@@ -1,6 +1,7 @@
 // @vitest-environment node
 /**
- * **显示层**守卫（用户第 ⑮ 轮）：凡是「按名字列出的分组」，都必须按名字去重后再渲染。
+ * **显示层**守卫（用户第 ⑮ 轮口径，第 ⑯ 轮更新）：从库派生的**显示列表**要么按名字规范化
+ * （基础门：名字即身份），要么明确声明"同名并存是故意的"（我的模块：玩家的不同作品）。
  *
  * 与 `library-append-audit.test.ts`（那一份盯的是「裸数组展开入库」）互补：那份防的是
  * "库里长出重复条目"，这份防的是"库里已经有重复条目 + 分组按名字列 → 同名出两张卡"。
@@ -10,7 +11,9 @@
  * （`library.filter(` / `library.map(` / `library.flatMap(` / `modules.map(`）：
  *   ① 被 `dedupeByNameForDisplay(` 包住 → **显示层去重，合规**；
  *   ② 回调返回 `.template` / `.hash` → 喂编译器/判定的数据，不是显示列表，合规；
- *   ③ 同文件里紧邻出现 `new Set(` + `.name` → 按名字分组（自行去重），合规；
+ *   ③ 同文件里紧邻出现 `new Set(` + `.name`，或 `m.name ===` 的比较 → 按名字分组（自行去重），合规；
+ *   ③b `!m.teaching`（我的模块：玩家自建条目）→ **同名并存是口径**（第 ⑯ 轮：那是玩家的不同作品，
+ *      合并等于替他删掉一件），合规；
  *   ④ 其余 → **报红**：可能是一条"按名字分组但没去重"的新路径。
  * 规则②③是刻意留的窄口子：真正的目标是把**新的**违规点逼出来，而不是把现有代码全判红。
  */
@@ -25,7 +28,7 @@ interface Site {
   file: string;
   line: number;
   text: string;
-  verdict: '显示层去重' | '喂编译器/判定' | '按名字分组' | '✗ 未去重';
+  verdict: '显示层去重' | '喂编译器/判定' | '按名字分组' | '玩家作品（同名并存）' | '✗ 未去重';
 }
 
 function scan(): Site[] {
@@ -48,7 +51,10 @@ function scan(): Site[] {
         /dedupeByNameForDisplay\s*\(/.test(before + here) ||
         /dedupeByNameForDisplay\s*\(/.test(context);
       const plumbing = /=>\s*m?\.(template|hash)\b/.test(here + after);
-      const groupedByName = /new Set\(/.test(context) && /\.name\b/.test(context);
+      const groupedByName =
+        (/new Set\(/.test(context) && /\.name\b/.test(context)) || /m\.name\s*===/.test(context);
+      // 我的模块 = 非教学条目：玩家自建模块同名不同内容是他的两件作品（第 ⑯ 轮口径，不合并）
+      const playerWorks = /!\s*m\.teaching/.test(here + after);
       sites.push({
         file: `apps/studio/src/${rel}`,
         line: i + 1,
@@ -59,7 +65,9 @@ function scan(): Site[] {
             ? '喂编译器/判定'
             : groupedByName
               ? '按名字分组'
-              : '✗ 未去重',
+              : playerWorks
+                ? '玩家作品（同名并存）'
+                : '✗ 未去重',
       });
     }
   }
@@ -91,14 +99,19 @@ describe('显示层守卫：按名字分组必须去重（用户第 ⑮ 轮）',
     expect(offenders).toEqual([]);
   });
 
-  it('两个显示分组（基础门 / 我的模块）确实走了去重口', () => {
+  it('基础门分组：逻辑关走本关权威清单（不读库），时机关走按名字去重', () => {
     const palette = readFileSync(path.join(SRC, 'panels/Palette.tsx'), 'utf8');
+    // ① 逻辑关分支：直接照 App 给的权威清单渲染 —— 这一支**不碰库**，
+    //    所以库里塞重复/同名不同 hash/垃圾条目都不会影响这一组（第 ⑯ 轮）。
+    expect(palette).toContain('const gateModules = logicLevel');
+    expect(palette).toMatch(/logicLevel\s*\?\s*\(gateCatalog \?\? \[\]\)\.filter\(/);
+    // ② 时机关 / 自由模式分支：仍从库里取（那里强弱与工艺是真实差异）+ 按名字去重
     expect(palette).toContain('dedupeByNameForDisplay(');
-    // 基础门与我的模块两个 useMemo 都要经过它
-    const uses = palette.match(/dedupeByNameForDisplay\(/g) ?? [];
-    expect(uses.length).toBeGreaterThanOrEqual(2);
-    // 反证：如果谁把去重摘掉，分组里就会重新出现同名卡（行为守卫在
-    // palette-name-dedupe.test.tsx 的 DOM 不变量里，这里只钉住调用点数量）
+    // ③ 我的模块：**不**合并同名（玩家作品）
+    expect(palette).not.toMatch(
+      /dedupeByNameForDisplay\(\s*library\.filter\(\(m\) => !m\.teaching\)/,
+    );
+    // 行为侧的守卫在 palette-gate-catalog.test.tsx（逐关 + 污染库 + 点击不变）里
   });
 
   it('反证：`dedupeByNameForDisplay` 本身按名字去重、且顺序可解释', async () => {

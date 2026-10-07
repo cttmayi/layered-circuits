@@ -50,12 +50,13 @@ export interface PaletteProps {
   /** 判定/仿真口径：逻辑版抹平延迟，卡片上就不显示延迟（默认时序版） */
   mode?: 'logic' | 'timing';
   /**
-   * 本关「门整族」的注入顺序（`teachingModulesFor(本关生效族)` 的 hash 次序，由 App 传入）。
-   * 显示层按名字去重时，这个次序是**权威依据**：同名条目里保留本关族的那一份
-   * （它带本关契约，逻辑关的判定与一键出答案用的都是它）。
-   * 不传（自由模式/测试）时退化为「版本号新的优先」，结果依然稳定。
+   * **本关基础门的权威清单**（`gateCatalogFor(本关生效族)`，由 App 传入）：
+   * 门是**契约实体**，逻辑关里「基础门」分组**直接照它渲染**，与库里有多少条同名条目、
+   * hash 是哪个族的、有没有重复**完全无关**（用户第 ⑯ 轮："到了第 8 关，不该存在不同的非门"）。
+   * 时机/自由模式不用它渲染（那里强弱/工艺是真实差异），只借它的次序给同名条目排序。
+   * 不传时（自由模式/测试）退化回"库里有什么列什么 + 按名字去重"。
    */
-  gateOrder?: readonly string[];
+  gateCatalog?: readonly StoredModule[];
 }
 
 /** 拖拽编码：把「放什么」写进 dataTransfer */
@@ -224,7 +225,7 @@ export function Palette({
   level,
   header,
   mode = 'timing',
-  gateOrder,
+  gateCatalog,
 }: PaletteProps): React.JSX.Element {
   const [openSections, toggleSection] = useOpenSections();
   const [hideLocked, toggleHideLocked] = useHideLocked();
@@ -307,15 +308,13 @@ export function Palette({
   /** 勾选「隐藏本关不可用」后的展示列表（竖屏底部形态恒不过滤，见 hideLockedActive） */
   const filteredUnits = hideLockedActive ? UNITS.filter((u) => unitAllowed(u.unit)) : UNITS;
   /**
-   * 「我的模块」= 库里的非教学条目，**显示层按名字去重**（`dedupeByNameForDisplay`）：
-   * 库是内容寻址的（一 hash 一条），玩家把两个不同电路都叫「我的锁存器」就是两条；
-   * 存档瘦身（`dedupeLibrary`）对被画布引用的旧版是**故意保留**的，所以同名条目真的会同时在库里。
-   * 只动显示：库、存档、判定按 hash 解析，一行没碰 —— 详情/血统面板仍能看到全部版本。
+   * 「我的模块」= 库里的非教学条目，**不按名字合并**（用户第 ⑯ 轮的口径，我同意）：
+   * 玩家自建模块是**内容实体**，同名不同内容就是他的两件不同作品（同名不同 hash 也正是
+   * `dedupeLibrary` 要保留的语义：被画布引用的老版本不能删）。菜单里两张卡靠**成本/入出数/
+   * 延迟**区分得开，玩家自己知道哪个是哪个；合并反而等于替他删掉一件作品。
+   * （与「基础门」正好相反：那里门是**契约实体**，名字即身份，所以必须规范化成一张卡。）
    */
-  const userModules = useMemo(
-    () => dedupeByNameForDisplay(library.filter((m) => !m.teaching)),
-    [library],
-  );
+  const userModules = useMemo(() => library.filter((m) => !m.teaching), [library]);
   /**
    * 逻辑关（`judgeMode === 'logic'`，第 8 关起）里「我的模块」**只列门级口径跑得动的** ——
    * 第 1~7 关用元件搭的非门/与门这些**组合**老模块在门级口径下不成立（门级引擎递归展开时
@@ -356,15 +355,28 @@ export function Palette({
    */
   // 不套 useMemo：moduleAllowed 依赖 level、每次渲染都是新函数（套上要么漏依赖要么每帧重算），
   // 而这里就是一次 O(库大小) 的过滤 + 去重（库几十条），直接算最省心也最不容易出错。
-  const gateModules = dedupeByNameForDisplay(
-    library.filter(
-      (m) =>
-        m.teaching === true &&
-        BASIC_GATES.includes(m.name) &&
-        (level?.moduleAccess !== 'listed' || moduleAllowed(m.name)),
-    ),
-    { ...(gateOrder ? { order: gateOrder } : {}) },
-  );
+  const inGateList = (m: StoredModule): boolean =>
+    m.teaching === true &&
+    BASIC_GATES.includes(m.name) &&
+    (level?.moduleAccess !== 'listed' || moduleAllowed(m.name));
+  /**
+   * 基础门分组。**逻辑关与时机/自由模式是两套口径**：
+   *
+   * · **逻辑关**（第 8 关起）= 照 App 给的**权威清单**渲染（`gateCatalog`）。门是契约实体，
+   *   身份是**名字**：判定侧的 `gate-netlist.ts` 遇到 `isGateName(name)` 就按真值函数当原子算、
+   *   根本不展开身体，`gate-logic.ts` 的 `evalGate` 也只认门名 —— 库里同名不同 hash 的「非门」
+   *   在逻辑关**不该同时存在**（实测：把门版答案里的非门换成 ttl/cmos 版本，判定结论逐字一致，
+   *   只有造价/评分跟着族变）。所以这一组与库内容**无关**：库里塞重复条目、塞别族同名门、
+   *   塞乱七八糟的东西，这一组逐字不变。
+   * · **时机 / 自由模式** = 库里有什么列什么（那里门槛由本关族注入、强弱是真实差异），
+   *   但**按名字去重**：库是内容寻址的，历史遗留的别族同名门会让一个门出两张卡
+   *   （用户实测 7 → 11）；去重时按 `gateCatalog` 的次序保留本关族那一份。
+   */
+  const gateModules = logicLevel
+    ? (gateCatalog ?? []).filter(inGateList)
+    : dedupeByNameForDisplay(library.filter(inGateList), {
+        ...(gateCatalog ? { order: gateCatalog.map((m) => m.hash) } : {}),
+      });
   const filteredModules = hideLockedActive
     ? visibleUserModules.filter((m) => modulesAllowed && moduleAllowed(m.name))
     : visibleUserModules;

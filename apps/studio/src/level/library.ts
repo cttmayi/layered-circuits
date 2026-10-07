@@ -7,6 +7,7 @@
  * 并且每个版本都记住自己用了哪些下层模块（溯源树），成本与依赖都能一路查下去。
  */
 
+import { BASIC_GATES, teachingModulesFor } from '@lc/content';
 import type { LogicFamily } from '@lc/schema';
 import type { StoredModule } from '../editor/model';
 
@@ -109,6 +110,46 @@ export function mergeModules(
     out = [...(out ?? library), module];
   }
   return out ?? (library as StoredModule[]);
+}
+
+/** 教学积木（整个族）→ 画布库条目：`teaching: true` 使其不进「我的模块」（见 editor/model.ts） */
+export function teachingCatalogFor(family: LogicFamily): StoredModule[] {
+  return teachingModulesFor(family).map((m) => ({
+    hash: m.hash,
+    name: m.name,
+    version: m.version,
+    stage: m.stage,
+    costHalf: m.costHalf,
+    isSequential: m.isSequential,
+    ports: m.ports,
+    template: m,
+    sources: [],
+    createdAt: 0,
+    teaching: true,
+  }));
+}
+
+/**
+ * **本关基础门的权威清单**（逻辑关的「基础门」分组直接照它渲染，与库里有什么无关）。
+ *
+ * 用户第 ⑯ 轮的口径：到了第 8 关（逻辑关）**不该存在"不同的非门"** —— 门是**契约实体**，
+ * 身份由**名字**决定，内部怎么搭（rtl 的 NPN+电阻、TTL 的射极跟随器、CMOS 的互补对）
+ * 与玩家无关。这条口径在引擎里本就是事实：
+ *   · `sim-core/gate-netlist.ts` 遇到 `isGateName(mod.name)` 就**按真值函数当原子算、根本不展开身体**
+ *     （`isPureCombinational` 同样判它"纯"）—— 判定读的是**名字**，不是 hash；
+ *   · `gate-logic.ts` 的 `evalGate(name, inputs)` 只认 `GATE_NAMES`。
+ * 实测（本轮）：同一个逻辑关的门版参考解，把里面的「非门」换成 ttl / cmos 版本
+ * （hash 完全不同、身体完全不同）→ **判定结论逐字一致（pass + 错误列表）**；
+ * 只有**造价/评分**会变（非门成本 rtl 32 / ttl 36 / cmos 24 半单位），因为评分按本关族
+ * 的积木算。所以菜单必须给**本关族**那一份：给别族的同名门 = 让玩家用别族的成本去打本关的
+ * 满分线（可能更便宜，也可能更贵），这与"关卡严格保证"的族契约相冲突。
+ *
+ * 于是逻辑关的清单 = `teachingModulesFor(本关族)` 里的基础门，**按族内教学顺序**排列 ——
+ * 与库里有多少条同名、hash 是不是别族的、有没有重复**完全无关**。
+ * 时机与自由模式不走这条（那里强弱/工艺是真实差异，见 Palette 的分支）。
+ */
+export function gateCatalogFor(family: LogicFamily): StoredModule[] {
+  return teachingCatalogFor(family).filter((m) => BASIC_GATES.includes(m.name));
 }
 
 /**

@@ -5,7 +5,6 @@ import {
   findLevel,
   findTeachLevel,
   isTeachLevel,
-  teachingModulesFor,
   teachingSolutionOf,
 } from '@lc/content';
 import {
@@ -59,7 +58,14 @@ import {
 import { type Box, contentBoxOf, fitCamera, usableArea } from './layout/fit';
 import { type OverlayAnchor, placeFloatingBar, selectionAnchor } from './layout/overlay';
 import { useNarrowScreen, usePortraitNarrow } from './layout/viewport';
-import { addModule, dedupeLibrary, mergeModules, storeModule } from './level/library';
+import {
+  addModule,
+  dedupeLibrary,
+  gateCatalogFor,
+  mergeModules,
+  storeModule,
+  teachingCatalogFor,
+} from './level/library';
 import {
   docForLevel,
   emptyProgress,
@@ -289,11 +295,13 @@ export function App(): React.JSX.Element {
    */
   const logicLevel = levelJudgeMode === 'logic';
   /**
-   * 基础门菜单的「权威顺序」= 本关生效族的门整族注入顺序（hash 次序）。
-   * 菜单按名字去重时用它决定同名条目保留哪一份（本关族那一份带本关契约），
-   * 同时给卡片排序 —— 干净存档下与去重前的顺序逐字一致。 */
-  const gateOrderForLevel = useMemo(
-    () => teachingModulesFor(levelFamilyOf(levelId)).map((m) => m.hash),
+   * **本关基础门的权威清单**（穷尽「门是契约实体」这条口径）：按本关生效族取
+   * `teachingModulesFor(族)` 里的基础门，逻辑关的「基础门」分组直接照它渲染 ——
+   * 与库里有多少条同名条目、hash 是不是别族的、有没有重复**完全无关**（用户第 ⑯ 轮）。
+   * 时机/自由模式不用它（那里强弱与工艺是真实差异，见 Palette 分支）。
+   */
+  const gateCatalogForLevel = useMemo(
+    () => gateCatalogFor(levelFamilyOf(levelId)),
     [levelFamilyOf, levelId],
   );
   // 自由模式恒按「零延迟逻辑口径」；关卡口径仍由关卡自己声明（levelJudgeMode 优先）。
@@ -1389,7 +1397,7 @@ export function App(): React.JSX.Element {
     // 复合积木的身体还会引用更早的积木（传递闭包，如 显示控制→七段译码器→与非门），
     // 只注入直接引用会在展开时 unknown-module，因此只要参考解用到任何教学积木就注入整族。
     const refUsesModule = ref.instances.some((inst) => inst.kind === 'module');
-    const extra = refUsesModule ? teachingStoredFor(spec.family) : [];
+    const extra = refUsesModule ? teachingCatalogFor(spec.family) : [];
     // 内容寻址合并（**不是**不去重追加）：同一份教学积木已经在本关画布库里就一条都不再加。
     // 否则连点「一键出答案」每点一次就多塞一整族（实测基础门 5 → 10 → 15 → 20，用户报的 bug）。
     const library = mergeModules(doc.library, extra);
@@ -1960,7 +1968,7 @@ export function App(): React.JSX.Element {
             placing={placing}
             onPick={setPlacing}
             library={doc.library}
-            gateOrder={gateOrderForLevel}
+            gateCatalog={gateCatalogForLevel}
             level={
               currentLevel
                 ? {
@@ -2277,23 +2285,6 @@ export function App(): React.JSX.Element {
   );
 }
 
-/** 教学用门级模块 → 画布库条目（按玩家工艺给对应工艺的积木，hash 内容稳定，重复注入无害；
- *  teaching: true 标记使其不出现在「我的模块」与放置面板，见 editor/model.ts StoredModule） */
-const teachingStoredFor = (family: LogicFamily): StoredModule[] =>
-  teachingModulesFor(family).map((m) => ({
-    hash: m.hash,
-    name: m.name,
-    version: m.version,
-    stage: m.stage,
-    costHalf: m.costHalf,
-    isSequential: m.isSequential,
-    ports: m.ports,
-    template: m,
-    sources: [],
-    createdAt: 0,
-    teaching: true,
-  }));
-
 /**
  * 设计传递引用到的教学积木（复合积木的身体还会引用更早的积木）。
  * 封装出的复合模块要跨关复用，其身体引用的教学积木必须也在玩家库里；
@@ -2316,7 +2307,7 @@ const withLevelGates = (
   if (!level || level.moduleAccess === 'none') return library;
   // 同样按 hash 去重：玩家库里的教学依赖（通完关后由 wrapAndSettle 存入，见下）会让
   // 「整族注入」再叠一份 —— 第 7 关起基础门就会一关比一关多（实测 8 张里 3 张是重复）。
-  return mergeModules(library, teachingStoredFor(family));
+  return mergeModules(library, teachingCatalogFor(family));
 };
 
 const teachingDepsOf = (
@@ -2324,7 +2315,7 @@ const teachingDepsOf = (
   library: readonly StoredModule[],
   family: LogicFamily,
 ): StoredModule[] => {
-  const all = teachingStoredFor(family);
+  const all = teachingCatalogFor(family);
   const byHash = new Map<string, ModuleTemplate>();
   // 模板在存档/画布库里是纯 JSON（结构化克隆），按 familyOfModule 的既有模式窄化成 ModuleTemplate
   for (const m of library) byHash.set(m.hash, m.template as ModuleTemplate);
