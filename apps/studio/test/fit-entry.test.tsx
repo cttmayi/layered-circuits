@@ -142,22 +142,24 @@ function boxOf(scene: Scene): { x: number; y: number; w: number; h: number } {
   return box;
 }
 
-/** 面积口径会给出的 scale（A = 可用宽/可用高）—— 现在这是**唯一**口径 */
+/** 面积口径会给出的 scale（A = 可用宽/可用高）—— 现在这是**唯一**口径（目标 2275 格² = 175×13） */
 function areaScaleFor(w: number, h: number): number {
-  return w / (Math.sqrt(175 * (w / h)) * GRID_PITCH);
+  return w / (Math.sqrt(2275 * (w / h)) * GRID_PITCH);
 }
 
-/** 真正喂给渲染的 scale：面积口径夹到手势上限 2.6（大屏会截住） */
+/** 真正喂给渲染的 scale：面积口径夹到手势区间；新目标下四个真实视口都不夹，又小又扁的可用区会撞下限 */
 function expectedScale(w: number, h: number): number {
   return Math.min(Math.max(areaScaleFor(w, h), SCALE_RANGE.min), SCALE_RANGE.max);
 }
 
 /**
- * **老口径**（已按用户裁定删除）会给出的 scale：min(面积, 内容含留白) —— 留在这里做反证，
- * 防止"内容优先"再退回来（它会把视野撑到 606~2691 格²，是 175 的 3~15 倍）。
+ * **老口径的"内容优先"那一半**（已按用户裁定删除）：只按内容 bbox（含 40 世界单位留白）把整关塞进来。
+ * 留在这里做反证 —— 它给出的 606~2896 格²，四个视口**没有一个**落在目标区间 [1950, 2600] 里，
+ * 所以"面积 ∈ 区间"这条断言本身就是防回归闸门（一旦内容又参与定 scale，这条立刻红）。
+ * 注意不要拿 `areaScaleFor` 混进来（那是**新**目标），否则反证会被新口径污染。
  */
-function oldContentPriorityScale(w: number, h: number, box: { w: number; h: number }): number {
-  return Math.min(areaScaleFor(w, h), w / (box.w + 80), h / (box.h + 80));
+function oldContentOnlyScale(w: number, h: number, box: { w: number; h: number }): number {
+  return Math.min(w / (box.w + 80), h / (box.h + 80));
 }
 
 /** 手动缩放一次（App 的 onWheel） */
@@ -181,15 +183,15 @@ function reenterSameLevel(title: string): void {
   fireEvent.click(screen.getByText(title));
 }
 
-describe('进关自适应：进关就把相机摆好（固定约 13 格视野 + 内容居中）', () => {
+describe('进关自适应：进关就把相机摆好（目标 2275 格² ≈ 47.7 格见方 + 内容居中）', () => {
   it.each([
-    // 画布尺寸 = CDP 实测（桌面扣掉左侧元件库 240 + 间距 16；竖屏顶栏现在是 161 高）
+    // 画布尺寸 = CDP 实测（桌面扣掉左侧元件库 240 + 间距 16；竖屏顶栏 109 高）
     ['桌面 1280×800（画布 1024×754）', 1280, 800, 1024, 754],
-    ['竖屏 390×844（画布 390×683）', 390, 844, 390, 683],
+    ['竖屏 390×844（画布 390×735）', 390, 844, 390, 735],
     ['横屏 844×390（画布 844×333）', 844, 390, 844, 333],
     ['平板 768×1024（画布 768×967）', 768, 1024, 768, 967],
   ])(
-    '%s：scale 只由面积口径定（真实关卡内容撑不大它）、相机居中于内容中心、内容超出靠平移',
+    '%s：scale 只由面积口径定（真实关卡内容不参与）、相机居中于内容中心、内容基本装得下',
     (_l, vw, vh, cw, ch) => {
       stubCanvas();
       stubCanvasRect(cw, ch);
@@ -199,29 +201,31 @@ describe('进关自适应：进关就把相机摆好（固定约 13 格视野 + 
       const s = lastScene();
       const box = boxOf(s);
 
+      // 手势区间内，而且四个真实视口都**不夹紧**
       expect(s.camera.scale).toBeGreaterThanOrEqual(SCALE_RANGE.min);
       expect(s.camera.scale).toBeLessThanOrEqual(SCALE_RANGE.max);
+      expect(s.camera.scale).toBeCloseTo(expectedScale(cw, ch), 9);
+      expect(s.camera.scale).toBeCloseTo(areaScaleFor(cw, ch), 9);
       // 居中：相机 = 内容 bbox 中心（= 可用区中心），不是旧默认值 (340,220)
       expect(s.camera.x).toBeCloseTo(box.x + box.w / 2, 6);
       expect(s.camera.y).toBeCloseTo(box.y + box.h / 2, 6);
 
-      // **核心口径**：scale == 面积口径（大屏夹到 2.6），真实关卡内容不再参与
-      expect(s.camera.scale).toBeCloseTo(expectedScale(cw, ch), 9);
+      // **核心口径**：可见面积正好 2275 格²，落在 [1950, 2600] 里
       const cells = visibleCells(s.camera, cw, ch);
-      const clamped = areaScaleFor(cw, ch) > SCALE_RANGE.max;
-      expect(cells.area).toBeCloseTo(
-        clamped ? (cw * ch) / (GRID_PITCH * SCALE_RANGE.max) ** 2 : 175,
-        1,
-      );
-      // 不许被内容撑大：老口径（内容优先）会给 min(面积,内容) = 1.13 量级 → 1496.9 格²（桌面）
-      expect(s.camera.scale).toBeGreaterThan(oldContentPriorityScale(cw, ch, box));
-      expect(cells.area).toBeLessThan(607);
-      // 内容（704 世界单位宽）比视野大 → 一部分在视野外，靠平移/缩放看（预期代价）
-      expect((box.w * s.camera.scale) / 2).toBeGreaterThan(cw / 2);
+      expect(cells.area).toBeCloseTo(2275, 1);
+      expect(cells.area).toBeGreaterThanOrEqual(1950);
+      expect(cells.area).toBeLessThanOrEqual(2600);
+      // 不许被内容带偏：老口径（内容优先）在这一关的落点必须**在区间外**（反证口径还活着）
+      const oldScale = oldContentOnlyScale(cw, ch, box);
+      const oldArea = (cw * ch) / (GRID_PITCH * oldScale) ** 2;
+      expect(oldArea < 1950 || oldArea > 2600, `老口径 ${oldArea} 竟然落在区间里`).toBe(true);
+      // 目标放大 13 倍后真实内容（704 宽）基本装得下：桌面/横屏/平板整关可见，
+      // 竖屏最多差 6px（不到 2%）→ 只有边缘一点点要靠平移
+      expect((box.w * s.camera.scale) / 2).toBeLessThanOrEqual(cw / 2 + 6);
     },
   );
 
-  it('数字对得上：桌面 1024×754 的 scale == 面积口径 3.321 夹到上限 2.6（= 285.5 格²）', () => {
+  it('数字对得上：桌面 1024×754 的 scale == 面积口径 0.9211（不夹紧）= 2275 格²', () => {
     stubCanvas();
     stubCanvasRect(1024, 754);
     setViewport(1280, 800);
@@ -229,16 +233,16 @@ describe('进关自适应：进关就把相机摆好（固定约 13 格视野 + 
     goToLevel('非门');
     const s = lastScene();
     const box = boxOf(s);
-    expect(s.camera.scale).toBeCloseTo(SCALE_RANGE.max, 9);
-    // 面积口径要给的 scale 是 3.321（> 上限 2.6）→ 大屏上 175 格² 够不着，硬夹到 285.5 格²
-    expect(areaScaleFor(1024, 754)).toBeCloseTo(3.321, 3);
-    expect(visibleCells(s.camera, 1024, 754).area).toBeCloseTo(285.5, 1);
-    // 反证：老口径（内容优先）在这一关给 min(1024/784, 754/244) = 1.306 → 1131.5 格²
-    // （比新口径的 285.5 还大 4 倍；内容更高的关如段码·abc 会到 1496.9 格²）
-    const oldScale = oldContentPriorityScale(1024, 754, box);
+    // 175 时这里要 3.321 撞上限 2.6；目标 ×13 后只要 0.9211，稳稳落在手势区间里
+    expect(areaScaleFor(1024, 754)).toBeCloseTo(0.9211, 4);
+    expect(s.camera.scale).toBeCloseTo(0.9211, 4);
+    expect(visibleCells(s.camera, 1024, 754).area).toBeCloseTo(2275, 1);
+    expect(s.camera.scale).toBeGreaterThan(SCALE_RANGE.min);
+    // 反证：老口径（内容优先）在这一关给 min(1024/784, 754/244) = 1.306 → 1131.5 格²（区间外）
+    const oldScale = oldContentOnlyScale(1024, 754, box);
     expect(oldScale).toBeCloseTo(1.306, 3);
     expect((1024 * 754) / (GRID_PITCH * oldScale) ** 2).toBeCloseTo(1131.5, 1);
-    expect(oldScale).toBeLessThan(SCALE_RANGE.max); // 老口径连上限都够不着，视野直接被内容撑开
+    expect(oldScale).toBeGreaterThan(s.camera.scale); // 老口径会把视野**缩**到比目标小（1131.5 < 1950）
   });
 
   it('竖屏扣掉底部抽屉：可用区高变矮 → 面积口径跟着变（仍不碰内容）', () => {
@@ -252,7 +256,7 @@ describe('进关自适应：进关就把相机摆好（固定约 13 格视野 + 
     const withoutSheet = lastScene().camera;
     const box = boxOf(lastScene());
     expect(withoutSheet.scale).toBeCloseTo(expectedScale(600, 400), 9);
-    expect(visibleCells(withoutSheet, 600, 400).area).toBeCloseTo(175, 1);
+    expect(visibleCells(withoutSheet, 600, 400).area).toBeCloseTo(2275, 1);
 
     // 拉开底部抽屉（260px 高）→ 可用区 600×400 → 600×140，面积口径的 scale 跟着变
     fakePanelSize(390, 260);
@@ -260,8 +264,12 @@ describe('进关自适应：进关就把相机摆好（固定约 13 格视野 + 
     const withSheet = lastScene().camera;
     const withCells = visibleCells(withSheet, 600, 140);
     expect(withSheet).not.toEqual(withoutSheet);
+    // 140px 高的可用区：面积口径想要 0.3038 < 0.35 → 撞**下限**（放大 13 倍后容易撞的是这一头），
+    // 实得 1714.3 格²（低于区间下限，如实记录；真机竖屏可用区 390×397 是 0.4125，不撞）
+    expect(areaScaleFor(600, 140)).toBeCloseTo(0.3038, 4);
     expect(withSheet.scale).toBeCloseTo(expectedScale(600, 140), 9);
-    expect(withCells.area).toBeCloseTo(175, 1); // 面积口径不因可用区变矮而变松
+    expect(withSheet.scale).toBe(SCALE_RANGE.min);
+    expect(withCells.area).toBeCloseTo(1714.3, 1);
     expect(withSheet.scale).toBeGreaterThanOrEqual(SCALE_RANGE.min);
     // 相机仍在内容中心（中心不随可用区变）
     expect(withSheet.x).toBeCloseTo(box.x + box.w / 2, 6);
@@ -294,10 +302,10 @@ describe('手动平移/缩放之后不再被重置', () => {
     expect(canvas).toBeTruthy();
     const fitted = lastScene().camera;
 
-    // 桌面进关已经是手势上限 2.6（面积口径被 max 截住）→ 只能往回缩，缩了就算"用户接管了视图"
+    // 桌面进关的 scale 是面积口径给的 0.9211（新目标下不夹紧）→ 往回缩一点就算"用户接管了视图"
     wheelZoom(canvas!, 100);
     const zoomed = lastScene().camera;
-    expect(fitted.scale).toBeCloseTo(SCALE_RANGE.max, 9);
+    expect(fitted.scale).toBeCloseTo(0.9211, 4);
     expect(zoomed.scale).toBeLessThan(fitted.scale);
 
     setViewport(844, 390); // 旋屏
@@ -308,7 +316,7 @@ describe('手动平移/缩放之后不再被重置', () => {
 
   it('手动平移一次 → 抽屉开合也不重新 fit', () => {
     stubCanvas();
-    stubCanvasRect(390, 787);
+    stubCanvasRect(390, 735);
     fakePanelSize(390, 362);
     setViewport(390, 844);
     renderApp();
@@ -327,7 +335,7 @@ describe('手动平移/缩放之后不再被重置', () => {
 });
 
 describe('可见格数（CDP 用的是同一算法，先在这里对一遍）', () => {
-  it('进关后由 camera 反推的可见格数 = 可用区面积 / (格距×scale)²；桌面是 285.5（受 2.6 截）', () => {
+  it('进关后由 camera 反推的可见格数 = 可用区面积 / (格距×scale)²；桌面是 2275', () => {
     stubCanvas();
     stubCanvasRect(1024, 754);
     setViewport(1280, 800);
@@ -336,24 +344,26 @@ describe('可见格数（CDP 用的是同一算法，先在这里对一遍）', 
     const s = lastScene();
     const cells = visibleCells(s.camera, 1024, 754);
     expect(cells.area).toBeCloseTo((1024 * 754) / (GRID_PITCH * s.camera.scale) ** 2, 6);
-    // 格块宽高比 = 可用区宽高比（175 格² 那套「同比例铺满」的口径）
+    // 格块宽高比 = 可用区宽高比（2275 格² 那套「同比例铺满」的口径）
     expect(cells.x / cells.y).toBeCloseTo(1024 / 754, 6);
-    // 桌面被手势上限 2.6 截住 → 285.5 格²（不是 175，也不是老口径的 1131.5）
-    expect(cells.x).toBeCloseTo(19.7, 1); // 1024 / (20 × 2.6)，CDP 实测 19.69
-    expect(cells.y).toBeCloseTo(14.5, 1); // 754 / (20 × 2.6)，CDP 实测 14.5
-    expect(cells.area).toBeCloseTo(285.5, 1); // CDP 实测 285.5
+    // 桌面 55.59 × 40.93 = 2275.0（≈47.7 格见方的那套面积；不是 175，也不是老口径的 1131.5）
+    expect(cells.x).toBeCloseTo(55.59, 1);
+    expect(cells.y).toBeCloseTo(40.93, 1);
+    expect(cells.area).toBeCloseTo(2275, 1);
   });
 
-  it('竖屏：不被夹紧 → 正好 175 格²（10.0 格宽 × 17.5 格高，CDP 实测同值）', () => {
+  it('竖屏：不被夹紧 → 正好 2275 格²（34.7 格宽 × 65.5 格高）', () => {
     stubCanvas();
-    stubCanvasRect(390, 683);
+    stubCanvasRect(390, 735);
     setViewport(390, 844);
     renderApp();
     goToLevel('非门');
     const s = lastScene();
-    const cells = visibleCells(s.camera, 390, 683);
-    expect(cells.x).toBeCloseTo(Math.sqrt(175 * (390 / 683)), 3); // 10.0（CDP 实测 10.0）
-    expect(cells.y).toBeCloseTo(175 / Math.sqrt(175 * (390 / 683)), 3); // 17.5（CDP 实测 17.51）
-    expect(cells.x * cells.y).toBeCloseTo(175, 1);
+    const cells = visibleCells(s.camera, 390, 735);
+    expect(cells.x).toBeCloseTo(Math.sqrt(2275 * (390 / 735)), 2); // 34.74
+    expect(cells.y).toBeCloseTo(2275 / Math.sqrt(2275 * (390 / 735)), 2); // 65.48
+    expect(cells.x * cells.y).toBeCloseTo(2275, 1);
+    expect(cells.area).toBeGreaterThanOrEqual(1950);
+    expect(cells.area).toBeLessThanOrEqual(2600);
   });
 });

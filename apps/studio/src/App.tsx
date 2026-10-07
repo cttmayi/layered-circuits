@@ -188,7 +188,7 @@ export function App(): React.JSX.Element {
   const [redoStack, setRedoStack] = useState<Doc[]>([]);
   const [camera, setCamera] = useState<Camera>({ x: 340, y: 220, scale: 1 });
   /**
-   * 进关自适应（口径 = 可见面积 175 格²，纯函数在 layout/fit.ts）：
+   * 进关自适应（口径 = 可见面积 **2275 格²** = 175 × 13，纯函数在 layout/fit.ts）：
    *  - `userViewRef`：用户**手动平移/缩放过**就置 true —— 之后容器变化（旋屏/缩放窗口）与
    *    抽屉开合都不再重新 fit，免得跟用户抢镜头；换关/重载/导入会复位。
    *  - `fitBoxRef`：当前内容 bbox（世界单位，由元件足迹算），跟着 doc 同步。
