@@ -7,13 +7,19 @@
  * （隐藏，不是置灰）；「基础门」那组一个字不动；时序关与自由模式逐字不变。
  *
  * 判据本身（`sim/gate-usable.ts`：拿探针设计把门级判定自己叫起来跑一遍）在这里也被钉住：
- *  - 含元件的模块 → 用不了（含**递归**：身体里嵌了含元件模块的也不行）；
+ *  - 含元件的**组合**模块 → 用不了（含**递归**：身体里嵌了含元件模块的也不行）；
  *  - 全由基础门搭的复合模块 → 能用；
- *  - 带 SeqSpec 的时序积木（主从D触发器）→ **能用**（不被一刀切成"非纯门就隐藏"）。
+ *  - 时序积木（D锁存器 / 主从D触发器）→ **能用**（不被一刀切成"非纯门就隐藏"）。
+ *
+ * ⚠️ 用户随后报的 bug（本文件最后一组用例）：门级引擎认时序积木**按模块名**查
+ * `GATE_SEQ_SPECS`，而玩家给模块起的名字五花八门（手动封装的默认名就是「我的模块」，
+ * 老版本还可能用关卡标题「D 锁存器」——带空格）。名字对不上表，同一个电路就被判成"跑不动"
+ * 而**被整条藏掉**，其中就包括玩家上一关产出的 D 锁存器。修法：**名字不参与判据** —— 端口形状
+ * 是已声明的时序积木（`d/en/q`、`clk/d/q`）就必列。这组用例把「同一具身体、不同名字」的对照表固化。
  */
 
 import { designToModulePorts, wrapModule } from '@lc/compiler';
-import { GATE_SEQ_SPECS, hashOf, teachingModulesFor } from '@lc/content';
+import { ALL_LEVELS, GATE_SEQ_SPECS, hashOf, teachingModulesFor } from '@lc/content';
 import {
   type Design,
   DesignSchema,
@@ -26,7 +32,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { StoredModule } from '../src/editor/model.ts';
 import { Palette } from '../src/panels/Palette.tsx';
-import { gateLevelUsable, gateProbeLibrary } from '../src/sim/gate-usable.ts';
+import { gateLevelUsable, gateProbeLibrary, specByShape } from '../src/sim/gate-usable.ts';
 
 /** 与 App 注入画布库的口径一致：整族教学积木（含嵌套用到的下层门） */
 const RTL_LIB = new InMemoryModuleLibrary([...teachingModulesFor('rtl')]);
@@ -167,6 +173,19 @@ function dffModule(): StoredModule {
   return wrap('主从D触发器（包一层）', body);
 }
 
+/**
+ * 玩家上一关的成果：D 锁存器。身体照抄教学积木（元件版双极锁存电路，`isSequential` 为真），
+ * 但**名字由玩家自己起**（手动封装时 window.prompt 的默认值就是「我的模块」）。
+ */
+function playerLatchNamed(name: string): StoredModule {
+  const tpl = RTL_LIB.get(hashOf('D锁存器')) as ModuleTemplate;
+  const { template } = wrapModule(
+    { name, stage: 2, kind: 'logic', ports: designToModulePorts(tpl.body), body: tpl.body },
+    RTL_LIB,
+  );
+  return stored(template);
+}
+
 function fakeLevel(judgeMode: 'logic' | 'timing', bannedModules: string[] = []): Level {
   return {
     id: 't-logic',
@@ -209,6 +228,19 @@ function renderPalette(opts: {
     />,
   );
 }
+
+/** 某一组的卡片名字（按组头前缀找那一组，避开与组头文字撞名） */
+function sectionCardNames(head: string): string[] {
+  const section = [...document.querySelectorAll('.palette-section')].find((sec) =>
+    (sec.querySelector('.palette-section-title')?.textContent?.trim() ?? '').startsWith(head),
+  );
+  return [...(section?.querySelectorAll('.palette-name') ?? [])].map((el) =>
+    (el.textContent?.trim() ?? '').replace(/\s+(时序|组合|模块)$/, ''),
+  );
+}
+
+/** 「我的模块」组的卡片名字 */
+const cardNames = (): string[] => sectionCardNames('我的模块');
 
 /**
  * 用户第 ⑫ 轮追加裁定：**不要**"已隐藏 N 个"这类说明文字（隐藏就是安静地不渲染），
@@ -378,6 +410,76 @@ describe('逻辑关隐藏元件级老模块（门级判定跑不了的不列）'
     // 反证：全门模块**没有**理由（门级判定接得住）
     expect(probeReason(gateMod2, lib)).toBe('');
     expect(probeReason(dff, lib)).toBe('');
+  });
+
+  /**
+   * 用户报的 bug（最高优先级）：第 10 关「D 锁存器」通关后封装出来的模块，到第 11 关
+   * 「主从 D 触发器」里**不见了** —— 因为门级引擎按**名字**查 `GATE_SEQ_SPECS`，而玩家的模块名
+   * 对不上表（手动封装默认「我的模块」、老版本用关卡标题「D 锁存器」带空格）→ 探针返回 null
+   * → 被当成"门级跑不动"整条藏掉。实测口径（本用例固化的对照表）：
+   *   名字「D锁存器」（= 关卡 unlock.name）→ 跑得动；「D 锁存器」/「我的模块」/「D锁存器2」→ 曾经 null。
+   */
+  it('上一关产出的 D 锁存器，换个名字也必须列出来（用户报的 bug）', () => {
+    for (const name of ['D锁存器', 'D 锁存器', '我的模块', 'D锁存器2']) {
+      const latch = playerLatchNamed(name);
+      const lib = gateProbeLibrary([...teachingLibrary(), latch]);
+      // 判据层面：形状就是本关要用的时序积木 → 必须判成"跑得动"
+      expect(gateLevelUsable(latch, lib), name).toBe(true);
+      // 渲染层面：必须在「我的模块」里（卡片的 title 也按竖屏口径给全名）
+      const view = renderPalette({ level: fakeLevel('logic'), library: [latch] });
+      expect(cardNames(), name).toEqual([name]);
+      expect(screen.getByText('我的模块（1）'), name).toBeTruthy();
+      expect(screen.queryByText(NO_HINT), name).toBeNull();
+      view.unmount();
+    }
+  });
+
+  it('对照表：同形不同名，两个模块各判各的（按 hash 缓存的旧实现会串味）', () => {
+    const namedLatch = playerLatchNamed('D锁存器');
+    const renamedLatch = playerLatchNamed('我的模块');
+    // 同形 → 同 hash（wrapModule 的 hash 不含名字，所以旧缓存必然把两者混成一个结论）
+    expect(renamedLatch.hash).toBe(namedLatch.hash);
+    // 先拿一个**缺依赖**的库问一次（真答案 false），再用完整库问 —— 结论不许被上一次污染
+    const brokenLib = gateProbeLibrary([gateNotModule()]);
+    const goodLib = gateProbeLibrary([...teachingLibrary(), gateNotModule()]);
+    const gateMod = gateNotModule();
+    expect(gateLevelUsable(gateMod, brokenLib)).toBe(false);
+    expect(gateLevelUsable(gateMod, goodLib)).toBe(true);
+    // 时序积木：名字对不上表也要 true（形状兜底），且两个名字结论一致
+    expect(gateLevelUsable(renamedLatch, goodLib)).toBe(true);
+    expect(gateLevelUsable(namedLatch, goodLib)).toBe(true);
+  });
+
+  it('原来该挡的还挡着：含元件的**组合**老模块（含递归）一律不列', () => {
+    const unitMod = unitNotModule();
+    const nested = nestedOverUnitModule();
+    const latch = playerLatchNamed('我的模块');
+    renderPalette({ level: fakeLevel('logic'), library: [unitMod, nested, latch] });
+    expect(screen.queryByText(unitMod.name, { exact: false })).toBeNull();
+    expect(screen.queryByText(nested.name, { exact: false })).toBeNull();
+    expect(cardNames()).toEqual(['我的模块']);
+    expect(screen.getByText('我的模块（1）')).toBeTruthy();
+    // 口径：**形状对不上任何时序声明**的组合模块 → 才问门级探针
+    const lib = gateProbeLibrary([...teachingLibrary(), unitMod, nested, latch]);
+    expect(specByShape(unitMod)).toBeUndefined();
+    expect(specByShape(nested)).toBeUndefined();
+    expect(specByShape(latch)).toBeDefined();
+    expect(gateLevelUsable(unitMod, lib)).toBe(false);
+    expect(gateLevelUsable(nested, lib)).toBe(false);
+  });
+
+  it('真实关卡复现（第 11 关「主从 D 触发器」）：D锁存器在、老非门不在、基础门的非门照旧', () => {
+    const dffLevel = ALL_LEVELS.find((l) => l.id === 's2-dff') as Level;
+    const playerLatch = playerLatchNamed('我的模块'); // 上一关的成果（玩家自己起的名字）
+    const oldUnitNot = unitNotModule(); // 第 1~7 关那种元件版非门
+    renderPalette({ level: dffLevel, library: [playerLatch, oldUnitNot] });
+    expect(cardNames()).toEqual(['我的模块']);
+    expect(screen.getByText('我的模块（1）')).toBeTruthy();
+    expect(screen.queryByText('非门（元件版）', { exact: false })).toBeNull();
+    // 「基础门」那组照旧（本关给的门，非门在里面）
+    expect(screen.getByText('基础门（5）')).toBeTruthy();
+    expect(sectionCardNames('基础门')).toContain('非门');
+    expect(screen.queryByText(NO_HINT)).toBeNull();
   });
 
   it('点击仍然有效：逻辑关里全门模块照旧能回调（没被这轮改动碰掉）', () => {

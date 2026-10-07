@@ -297,14 +297,16 @@ export function Palette({
     Boolean(level);
   /** 勾选「隐藏本关不可用」后的展示列表（竖屏底部形态恒不过滤，见 hideLockedActive） */
   const filteredUnits = hideLockedActive ? UNITS.filter((u) => unitAllowed(u.unit)) : UNITS;
-  const userModules = library.filter((m) => !m.teaching);
+  const userModules = useMemo(() => library.filter((m) => !m.teaching), [library]);
   /**
-   * 逻辑关（`judgeMode === 'logic'`，第 8 关起）里「我的模块」**只列门级判定跑得了的** ——
-   * 第 1~7 关用元件搭的非门/与门这些老模块在门级判定里是"看着能用、其实不认"
-   * （门级引擎遇到身体里含元件的模块会如实放弃），所以**整条不渲染**（隐藏，不是置灰）。
+   * 逻辑关（`judgeMode === 'logic'`，第 8 关起）里「我的模块」**只列门级口径跑得动的** ——
+   * 第 1~7 关用元件搭的非门/与门这些**组合**老模块在门级口径下不成立（门级引擎递归展开时
+   * 遇到身体里含元件的模块会如实放弃），所以**整条不渲染**（隐藏，不是置灰）。
    *
    * 判据不在这里维护，也不在别处维护名单：见 sim/gate-usable.ts —— 拿探针设计把**门级判定
-   * 自己叫起来跑一遍**（`runGateVectors`，就是判定在逻辑关走的那条入口），跑不了就不列。
+   * 自己叫起来跑一遍**（`runGateVectors`，就是判定在逻辑关走的那条入口）：跑不了就不列；
+   * 名字没写进 `GATE_SEQ_SPECS` 的**时序**积木（玩家自己起名的 D 锁存器/主从D触发器）按端口
+   * 形状补一份声明再问 —— 否则会把玩家上一关的成果藏掉（用户实测 bug，见该文件头）。
    * 这样将来新增模块/关卡、引擎放宽或收紧，这里自动跟着对。
    *
    * 时序关与自由模式（`judgeMode !== 'logic'`）走的是同一个 `visibleUserModules = userModules`
@@ -315,9 +317,12 @@ export function Palette({
    */
   const logicLevel = level?.judgeMode === 'logic';
   const probeLibrary = useMemo(() => gateProbeLibrary(library), [library]);
-  const visibleUserModules = logicLevel
-    ? userModules.filter((m) => gateLevelUsable(m, probeLibrary))
-    : userModules;
+  // 探针不再做全局缓存（结论同时取决于模块名与库，按 hash 缓存会串味 —— 见 gate-usable.ts 文件头），
+  // 所以这里按「库 + 是否逻辑关」记忆化，画布上的鼠标移动不会反复跑探针。
+  const visibleUserModules = useMemo(
+    () => (logicLevel ? userModules.filter((m) => gateLevelUsable(m, probeLibrary)) : userModules),
+    [logicLevel, userModules, probeLibrary],
+  );
   /** 基础门：本关提供的门（teaching 积木）。库里注入的是整族（复合门的身体会引用更底层的门），
    *  菜单只列本关允许的门，所以列表里不会出现被锁住的卡片。 */
   /** 本关是否允许在顶层画布摆元件（第 8 关起为 false） */
