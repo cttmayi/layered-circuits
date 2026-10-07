@@ -30,7 +30,8 @@ import {
  * 可用区 = **真机量出来的画布尺寸**（headless Chrome 1280×800 / 844×390 / 390×844 / 768×1024，
  * 第 ⑨ 轮 CDP 实测，与 App 里 usableArea 的口径一致）：
  *  - 桌面：画布 1024×754 —— 顶栏 46 + 左侧元件库 240 + 间距 16（元件库是流内布局）；
- *  - 竖屏：画布 390×735 —— 顶栏 109（任务块只剩短标题后从 161 收下来，见 mobile-layout 契约）；
+ *  - 竖屏：画布 390×735（CDP 实测：顶栏 109 → 844 − 109 = 735，见 mobile-layout 契约）；
+ *    用户口径里写的是 390×683，两者都单独覆盖（见"用户第 ⑩ 轮点名的四视口"那条）；
  *  - 横屏：画布 844×333 —— 顶栏 57，元件库是覆盖抽屉（关着就不占）；
  *  - 平板竖屏：画布 768×967 —— 顶栏 57（任务块与按钮同行）。
  */
@@ -153,6 +154,53 @@ describe('面积口径：按 2275 格² 取景（内容尺寸不参与）', () =
       const s = fitCamera({ width: v.w, height: v.h, content: REAL_TALL }).camera.scale;
       expect(s, `${v.label} 撞界了`).toBeGreaterThan(SCALE_RANGE.min);
       expect(s, `${v.label} 撞界了`).toBeLessThan(SCALE_RANGE.max);
+    }
+  });
+
+  it('用户第 ⑩ 轮点名的四视口（桌面 1024×754 / 竖屏 390×683 / 横屏 844×333 / 平板 768×967）', () => {
+    // 用**真实代码**（fitCamera）跑这四组可用区：面积落在 [1950, 2600]、scale 落在手势区间
+    // [0.35, 2.6]、内容 bbox 中心正好落在视野中心（内容只做取景居中，不参与 scale）。
+    // 竖屏这里用用户写下的 683；真机实测画布是 390×735（上面 VIEWPORTS 走的是实测值），两个都在测。
+    const userViews = [
+      { label: '桌面画布 1024×754', w: 1024, h: 754, scale: 0.9211 },
+      { label: '竖屏画布 390×683', w: 390, h: 683, scale: 0.541 },
+      { label: '横屏画布 844×333', w: 844, h: 333, scale: 0.5557 },
+      { label: '平板画布 768×967', w: 768, h: 967, scale: 0.9034 },
+    ] as const;
+    for (const v of userViews) {
+      const r = fitCamera({ width: v.w, height: v.h, content: REAL_NOT });
+      expect(r.clamped, v.label).toBe('none');
+      expect(r.cells.area, v.label).toBeCloseTo(TARGET_CELLS_AREA, 6);
+      expect(r.cells.area).toBeGreaterThanOrEqual(CELLS_AREA_RANGE.min);
+      expect(r.cells.area).toBeLessThanOrEqual(CELLS_AREA_RANGE.max);
+      expect(r.camera.scale, v.label).toBeCloseTo(v.scale, 3);
+      expect(r.camera.scale, v.label).toBeGreaterThanOrEqual(SCALE_RANGE.min);
+      expect(r.camera.scale, v.label).toBeLessThanOrEqual(SCALE_RANGE.max);
+      expect(r.camera.x, v.label).toBeCloseTo(REAL_NOT.x + REAL_NOT.w / 2, 9);
+      expect(r.camera.y, v.label).toBeCloseTo(REAL_NOT.y + REAL_NOT.h / 2, 9);
+      // 等比例时约 47.7 格见方：sqrt(2275) = 47.697
+      expect(Math.sqrt(r.cells.area), v.label).toBeCloseTo(47.697, 2);
+    }
+  });
+
+  it('往"缩小"走顺手解决了老问题：旧口径 175 在桌面/平板撞**上限 2.6**，现在不撞了', () => {
+    // 175 格² 想要 scale ≈ 3.3（桌面）/ 3.18（平板）→ 被 SCALE_RANGE.max = 2.6 夹住，
+    // 实得只有 285.5 / 274.7 格²（"够不着"）。2275 想要 0.92 / 0.90 → 一头都不撞。
+    const cases = [
+      { label: '桌面 1024×754', w: 1024, h: 754, oldArea: 285.5 },
+      { label: '平板 768×967', w: 768, h: 967, oldArea: 274.7 },
+    ] as const;
+    for (const v of cases) {
+      const old = fitCamera({ width: v.w, height: v.h, content: SMALL, targetArea: 175 });
+      expect(old.clamped, v.label).toBe('max');
+      expect(old.camera.scale, v.label).toBe(SCALE_RANGE.max);
+      expect(old.cells.area, v.label).toBeCloseTo(v.oldArea, 1);
+      const now = fitCamera({ width: v.w, height: v.h, content: SMALL });
+      expect(now.clamped, v.label).toBe('none');
+      expect(now.cells.area, v.label).toBeCloseTo(TARGET_CELLS_AREA, 6);
+      // 目标 ×13，但因为老口径被上限吃掉一截，桌面/平板实测只涨到 ×7.97 / ×8.28（如实记录）
+      expect(now.cells.area / old.cells.area, v.label).toBeGreaterThan(7.9);
+      expect(now.cells.area / old.cells.area, v.label).toBeLessThan(8.4);
     }
   });
 
