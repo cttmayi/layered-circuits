@@ -26,6 +26,8 @@ import {
 import {
   type Bit,
   evalGateDelayed,
+  GATE_MAX_EVENTS,
+  GATE_WINDOW_PS,
   type GateDelayRun,
   GateStateStore,
   gateDelaySupport,
@@ -75,8 +77,10 @@ function buildLibrary(raw: unknown[]): ModuleLibrary {
  * 验收口径（apps/studio/test/gate-canvas-same-caliber.test.ts 钉住）：
  *   画布 `netSignals` 里每条顶层网的电平 == 门级引擎 `evalGateDelayed().nets` 的同名网电平。
  */
-const GATE_CANVAS_WINDOW_PS = 1_000_000; // 1µs：够慢路径走完（关卡向量 settlePs 的上限也是它）
-const GATE_CANVAS_MAX_EVENTS = 500_000; // 与 harness.ts 的 maxEventsPerVector 同量级
+// ★ 与判定侧**同源**（不在这里写死数字）：apps/studio/test/gate-canvas-same-caliber.test.ts
+//   有等式断言钉住，且断言"所有关卡向量的 settlePs ≤ GATE_WINDOW_PS"。
+export const GATE_CANVAS_WINDOW_PS = GATE_WINDOW_PS;
+export const GATE_CANVAS_MAX_EVENTS = GATE_MAX_EVENTS;
 const GATE_CANVAS_STATE_KEEP = 8; // 状态缓存只留最近 8 份电路
 /**
  * "这份电路的上电是对称自振，必须用 settle 口径" 的**备忘**（按电路 hash）。
@@ -229,14 +233,14 @@ export function handleRequest(req: StudioRequest): StudioResponse {
 
     let unstable = false;
     if (mode === 'timing') {
-      // 先给组合链一个稳定窗口（含按钮端口为 0 时的状态）
-      if (!sim.advanceTo(sim.time + 1_000_000, 500_000)) unstable = true;
+      // 先给组合链一个稳定窗口（含按钮端口为 0 时的状态）—— 窗口/上限与判定侧同源（bounds.ts）
+      if (!sim.advanceTo(sim.time + GATE_CANVAS_WINDOW_PS, GATE_CANVAS_MAX_EVENTS)) unstable = true;
       // 按钮端口在组合链稳定后才生效（上升沿锁存正确的组合输出）
       for (const bp of buttonPorts) {
         const drive = inputs[bp] ?? 0;
         sim.setInput(bp, paramToLogic(drive));
       }
-      if (!sim.advanceTo(sim.time + 1_000_000, 500_000)) unstable = true;
+      if (!sim.advanceTo(sim.time + GATE_CANVAS_WINDOW_PS, GATE_CANVAS_MAX_EVENTS)) unstable = true;
     } else if (!sim.settle()) {
       unstable = true;
     }

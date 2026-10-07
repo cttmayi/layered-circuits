@@ -45,6 +45,7 @@
  */
 
 import type { Design, ModuleLibrary } from '@lc/schema';
+import { GATE_MAX_EVENTS, GATE_WINDOW_PS } from './bounds.js';
 import {
   B0,
   B1,
@@ -97,11 +98,9 @@ export const DEFAULT_GATE_DELAY_PS = 1000;
 /** kind 口径的换算基数：1 时间步 = 1000ps（时间轴单位 = 1ps，便于与元件级对齐读数）*/
 const KIND_STEP_PS = 1000;
 
-/** 默认事件上限（与 harness.ts 的 maxEventsPerVector 同量级）*/
-const DEFAULT_MAX_EVENTS = 500_000;
-
-/** 默认时间窗（ps）：1µs。带延迟的电路要留够慢路径走完的时间（关卡向量自带 settlePs 时以它为准）*/
-const DEFAULT_WINDOW_PS = 1_000_000;
+/** 默认事件上限 / 默认时间窗 —— **同源**于 bounds.ts（与判定 harness、画布同源，别在这里写死数字）*/
+const DEFAULT_MAX_EVENTS = GATE_MAX_EVENTS;
+const DEFAULT_WINDOW_PS = GATE_WINDOW_PS;
 
 /** 延迟口径：`kind` = 按门种类（产品默认）；`unit` = 每门 1 步（仅对照用，粒度太粗）*/
 export type GateDelayCaliber = 'kind' | 'unit';
@@ -117,7 +116,7 @@ export interface GateDelayOptions {
   caliber?: GateDelayCaliber;
   /** 延迟语义，默认 'inertial'（惯性）*/
   semantics?: GateDelaySemantics;
-  /** 每个窗口的事件上限，撞满即 capped（防振荡电路卡死），默认 500_000 */
+  /** 每个窗口的事件上限，撞满即 capped（防振荡电路卡死），默认取 bounds.ts 的 GATE_MAX_EVENTS */
   maxEvents?: number;
   /** 表里查不到的门/原子的兜底延迟（ps），默认 GATE_DELAY_PS 的常见值 1000 */
   defaultDelayPs?: number;
@@ -157,7 +156,7 @@ export interface GateDelayOptions {
 
 /** 入口选项 = 引擎选项 + 单次运行要带的东西（窗口长度、跨请求携带的状态）*/
 export type GateDelayRunOptions = GateDelayOptions & {
-  /** 本次运行的时间窗（ps），默认 1_000_000 */
+  /** 本次运行的时间窗（ps），默认取 bounds.ts 的 GATE_WINDOW_PS */
   windowPs?: number;
   /** 跨请求携带的时序状态（复用 gate-seq 的 GateStateStore）*/
   state?: GateStateStore;

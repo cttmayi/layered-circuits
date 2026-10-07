@@ -1,3 +1,4 @@
+export * from './bounds.js';
 export * from './engine.js';
 export * from './gate-delay.js';
 export * from './gate-logic.js';

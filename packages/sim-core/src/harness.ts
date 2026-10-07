@@ -5,6 +5,7 @@
  * 逻辑模式一次收敛；时序模式施加激励后推进 settlePs 再采样（M2 会在此基础上加波形时序断言）。
  */
 
+import { GATE_MAX_EVENTS, SETTLE_PS_DEFAULT } from './bounds.js';
 import type { Diagnostic } from './engine.js';
 import { type SimMode, Simulator } from './engine.js';
 import type { FlatNet } from './ir.js';
@@ -78,8 +79,9 @@ export function runVectors(
     ...(options.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
   });
 
-  const defaultSettlePs = options.defaultSettlePs ?? 100_000;
-  const maxEventsPerVector = options.maxEventsPerVector ?? 500_000;
+  // 默认值来自 bounds.ts（与画布/门级引擎同源，别在这里写死数字）
+  const defaultSettlePs = options.defaultSettlePs ?? SETTLE_PS_DEFAULT;
+  const maxEventsPerVector = options.maxEventsPerVector ?? GATE_MAX_EVENTS;
   const rows: VectorRow[] = [];
   let unstable = false;
   let pass = true;

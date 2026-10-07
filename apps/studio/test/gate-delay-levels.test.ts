@@ -171,6 +171,30 @@ describe('有界延迟门级 · 20 个逻辑关的结论表（钉住，不许悄
     console.log(`\n${lines.join('\n')}\n`);
   }, 900_000);
 
+  it('轨升格（vcc/gnd → 零延迟常量原子）没有改任何一关的逐行读数：显式 rails=constant 与默认逐行全等', () => {
+    const lines: string[] = [];
+    for (const level of LOGIC_LEVELS) {
+      const design = teachingSolutionOf(level.id, 'rtl');
+      if (!design) continue;
+      const d = DesignSchema.parse(design) as Design;
+      const widths = portWidthsOf(level);
+      const vectors = expandVectors(level.vectors, widths);
+      const implicit = evalGateVectorsDelayed(d, LIB, vectors, widths, GATE_SEQ_SPECS);
+      const explicit = evalGateVectorsDelayed(d, LIB, vectors, widths, GATE_SEQ_SPECS, {
+        rails: 'constant',
+      });
+      const a = implicit?.rows.map((r) => normActual(r.actual)) ?? [];
+      const b = explicit?.rows.map((r) => normActual(r.actual)) ?? [];
+      lines.push(
+        `${level.id.padEnd(15)} 行数=${a.length} 默认 vs 显式constant 差异=${a.filter((x, i) => x !== b[i]).length}`,
+      );
+      // 「升格」只是实现手段（叶子单元 delayPs=0 + kind:'rail'），不许改语义 ⇒ 逐行必须全等
+      expect(b, `${level.id}：显式 rails=constant 与默认（有延迟档）必须逐行全等`).toEqual(a);
+      expect(a.length, `${level.id} 行数`).toBeGreaterThan(0);
+    }
+    console.log(`\n${lines.join('\n')}\n`);
+  }, 900_000);
+
   it('s3-calc 的残留差异只在那一条没有期望值的「待命」行', () => {
     const calcLevel = LOGIC_LEVELS.find((l) => l.id === 's3-calc')!;
     const design = teachingSolutionOf('s3-calc', 'rtl');
