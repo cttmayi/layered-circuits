@@ -87,6 +87,30 @@ export function addModule(library: readonly StoredModule[], module: StoredModule
   return [...library, module];
 }
 
+/**
+ * 批量入库（内容寻址去重）：`modules` 里同 hash 的一条都不重复加。
+ *
+ * 为什么必须有这个函数：库里是「一 hash 一条」，而菜单是「一条目一张卡」
+ * （Palette 的基础门 = `library.filter(teaching && BASIC_GATES)`）—— 所以凡是写成
+ * `[...library, ...extra]` 的「不去重追加」，只要被重复触发，玩家就会看到同一个门变出
+ * 好几张卡（用户实测 bug：连点「一键出答案」，基础门 5 → 10 → 15 → 20）。
+ * 库本来就是内容寻址的（hash = 电路内容），重复触发必须**逐字不改变库**。
+ *
+ * 一条都没加时返回**原数组本身**（引用不变）：调用方多是 React state / useMemo 的依赖，
+ * 无谓的拷贝会让下面的 memo 与重渲染白白失效。
+ */
+export function mergeModules(
+  library: readonly StoredModule[],
+  modules: readonly StoredModule[],
+): StoredModule[] {
+  let out: StoredModule[] | null = null;
+  for (const module of modules) {
+    if ((out ?? library).some((m) => m.hash === module.hash)) continue;
+    out = [...(out ?? library), module];
+  }
+  return out ?? (library as StoredModule[]);
+}
+
 export interface TraceNode {
   hash: string;
   name: string;

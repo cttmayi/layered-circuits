@@ -15,7 +15,7 @@ import {
 import type { Level } from '@lc/schema';
 import { notGateDemo, teachingSeedDoc } from '../editor/demos';
 import type { Doc, StoredModule, Sym } from '../editor/model';
-import { dedupeLibrary } from './library';
+import { dedupeLibrary, mergeModules } from './library';
 import { docForLevel, isLevelUnlocked, loadProgress, type Progress } from './progress';
 
 /** 工作台模式：关卡（任务墙）/ 自由搭建（沙盒）/ 教学（认识元件，独立入口） */
@@ -90,7 +90,7 @@ function resolveMissingModules(doc: Doc, library: readonly StoredModule[]): Stor
     }
   }
   const extra = missing.map((h) => teach.get(h)).filter((m): m is StoredModule => Boolean(m));
-  return extra.length === 0 ? [...library] : [...library, ...extra];
+  return mergeModules(library, extra);
 }
 
 /**

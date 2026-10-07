@@ -59,7 +59,7 @@ import {
 import { type Box, contentBoxOf, fitCamera, usableArea } from './layout/fit';
 import { type OverlayAnchor, placeFloatingBar, selectionAnchor } from './layout/overlay';
 import { useNarrowScreen, usePortraitNarrow } from './layout/viewport';
-import { addModule, dedupeLibrary, storeModule } from './level/library';
+import { addModule, dedupeLibrary, mergeModules, storeModule } from './level/library';
 import {
   docForLevel,
   emptyProgress,
@@ -1343,7 +1343,9 @@ export function App(): React.JSX.Element {
     // 只注入直接引用会在展开时 unknown-module，因此只要参考解用到任何教学积木就注入整族。
     const refUsesModule = ref.instances.some((inst) => inst.kind === 'module');
     const extra = refUsesModule ? teachingStoredFor(spec.family) : [];
-    const library = [...doc.library, ...extra];
+    // 内容寻址合并（**不是**不去重追加）：同一份教学积木已经在本关画布库里就一条都不再加。
+    // 否则连点「一键出答案」每点一次就多塞一整族（实测基础门 5 → 10 → 15 → 20，用户报的 bug）。
+    const library = mergeModules(doc.library, extra);
     const next = fromDesign(ref, docForLevel(currentLevel, library));
     const nextDoc = { ...next, library };
     loadDoc(nextDoc);
@@ -2246,7 +2248,9 @@ const withLevelGates = (
 ): StoredModule[] => {
   const level = levelId ? findLevel(levelId) : null;
   if (!level || level.moduleAccess === 'none') return library;
-  return [...library, ...teachingStoredFor(family)];
+  // 同样按 hash 去重：玩家库里的教学依赖（通完关后由 wrapAndSettle 存入，见下）会让
+  // 「整族注入」再叠一份 —— 第 7 关起基础门就会一关比一关多（实测 8 张里 3 张是重复）。
+  return mergeModules(library, teachingStoredFor(family));
 };
 
 const teachingDepsOf = (
