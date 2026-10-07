@@ -427,11 +427,24 @@ export function Palette({
    *   但**按名字去重**：库是内容寻址的，历史遗留的别族同名门会让一个门出两张卡
    *   （用户实测 7 → 11）；去重时按 `gateCatalog` 的次序保留本关族那一份。
    */
-  const gateModules = logicLevel
-    ? (gateCatalog ?? []).filter(inGateList)
-    : dedupeByNameForDisplay(library.filter(inGateList), {
-        ...(gateCatalog ? { order: gateCatalog.map((m) => m.hash) } : {}),
-      });
+  /**
+   * ⚠️ 用户第 ⑳ 轮拍板：**「基础门」这一组只在逻辑关（第 8 关起）渲染**。
+   *   · 1~3 关只有元件（`moduleAccess: 'none'`，本组本来也不会有东西）；
+   *   · 4~7 关是时序关：**不显示基础门**，玩家用元件搭；要复用就复用「我的模块」里前面关卡产出的
+   *     模块（那些带 `levelId`，现有规则就放行）；
+   *   · 8 关起才显示基础门，且**不列 1~7 关产出的元件模块**（`producedInElementLevel` 已拦）。
+   *  依据（实测）：这正是"基础门清单是全局名单"那个副作用的解法 —— 不必新增逐关门表，
+   *  分界就是判定的 `judgeMode`（27 关里 #1~#7 = timing、#8~#27 = logic，与"第 8 关"完全重合）。
+   */
+  const gateModules =
+    level && !logicLevel
+      ? [] // 时序关（第 1~7 关）：基础门从第 8 关起才有 → 这一组整组不渲染
+      : logicLevel
+        ? (gateCatalog ?? []).filter(inGateList)
+        : dedupeByNameForDisplay(library.filter(inGateList), {
+            // 自由模式（没有关卡）：照旧"库里有什么列什么 + 按名字去重"，一字不动
+            ...(gateCatalog ? { order: gateCatalog.map((m) => m.hash) } : {}),
+          });
   const filteredModules = hideLockedActive
     ? visibleUserModules.filter((m) => modulesAllowed && moduleAllowed(m.name))
     : visibleUserModules;

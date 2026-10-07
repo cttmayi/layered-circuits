@@ -296,21 +296,24 @@ describe('逻辑关基础门 = 本关清单（与库无关）', () => {
     expect(cardsOf('基础门').map((c) => c.name)).toEqual(gateCatalogFor('rtl').map((m) => m.name));
   }, 120000);
 
-  it('⑥ 时机关（非逻辑关）保持旧口径：库里那套 + 按名字去重，且与干净存档逐字一致', async () => {
+  it('⑥ 时机关（非逻辑关）**不再渲染基础门组**（用户第 ⑳ 轮口径）：1~7 关只有元件 / 前关产出的模块', async () => {
+    // 库被污染也好、干净也好：时机关连「基础门」这个组头都不该出现（门要从第 8 关起才有）
     await enterLevel('与非门', [...LEGACY_7, ...JUNK], 'cmos', { debug: false });
     const polluted = cardsOf('基础门');
-    console.log(
-      `[时机关·污染库] ${groupTitle('基础门')}｜${polluted.map((c) => `${c.name}:${c.hash.slice(0, 8)}`).join('、')}`,
-    );
-    expect(new Set(polluted.map((c) => c.name)).size).toBe(polluted.length); // 同名仍只出一张
+    console.log(`[时机关·污染库] ${groupTitle('基础门')}｜卡片数=${polluted.length}（应为 0）`);
+    expect(polluted).toEqual([]);
     cleanup();
     await enterLevel('与非门', [], 'rtl', { debug: false });
     const clean = cardsOf('基础门');
+    console.log(`[时机关·干净库] ${groupTitle('基础门')}｜卡片数=${clean.length}（应为 0）`);
+    expect(clean).toEqual([]);
+    // 反证：同一份库进逻辑关（第 8 关起）→ 基础门组照旧 = 本关权威清单
+    cleanup();
+    await enterLevel('SR 锁存器', [...LEGACY_7, ...JUNK], 'rtl', { debug: false });
+    const inLogic = cardsOf('基础门');
     console.log(
-      `[时机关·干净库] ${groupTitle('基础门')}｜${clean.map((c) => `${c.name}:${c.hash.slice(0, 8)}`).join('、')}`,
+      `[逻辑关·同一份污染库] ${groupTitle('基础门')}｜${inLogic.map((c) => `${c.name}:${c.hash.slice(0, 8)}`).join('、')}`,
     );
-    // 干净存档 = 本族教学门注入库，所以时机关列的就是本族那几个门（条数/顺序都跟内容走）
-    expect(clean.map((c) => c.name)).toEqual(gateCatalogFor('rtl').map((m) => m.name));
-    expect(clean.map((c) => c.hash)).toEqual(gateCatalogFor('rtl').map((m) => m.hash));
+    expect(inLogic.map((c) => c.name)).toEqual(gateCatalogFor('rtl').map((m) => m.name));
   }, 120000);
 });

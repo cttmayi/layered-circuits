@@ -6,9 +6,10 @@
  * 自由模式照旧（组头 + 6 张卡，文案与改动前逐字相同）。
  *
  * 为什么敢整组隐藏 —— 这里同时钉住"依据"本身（数据驱动，不是口头结论）：
- * `docForLevel` 对每一关都预置并锁定 rail-vcc / rail-gnd 与关卡声明的全部 in/out 端口
- * （按钮 = 端口的 `button` 标记、七段数码管 = 端口的 `display` 标记），
- * 而 27 关的参考解没有一关用到超出初始画布的 vcc/gnd/端口。
+ * `docForLevel` 对**时序关（第 1~7 关）**预置并锁定 rail-vcc / rail-gnd，逻辑关（第 8 关起）
+ * **不预置**（用户第 ⑳ 轮拍板，依据：门级口径下 vcc/gnd 当恒定轨与直接忽略的逐行判定差异完全相同），
+ * 并且对每一关预置关卡声明的全部 in/out 端口（按钮 = `button` 标记、七段数码管 = `display` 标记）；
+ * 27 关的参考解没有一关用到超出初始画布的 vcc/gnd/端口。
  * 一旦以后有哪一关的参考解开始需要玩家从这一组取件，这条守卫会立刻红。
  */
 import { ALL_LEVELS } from '@lc/content';
@@ -112,6 +113,32 @@ describe('「电源与端口」只在自由模式出现（关卡模式整组不�
     expect(heads).toContain('电源与端口');
   });
 
+  it('逐关节点数：逻辑关 = 端口数（无轨），时序关 = 端口数 + 2 轨 —— 第 ⑳ 轮改动只差这 2 个孤立节点', () => {
+    const rows: string[] = [];
+    for (const [i, level] of ALL_LEVELS.entries()) {
+      const doc = docForLevel(level, []);
+      const rails = doc.syms.filter((s) => s.kind === 'vcc' || s.kind === 'gnd').length;
+      const ports = doc.syms.filter((s) => s.kind === 'input' || s.kind === 'output').length;
+      rows.push(
+        `#${String(i + 1).padStart(2)} ${level.id.padEnd(15)} judgeMode=${String((level as { judgeMode?: string }).judgeMode).padEnd(6)} 初始画布节点=${doc.syms.length}（端口 ${ports} + 轨 ${rails}）`,
+      );
+      expect(doc.syms.length, `${level.id} 的节点数`).toBe(ports + rails);
+    }
+    console.log(`\n${rows.join('\n')}\n`);
+    const logic = ALL_LEVELS.filter((l) => (l as { judgeMode?: string }).judgeMode === 'logic');
+    const timing = ALL_LEVELS.filter((l) => (l as { judgeMode?: string }).judgeMode !== 'logic');
+    const railsOf = (l: (typeof ALL_LEVELS)[number]) =>
+      docForLevel(l, []).syms.filter((s) => s.kind === 'vcc' || s.kind === 'gnd').length;
+    console.log(
+      `[1a] 逻辑关 ${logic.length} 个：节点数=${logic.map((l) => docForLevel(l, []).syms.length).join(',')}｜轨=${logic.map(railsOf).join(',')}`,
+    );
+    console.log(
+      `[1b] 时序关 ${timing.length} 个：节点数=${timing.map((l) => docForLevel(l, []).syms.length).join(',')}｜轨=${timing.map(railsOf).join(',')}`,
+    );
+    expect(logic.every((l) => railsOf(l) === 0)).toBe(true);
+    expect(timing.every((l) => railsOf(l) === 2)).toBe(true);
+  }, 300_000);
+
   it('自由模式：卡片可点、能回调（自由模式行为没被这轮改动碰掉）', () => {
     const picked: Array<Record<string, unknown>> = [];
     stubNarrow(false);
@@ -170,16 +197,35 @@ describe('「电源与端口」只在自由模式出现（关卡模式整组不�
       }
       const initVcc = init.syms.filter((s) => s.kind === 'vcc').length;
       const initGnd = init.syms.filter((s) => s.kind === 'gnd').length;
-      // 初始画布：每关都有电源轨（且锁定）
-      if (initVcc < 1 || initGnd < 1) bad.push(`${level.id}: 初始画布缺电源轨`);
+      const isLogic = (level as { judgeMode?: string }).judgeMode === 'logic';
+      if (isLogic) {
+        // 逻辑关（第 8 关起）：**初始画布不放轨**，而且参考解里也没有轨要接（接线 0 条）
+        if (initVcc !== 0 || initGnd !== 0) bad.push(`${level.id}: 逻辑关不该预置电源轨`);
+        const railIds = new Set(
+          init.syms.filter((s) => s.kind === 'vcc' || s.kind === 'gnd').map((s) => s.id),
+        );
+        const wired = (level.referenceSolution?.nets ?? []).filter(
+          (n: { pins?: Array<{ inst?: string }> }) =>
+            (n.pins ?? []).some((p) => railIds.has(String(p.inst))),
+        ).length;
+        if (wired !== 0) bad.push(`${level.id}: 逻辑关参考解接了 ${wired} 条轨线`);
+      } else {
+        // 时序关（第 1~7 关）与自由模式：照旧预置并锁定
+        if (initVcc < 1 || initGnd < 1) bad.push(`${level.id}: 初始画布缺电源轨`);
+      }
       for (const rail of init.syms.filter((s) => s.kind === 'vcc' || s.kind === 'gnd')) {
         if (!rail.locked) bad.push(`${level.id}: 电源轨 ${rail.id} 没锁定`);
       }
       // 参考解：不得超出初始画布提供的 vcc/gnd 与端口
+      // ⚠️ 只在**预置轨**的关卡上比（时序关）：逻辑关初始画布已经没有轨了，而那里的参考解是
+      // **元件版**（自己身体里带 vcc/gnd 单元，与画布上的轨无关）→ 比"几个轨"没有意义，
+      // 逻辑关改比的是上面那条"参考解没接画布上的轨（接线 0 条）"。
       const refVcc = ref.instances.filter((i) => i.kind === 'vcc').length;
       const refGnd = ref.instances.filter((i) => i.kind === 'gnd').length;
-      if (refVcc > initVcc) bad.push(`${level.id}: 参考解要 ${refVcc} 个 VCC > 初始 ${initVcc}`);
-      if (refGnd > initGnd) bad.push(`${level.id}: 参考解要 ${refGnd} 个 GND > 初始 ${initGnd}`);
+      if (!isLogic) {
+        if (refVcc > initVcc) bad.push(`${level.id}: 参考解要 ${refVcc} 个 VCC > 初始 ${initVcc}`);
+        if (refGnd > initGnd) bad.push(`${level.id}: 参考解要 ${refGnd} 个 GND > 初始 ${initGnd}`);
+      }
       const initPorts = init.syms
         .filter((s) => s.kind === 'input' || s.kind === 'output')
         .map((s) => `${s.label}:${s.kind === 'input' ? 'in' : 'out'}`);

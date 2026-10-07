@@ -133,10 +133,12 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
     enableDebugUrl();
   });
 
-  it('A 第 6 关「与非门」连点 3 次：基础门计数与名字列表逐字不变 + 反证答案确实搭出来了', async () => {
-    seedUpTo('与非门');
+  it('A 第 8 关「SR 锁存器」连点 3 次：基础门计数与名字列表逐字不变 + 反证答案确实搭出来了', async () => {
+    // ⚠️ 第 ⑳ 轮起「基础门」组只在逻辑关（第 8 关起）渲染 —— 时序关里这组连组头都没有，
+    // 所以"基础门不变"这条只能、也只该在逻辑关上观察（否则是空断言）。
+    seedUpTo('SR 锁存器');
     render(<App />);
-    startJob('与非门');
+    startJob('SR 锁存器');
     dismissTaskDialog();
 
     const before = snapshot();
@@ -144,7 +146,7 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
       `[幂等 A] 初始：基础门「${before.基础门?.head}」=${JSON.stringify(before.基础门?.names)}`,
     );
     // 反证：这一关确实有门版答案可搭（否则下面的"不变"可能是"什么都没发生"）
-    // 条数跟内容走（第 ⑰ 轮给基础门清单补进 或非门/同或门 → 第 6 关这一族由 5 张变 7 张）
+    // 条数跟内容走（第 ⑰ 轮给基础门清单补进 或非门/同或门 → 由 5 张变 7 张）
     expect(before.基础门?.names.length).toBe(gateCatalogFor('rtl').length);
 
     for (let i = 1; i <= 3; i++) {
@@ -183,12 +185,12 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
   }, 60000);
 
   it('C 反复进同一关 3 次（每次进关都注入整族）：基础门名字列表逐字不变', async () => {
-    seedUpTo('与非门');
+    seedUpTo('SR 锁存器');
     const rows: string[] = [];
     let first: Record<string, GroupSnapshot> | null = null;
     for (let i = 1; i <= 3; i++) {
       render(<App />); // 每次都是全新挂载 = 从地图再进这一关
-      startJob('与非门');
+      startJob('SR 锁存器');
       dismissTaskDialog();
       const now = snapshot();
       rows.push(`第${i}次进关：${JSON.stringify(now.基础门?.names)}`);
@@ -197,20 +199,20 @@ describe('「一键出答案」幂等：重复点不改变库', () => {
       document.body.innerHTML = '';
     }
     for (const row of rows) console.log(`[幂等 C] ${row}`);
-    expect(rows[0]).toContain('与非门');
+    expect(rows[0]).toContain('非门');
   }, 60000);
 
-  it('D 正式玩法（不用 debug）：存档里已有教学依赖时进下一关，基础门不带重复', async () => {
-    // 模拟"刚通完第 6 关"：progress.library 里躺着 3 条真实教学依赖
-    seedUpTo('异或门', teachingDeps(['非门', '与非门', '与门']));
+  it('D 正式玩法（不用 debug）：存档里已有教学依赖时进逻辑关，基础门不带重复', async () => {
+    // 模拟"刚通完时序关"：progress.library 里躺着 3 条真实教学依赖
+    seedUpTo('SR 锁存器', teachingDeps(['非门', '与非门', '与门']));
     disableDebugUrl();
     render(<App />);
-    startJob('异或门');
+    startJob('SR 锁存器');
     dismissTaskDialog();
 
     const now = snapshot();
     console.log(
-      `[幂等 D] 第 7 关：基础门「${now.基础门?.head}」=${JSON.stringify(now.基础门?.names)}`,
+      `[幂等 D] 第 8 关：基础门「${now.基础门?.head}」=${JSON.stringify(now.基础门?.names)}`,
     );
     // 修前实测：8 张里 3 张重复（非门×2 / 与非门×2 / 与门×2）
     const names = now.基础门?.names ?? [];

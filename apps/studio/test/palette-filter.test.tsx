@@ -8,10 +8,12 @@
  *
  * 直接渲染 Palette 并给一个受限 allowedUnits 的假关卡，绕开地图导航。
  */
+import { BASIC_GATES } from '@lc/content';
 import type { Level } from '@lc/schema';
 import { fireEvent, type RenderResult, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { StoredModule } from '../src/editor/model';
+import { gateCatalogFor } from '../src/level/library';
 import { Palette } from '../src/panels/Palette';
 
 /** 一个只开放 NPN/电阻 的假关卡（RTL 教学关同款约束） */
@@ -70,6 +72,14 @@ describe('元件库「隐藏本关不可用」', () => {
 /** 一个开放模块的假关卡（moduleAccess: 'all' 且不设白名单） */
 function moduleLevel(): Level {
   return { ...lockedLevel(), moduleAccess: 'all' } as Level;
+}
+
+/**
+ * 逻辑关（第 8 关起）：只有这种关卡才渲染「基础门」组（用户第 ⑳ 轮）。
+ * 27 关实测：`judgeMode === 'logic'` 的正好是 #8~#27，且都是 `moduleAccess: 'all'`。
+ */
+function logicLevel(): Level {
+  return { ...lockedLevel(), moduleAccess: 'all', judgeMode: 'logic' } as Level;
 }
 
 /** 一张「我的模块」卡片：关键路径写在模板里（与 App 封装后存下来的形状一致） */
@@ -157,27 +167,41 @@ describe('左侧菜单的分层：基础门区', () => {
       <Palette
         placing={null}
         onPick={() => {}}
-        library={[fakeGate('与非门'), fakeModule(6500)]}
-        level={moduleLevel()}
+        library={[fakeGate('与非门')]}
+        level={logicLevel()}
+        gateCatalog={[fakeGate('与非门')]}
       />,
     );
     expect(screen.getByText(/基础门（1）/)).toBeTruthy();
     expect(screen.getByText('与非门')).toBeTruthy();
-    // 教学积木不算玩家资产：它归「基础门」区，不占「我的模块」的计数（只有玩家那个模块）
-    expect(screen.getByText('我的模块（1）')).toBeTruthy();
-    expect(screen.queryByText('我的模块（2）')).toBeNull();
+    // 教学积木不算玩家资产：它归「基础门」区，不占「我的模块」的计数
+    expect(screen.getByText('我的模块（0）')).toBeTruthy();
   });
 
-  it('本关只允许手搭（moduleAccess: none）时，不出现「基础门」区', () => {
+  it('时序关（第 1~7 关）：整组不出现「基础门」区 —— 基础门从第 8 关起才有（用户第 ⑳ 轮）', () => {
     render(
       <Palette
         placing={null}
         onPick={() => {}}
         library={[fakeGate('与非门')]}
-        level={lockedLevel()}
+        level={moduleLevel()}
       />,
     );
     expect(screen.queryByText(/基础门/)).toBeNull();
+  });
+
+  it('逻辑关里 `moduleAccess: none`（现实数据里不存在，纯防御）：照旧不出该区', () => {
+    render(
+      <Palette
+        placing={null}
+        onPick={() => {}}
+        library={[fakeGate('与非门')]}
+        level={{ ...lockedLevel(), judgeMode: 'logic' } as Level}
+      />,
+    );
+    // moduleAccess !== 'listed' → inGateList 不做白名单过滤；这里靠 `modulesAllowed` 之外的
+    // 关卡声明兜底：该组合在 27 关里不存在（逻辑关全是 moduleAccess: 'all'），此用例只钉"不炸"。
+    expect(screen.queryByText(/我的元件/)).toBeTruthy();
   });
 });
 
@@ -191,7 +215,20 @@ describe('基础门区只列基础门（复合积木绝不能出现）', () => {
       teaching: true,
     }) as unknown as StoredModule;
 
-  it('复合积木不会进菜单（否则等于把答案给玩家）', () => {
+  it('复合积木不会进菜单（否则等于把答案给玩家）—— 守住 App 传进来的本关清单', () => {
+    // 第 ⑳ 轮后，逻辑关的这一组**只照 App 给的权威清单**（`gateCatalog`）渲染，
+    // 所以"复合积木绝不能出现"这条要对**清单本身**成立：清单 = 本族契约基础门，一个复合都没有。
+    const compositeNames = ['二进制→BCD', '显示控制', '全加器', '七段译码器', '运算控制'];
+    for (const fam of ['rtl', 'cmos', 'ttl'] as const) {
+      const names = gateCatalogFor(fam).map((m) => m.name);
+      console.log(`[3a] ${fam} 本关清单=${names.join('、')}`);
+      expect(
+        names.every((n) => BASIC_GATES.includes(n)),
+        `${fam} 清单里混进了非基础门`,
+      ).toBe(true);
+      for (const c of compositeNames) expect(names).not.toContain(c);
+    }
+    // 渲染侧：清单里只有一张，就只有一张卡（库里塞复合积木也不影响这一组）
     render(
       <Palette
         placing={null}
@@ -202,7 +239,8 @@ describe('基础门区只列基础门（复合积木绝不能出现）', () => {
           asGate('显示控制', 3000),
           asGate('全加器', 180),
         ]}
-        level={moduleLevel()}
+        level={logicLevel()}
+        gateCatalog={[asGate('与非门', 20)]}
       />,
     );
     expect(screen.getByText(/基础门（1）/)).toBeTruthy();

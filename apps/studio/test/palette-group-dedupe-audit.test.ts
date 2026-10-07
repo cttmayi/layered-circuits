@@ -99,13 +99,15 @@ describe('显示层守卫：按名字分组必须去重（用户第 ⑮ 轮）',
     expect(offenders).toEqual([]);
   });
 
-  it('基础门分组：逻辑关走本关权威清单（不读库），时机关走按名字去重', () => {
+  it('基础门分组：逻辑关走本关权威清单（不读库），时机关不渲染该组，自由模式按名字去重', () => {
     const palette = readFileSync(path.join(SRC, 'panels/Palette.tsx'), 'utf8');
     // ① 逻辑关分支：直接照 App 给的权威清单渲染 —— 这一支**不碰库**，
     //    所以库里塞重复/同名不同 hash/垃圾条目都不会影响这一组（第 ⑯ 轮）。
-    expect(palette).toContain('const gateModules = logicLevel');
+    expect(palette).toContain('const gateModules =');
     expect(palette).toMatch(/logicLevel\s*\?\s*\(gateCatalog \?\? \[\]\)\.filter\(/);
-    // ② 时机关 / 自由模式分支：仍从库里取（那里强弱与工艺是真实差异）+ 按名字去重
+    // ② 时机关（第 1~7 关）：整组不渲染（用户第 ⑳ 轮：「基础门只在 8 关开始才有」）
+    expect(palette).toMatch(/level && !logicLevel\s*\?\s*\[\]/);
+    // ③ 自由模式分支：仍从库里取（那里强弱与工艺是真实差异）+ 按名字去重
     expect(palette).toContain('dedupeByNameForDisplay(');
     // ③ 我的模块：**不**合并同名（玩家作品）
     expect(palette).not.toMatch(

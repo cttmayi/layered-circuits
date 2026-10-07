@@ -39,6 +39,9 @@ describe('位宽：画布端口与导出', () => {
     expect(drives['a[3]']).toBe(0);
     expect(drives.b).toBeUndefined(); // b 是 width 4 → 也没有裸名
     // 把 a[0] 接到 gnd 之类 → 导出时 a 端口只含接线的 lane？这里直接构造 4 根线
+    // ⚠️ 逻辑关（第 8 关起）的初始画布**不再预置电源轨**（用户第 ⑳ 轮拍板）——
+    // 这条用例只是需要"一根常量驱动"来把 4 个 lane 并到同一个 net，所以自己加一根地。
+    doc.syms.push({ id: 'test-gnd', kind: 'gnd', x: 0, y: 0, rot: 0, label: 'GND' } as never);
     const rail = doc.syms.find((s) => s.kind === 'gnd')!;
     const a = doc.syms.find((s) => s.kind === 'input' && s.label === 'a')!;
     doc.wires = [

@@ -261,7 +261,14 @@ export function recordAttempt(progress: Progress, levelId: string): Progress {
 /**
  * 关卡初始画布：
  *  - 关卡规定端口名（a/b/y）：端口元件由系统预置并锁定；
- *  - **VCC / GND 电源轨同样预置并锁定** —— 没有电源和地，任何电路都不工作。
+ *  - **时序关（第 1~7 关）预置并锁定 VCC / GND 电源轨** —— 那里是真搭元件，没有电源和地就不工作
+ *    （实测：拿掉后画布读数是 Z、错行 4、判不通过）。
+ *  - **逻辑关（第 8 关起）不再预置电源轨**（用户第 ⑳ 轮拍板，依据是实测）：门级口径里 vcc/gnd
+ *    只是被理想化掉的恒定轨 —— 把它当恒定轨与**直接忽略**两种口径，对每个含轨关卡的逐行判定差异
+ *    **完全相同（0 行差）**，一个结论都不改；而预置轨留着只会制造「把 VCC 接到门输入」这类坑。
+ *    老存档里已经存在的轨**不迁移**：画布上照旧留着、照旧工作（实测无害）——代价是"新画布无轨、
+ *    老画布有轨"，同一份逻辑电路的 **hash 可能不同**（hash 只跟结构有关）。
+ *    自由模式（没有关卡）照旧预置。
  * 玩家只需要在中间连出电路，端口约定与供电永远不是卡关原因。
  */
 export function docForLevel(level: Level, library: StoredModule[]): Doc {
@@ -274,11 +281,15 @@ export function docForLevel(level: Level, library: StoredModule[]): Doc {
   const widthOf = new Map(level.ports.map((p) => [p.name, p.width]));
   // 端口交互/显示形态：button（输入按钮）、display（输出数码管）
   const portFlagOf = new Map(level.ports.map((p) => [p.name, p]));
-  const syms: Sym[] = [
-    // 电源轨：左上 VCC、右上 GND（避开中间 200 起排的信号端口）
-    { id: 'rail-vcc', kind: 'vcc', x: 40, y: 60, rot: 0, label: 'VCC', locked: true },
-    { id: 'rail-gnd', kind: 'gnd', x: 700, y: 60, rot: 0, label: 'GND', locked: true },
-  ];
+  /** 逻辑关（第 8 关起）不预置电源轨，见函数头注释里的实测依据；时序关与自由模式照旧 */
+  const withRails = level.judgeMode !== 'logic';
+  const syms: Sym[] = withRails
+    ? [
+        // 电源轨：左上 VCC、右上 GND（避开中间 200 起排的信号端口）
+        { id: 'rail-vcc', kind: 'vcc', x: 40, y: 60, rot: 0, label: 'VCC', locked: true },
+        { id: 'rail-gnd', kind: 'gnd', x: 700, y: 60, rot: 0, label: 'GND', locked: true },
+      ]
+    : [];
   // 键盘式网格：按 ports 数组顺序行优先排（按键关让画布像真键盘），缺省单列竖排（保持历史间距）
   const gridCols = level.inputGridCols;
   inputs.forEach((name, i) => {
