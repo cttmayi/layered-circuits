@@ -263,7 +263,10 @@ export function handleRequest(req: StudioRequest): StudioResponse {
         gateReason = support.reason ?? '门级不支持这份设计';
       } else {
         const designHash = hashDesign(design);
-        const state = gateCanvasState(designHash);
+        // `gateFresh`（模块自测用）：每行都是全新状态，不读也不写跨请求缓存
+        const fresh = req.gateFresh === true;
+        const state = fresh ? new GateStateStore() : gateCanvasState(designHash);
+        const needsSettle = !fresh && gateCanvasNeedsSettle.has(designHash);
         const common = {
           state,
           seqSpecs: GATE_SEQ_SPECS,
@@ -272,14 +275,13 @@ export function handleRequest(req: StudioRequest): StudioResponse {
         // 已经在备忘里（上电对称自振）→ 直接用 settle 口径，不再白烧事件预算
         let run = evalGateDelayed(design, library, gateInputsOf(design, inputs), {
           ...common,
-          maxEvents: gateCanvasNeedsSettle.has(designHash)
-            ? GATE_CANVAS_MAX_EVENTS
-            : GATE_CANVAS_PROBE_EVENTS,
-          powerUp: gateCanvasNeedsSettle.has(designHash) ? 'settle' : 'delay',
+          maxEvents: needsSettle ? GATE_CANVAS_MAX_EVENTS : GATE_CANVAS_PROBE_EVENTS,
+          powerUp: needsSettle ? 'settle' : 'delay',
         });
-        if (!gateCanvasNeedsSettle.has(designHash) && run.ok && run.capped) {
+        if (!needsSettle && run.ok && run.capped) {
           // 上电对称自振（延迟完全匹配的交叉耦合环）：记下来，用确定性顺序上电重跑
-          gateCanvasNeedsSettle.add(designHash);
+          // （`gateFresh` 不记备忘：自测是逐行独立的短跑，没有"下一帧"可省）
+          if (!fresh) gateCanvasNeedsSettle.add(designHash);
           run = evalGateDelayed(design, library, gateInputsOf(design, inputs), {
             ...common,
             maxEvents: GATE_CANVAS_MAX_EVENTS,

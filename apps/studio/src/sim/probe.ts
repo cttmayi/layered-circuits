@@ -100,6 +100,11 @@ export function probeModule(
       mode: 'logic',
       inputs,
       buttonPorts: [],
+      // 与画布**同口径**（有延迟门级；含元件/缺 SeqSpec 的设计由引擎侧原样回落元件引擎），
+      // 否则"画布上看起来正常 / 自测说不通"又会变成两套读数打架。
+      // `gateFresh`：逐行独立的组合真值表，上一行的内部状态不能漏进下一行。
+      gateCanvas: true,
+      gateFresh: true,
     });
     if (resp.error || !resp.snapshot) return { ...empty, error: resp.error ?? '仿真没有返回结果' };
     const signals = new Map(resp.snapshot.netSignals);
