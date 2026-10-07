@@ -344,13 +344,37 @@ export function Palette({
    * 存档没记 provenance 时用内容代理（身体含元件），两条都会在注释里写明会判错的情况。
    * 时序关与自由模式不拦（玩家在原关卡里的产出照旧列着，见反证用例）。
    */
-  const visibleUserModules = useMemo(
-    () =>
-      logicLevel
-        ? userModules.filter((m) => !producedInElementLevel(m) && gateLevelUsable(m, probeLibrary))
-        : userModules,
-    [logicLevel, userModules, probeLibrary],
-  );
+  /**
+   * 逻辑关还有第二件事：**同一份模块不要两组各出一张卡**（用户第 ⑰ 轮批准的建议 2）。
+   *
+   * 实测事实（第 ⑰ 轮）：rtl 玩家在第 1~7 关亲手封装的门，与「基础门」清单里的门**hash 逐字相同**
+   * （非门 61fb0eb6 / 与门 ed7f885a / 或门 8ad8f9c0 / 与非门 761c6864 / 异或门 ec8958c7）——
+   * "元件版 vs 门版"是**假二分**：同一份内容，只是名字是门名才被门级引擎当零延迟原子算。
+   * 所以在逻辑关里，「我的模块」里凡是**与基础门同 hash** 的副本都不再重复列（基础门那份照旧在，
+   * 信息不丢）；玩家**内容不同**的同名作品照旧列（那是他自己的东西，见第 ⑯ 轮口径与对应用例）。
+   *
+   * **只动显示层**：不动库、存档、判定、关卡数据、schema —— 隐藏的模块仍在 `progress.library` 里，
+   * 「组件库与成绩」查得到，画布上已放置的实例照常工作，验收结论一字不变（见反证用例）。
+   * 无 provenance 的老存档也覆盖得到（这里比的是 hash，不看来路）。
+   *
+   * ⚠️ deps 里的 `gateCatalog` 由 App 用 `useMemo` 按族算出来，是稳定引用；`userModules` 本来
+   * 每次渲染都是新数组（既有情况），所以这个 memo 与它之前的开销特征一致。
+   */
+  const visibleUserModules = useMemo(() => {
+    if (!logicLevel) return userModules; // 时序关/自由模式：库 + 按名字去重，一行不动
+    // 与「基础门」渲染同一口径（catalog 本来就是 teaching + 白名单内的门，见下面的 inGateList）
+    const gateHashes = new Set(
+      (gateCatalog ?? [])
+        .filter((m) => m.teaching === true && BASIC_GATES.includes(m.name))
+        .map((m) => m.hash),
+    );
+    return userModules.filter(
+      (m) =>
+        !gateHashes.has(m.hash) && // ← 同 hash 跨组两张：只留基础门那一张
+        !producedInElementLevel(m) &&
+        gateLevelUsable(m, probeLibrary),
+    );
+  }, [logicLevel, userModules, probeLibrary, gateCatalog]);
   /** 基础门：本关提供的门（teaching 积木）。库里注入的是整族（复合门的身体会引用更底层的门），
    *  菜单只列本关允许的门，所以列表里不会出现被锁住的卡片。 */
   /** 本关是否允许在顶层画布摆元件（第 8 关起为 false） */
